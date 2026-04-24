@@ -169,6 +169,58 @@ namespace FrontierDepths.Tests.EditMode
             Assert.IsFalse(report.HasWarnings, report.ToSummaryString(build));
         }
 
+        [Test]
+        public void Validator_AcceptsSpawnInsideSelectedTransitUpRoom()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            build.playerSpawnNodeId = build.transitUpNodeId;
+            build.playerSpawnNodeKind = DungeonNodeKind.TransitUp.ToString();
+            build.playerSpawn = new Vector3(20f, 3.5f, 0f);
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
+        }
+
+        [Test]
+        public void Validator_FailsWhenSelectedSpawnRoomWasNotRendered()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            build.playerSpawnNodeId = "missing_spawn_room";
+            build.playerSpawnNodeKind = DungeonNodeKind.TransitUp.ToString();
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsFalse(report.IsValid);
+            StringAssert.Contains("Selected spawn room missing_spawn_room was not rendered.", report.ToSummaryString(build, 10));
+        }
+
+        [Test]
+        public void Seed_778287037_NormalOrFallbackBuild_PassesValidation()
+        {
+            GameObject root = new GameObject("DungeonSceneControllerSeedRegression");
+
+            try
+            {
+                DungeonBuildResult normalBuild = InvokeBuildFloorAttempt(root, useFallback: false, floorSeed: 778287037);
+                DungeonValidationReport normalReport = DungeonValidator.Validate(normalBuild);
+                if (normalReport.IsValid)
+                {
+                    Assert.Pass();
+                }
+
+                DungeonBuildResult fallbackBuild = InvokeBuildFloorAttempt(root, useFallback: true, floorSeed: 778287037);
+                DungeonValidationReport fallbackReport = DungeonValidator.Validate(fallbackBuild);
+
+                Assert.IsTrue(fallbackReport.IsValid, fallbackReport.ToSummaryString(fallbackBuild, 10));
+                Assert.IsFalse(HasSpawnRoomMismatchFailure(fallbackReport), fallbackReport.ToSummaryString(fallbackBuild, 10));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
         private static DungeonBuildResult CreateValidBuildResult()
         {
             DungeonLayoutGraph graph = new DungeonLayoutGraph
@@ -208,6 +260,8 @@ namespace FrontierDepths.Tests.EditMode
                 transitDownNodeId = graph.transitDownNodeId,
                 landmarkNodeId = "landmark",
                 secretNodeId = "secret_0",
+                playerSpawnNodeId = graph.entryHubNodeId,
+                playerSpawnNodeKind = DungeonNodeKind.EntryHub.ToString(),
                 playerSpawn = new Vector3(0f, 3.5f, 0f)
             };
 
@@ -384,7 +438,20 @@ namespace FrontierDepths.Tests.EditMode
             return new Bounds(bounds.center, size);
         }
 
-        private static DungeonBuildResult InvokeBuildFloorAttempt(GameObject root, bool useFallback)
+        private static bool HasSpawnRoomMismatchFailure(DungeonValidationReport report)
+        {
+            for (int i = 0; i < report.failures.Count; i++)
+            {
+                if (report.failures[i].reason.Contains("selected spawn room"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static DungeonBuildResult InvokeBuildFloorAttempt(GameObject root, bool useFallback, int floorSeed = 4400)
         {
             DungeonSceneController controller = root.AddComponent<DungeonSceneController>();
             typeof(DungeonSceneController).GetField("runtimeRoot", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, root.transform);
@@ -393,7 +460,7 @@ namespace FrontierDepths.Tests.EditMode
             MethodInfo method = typeof(DungeonSceneController).GetMethod("BuildFloorAttempt", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(method, "Expected DungeonSceneController.BuildFloorAttempt to exist.");
 
-            FloorState state = new FloorState { floorIndex = 1, floorSeed = 4400 };
+            FloorState state = new FloorState { floorIndex = 1, floorSeed = floorSeed };
             state.Normalize(state.floorIndex, state.floorSeed);
             return (DungeonBuildResult)method.Invoke(controller, new object[] { state, useFallback, 1, 1 });
         }

@@ -230,6 +230,11 @@ namespace FrontierDepths.World
             FloorTransitionKind transitionKind = run != null ? run.lastTransition : FloorTransitionKind.StartedRun;
             PortalAnchorState portalAnchor = run != null ? run.portalAnchor : PortalAnchorState.Invalid;
             DungeonSpawnRoutingResult routing = ResolveSpawnRouting(graph, transitionKind, portalAnchor, floorIndex);
+            if (activeBuildResult != null)
+            {
+                activeBuildResult.playerSpawnNodeId = routing.selectedNodeId;
+                activeBuildResult.playerSpawnNodeKind = routing.selectedNodeKind;
+            }
 
             if (!string.IsNullOrWhiteSpace(routing.warningMessage))
             {

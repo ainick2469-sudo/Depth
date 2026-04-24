@@ -19,6 +19,8 @@ namespace FrontierDepths.World
         public int attemptCount;
         public string validationSummary;
         public Vector3 playerSpawn;
+        public string playerSpawnNodeId;
+        public string playerSpawnNodeKind;
         public string entryNodeId;
         public string transitUpNodeId;
         public string transitDownNodeId;

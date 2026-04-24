@@ -326,22 +326,32 @@ namespace FrontierDepths.World
 
         private static void ValidateSpawn(DungeonBuildResult buildResult, DungeonValidationReport report)
         {
-            DungeonRoomBuildRecord entryRoom = buildResult.FindRoom(buildResult.entryNodeId);
-            if (entryRoom == null)
+            string selectedSpawnNodeId = string.IsNullOrWhiteSpace(buildResult.playerSpawnNodeId)
+                ? buildResult.entryNodeId
+                : buildResult.playerSpawnNodeId;
+
+            DungeonRoomBuildRecord spawnRoom = buildResult.FindRoom(selectedSpawnNodeId);
+            if (spawnRoom == null)
             {
+                report.AddFailure(
+                    buildResult,
+                    selectedSpawnNodeId,
+                    ResolveRoomType(buildResult, selectedSpawnNodeId),
+                    ResolveTemplate(buildResult, selectedSpawnNodeId),
+                    $"Selected spawn room {selectedSpawnNodeId} was not rendered.");
                 return;
             }
 
-            if (!ContainsXZ(entryRoom.bounds, buildResult.playerSpawn))
+            if (!ContainsXZ(spawnRoom.bounds, buildResult.playerSpawn))
             {
-                report.AddFailure(buildResult, buildResult.entryNodeId, entryRoom.roomType, entryRoom.templateKind, "Player spawn is outside the entry room.");
+                report.AddFailure(buildResult, selectedSpawnNodeId, spawnRoom.roomType, spawnRoom.templateKind, $"Player spawn is outside selected spawn room {selectedSpawnNodeId}.");
             }
 
             for (int i = 0; i < buildResult.wallSpans.Count; i++)
             {
                 if (ContainsXZ(buildResult.wallSpans[i].bounds, buildResult.playerSpawn))
                 {
-                    report.AddFailure(buildResult, buildResult.entryNodeId, entryRoom.roomType, entryRoom.templateKind, "Player spawn overlaps wall geometry.");
+                    report.AddFailure(buildResult, selectedSpawnNodeId, spawnRoom.roomType, spawnRoom.templateKind, $"Player spawn overlaps wall geometry in selected spawn room {selectedSpawnNodeId}.");
                     break;
                 }
             }
