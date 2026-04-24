@@ -26,6 +26,8 @@ namespace FrontierDepths.World
                 return;
             }
 
+            GameBootstrap.Instance.RunService.PrepareTownReturnOnFoot();
+            GameBootstrap.Instance.SceneFlowService.SetPendingTownHubLoadReason(TownHubLoadReason.DungeonEntranceReturn);
             GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
         }
     }

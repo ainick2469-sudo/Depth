@@ -30,6 +30,7 @@ namespace FrontierDepths.World
 
             Vector3 anchorPosition = transform.position + Vector3.up * 0.5f;
             GameBootstrap.Instance.RunService.SetPortalAnchor(anchorPosition, RoomId);
+            GameBootstrap.Instance.SceneFlowService.SetPendingTownHubLoadReason(TownHubLoadReason.DungeonPortalReturn);
             GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
         }
     }

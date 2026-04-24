@@ -99,6 +99,13 @@ namespace FrontierDepths.Core
             Save();
         }
 
+        public void PrepareTownReturnOnFoot()
+        {
+            EnsureRun();
+            Current.lastTransition = FloorTransitionKind.StartedRun;
+            Save();
+        }
+
         public void EndRun()
         {
             Current = new RunState();

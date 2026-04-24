@@ -312,6 +312,9 @@ namespace FrontierDepths.Editor
             CreateInteractableStation("BountyBoard", new Vector3(-8f, 1f, -6f), "shop.bounty_board");
             CreateInteractableStation("StashChest", new Vector3(8f, 1f, -6f), "shop.stash");
             CreateDungeonGate(new Vector3(0f, 1f, 40f));
+            CreateSpawnAnchor("TownSpawn_Default", new Vector3(0f, 2f, -28f), townRoot.transform);
+            CreateSpawnAnchor("TownSpawn_DungeonEntranceReturn", new Vector3(0f, 2f, 32f), townRoot.transform);
+            CreateSpawnAnchor("TownSpawn_PortalReturn", new Vector3(8f, 2f, 32f), townRoot.transform);
 
             CreatePlayerRig(new Vector3(0f, 2f, -28f));
             CreateHudCanvas();
@@ -500,6 +503,13 @@ namespace FrontierDepths.Editor
             gate.transform.localScale = new Vector3(4f, 4f, 2f);
             gate.GetComponent<Renderer>().sharedMaterial.color = new Color(0.12f, 0.12f, 0.14f);
             gate.AddComponent<DungeonGateInteractable>();
+        }
+
+        private static void CreateSpawnAnchor(string name, Vector3 position, Transform parent)
+        {
+            GameObject anchor = new GameObject(name);
+            anchor.transform.SetParent(parent, false);
+            anchor.transform.position = position;
         }
 
         private static void CreateGround(string name, Vector3 position, Vector3 scale, Color color)

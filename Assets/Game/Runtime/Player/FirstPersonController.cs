@@ -116,6 +116,11 @@ namespace FrontierDepths.Core
 
             if (Input.GetKeyDown(KeyCode.E))
             {
+                if (InputFrameGuard.WasTownServiceCloseConsumedThisFrame)
+                {
+                    return;
+                }
+
                 interactor.TryInteract();
             }
         }

@@ -19,6 +19,11 @@ namespace FrontierDepths.World
         private const float DoorwayClearance = 0.25f;
         private const float CorridorRoomOverlap = 0.75f;
         private const float DoorwayAlignmentEpsilon = 0.05f;
+        private const float PlayerSpawnHeight = 3.5f;
+        private const float SpawnWallMargin = 6f;
+        private const float SpawnInteractableClearance = 3f;
+        private const float SpawnDoorwayClearance = 4f;
+        private const float SpawnCandidateRadius = 4f;
 
         private sealed class BoundarySpan
         {
@@ -26,6 +31,35 @@ namespace FrontierDepths.World
             public float fixedCoord;
             public float start;
             public float end;
+        }
+
+        internal readonly struct DungeonSpawnRoutingResult
+        {
+            public readonly string selectedNodeId;
+            public readonly string selectedNodeKind;
+            public readonly FloorTransitionKind transitionKind;
+            public readonly bool useExplicitWorldPosition;
+            public readonly Vector3 explicitWorldPosition;
+            public readonly bool usedEntryFallback;
+            public readonly string warningMessage;
+
+            public DungeonSpawnRoutingResult(
+                string selectedNodeId,
+                string selectedNodeKind,
+                FloorTransitionKind transitionKind,
+                bool useExplicitWorldPosition,
+                Vector3 explicitWorldPosition,
+                bool usedEntryFallback,
+                string warningMessage)
+            {
+                this.selectedNodeId = selectedNodeId;
+                this.selectedNodeKind = selectedNodeKind;
+                this.transitionKind = transitionKind;
+                this.useExplicitWorldPosition = useExplicitWorldPosition;
+                this.explicitWorldPosition = explicitWorldPosition;
+                this.usedEntryFallback = usedEntryFallback;
+                this.warningMessage = warningMessage;
+            }
         }
 
         private static readonly Dictionary<int, Material> MaterialCache = new Dictionary<int, Material>();
@@ -189,8 +223,232 @@ namespace FrontierDepths.World
 
         private Vector3 GetSpawnPosition(DungeonLayoutGraph graph)
         {
-            DungeonNode spawnNode = graph.GetNode(graph.entryHubNodeId);
-            return GridToWorld(spawnNode.gridPosition) + Vector3.up * 3.5f;
+            RunState run = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService.Current : null;
+            int floorIndex = activeBuildResult != null
+                ? activeBuildResult.floorIndex
+                : (run != null && run.floorIndex > 0 ? run.floorIndex : 1);
+            FloorTransitionKind transitionKind = run != null ? run.lastTransition : FloorTransitionKind.StartedRun;
+            PortalAnchorState portalAnchor = run != null ? run.portalAnchor : PortalAnchorState.Invalid;
+            DungeonSpawnRoutingResult routing = ResolveSpawnRouting(graph, transitionKind, portalAnchor, floorIndex);
+
+            if (!string.IsNullOrWhiteSpace(routing.warningMessage))
+            {
+                Debug.LogWarning($"Dungeon spawn routing fallback on floor {floorIndex}: {routing.warningMessage}");
+            }
+
+            Vector3 finalPosition;
+            if (routing.useExplicitWorldPosition)
+            {
+                finalPosition = routing.explicitWorldPosition;
+                finalPosition.y = Mathf.Max(finalPosition.y, PlayerSpawnHeight);
+            }
+            else
+            {
+                finalPosition = GetSpawnPositionForNode(graph, routing.selectedNodeId);
+            }
+
+            if (Debug.isDebugBuild || Application.isEditor)
+            {
+                Debug.Log(
+                    $"Dungeon spawn routed. Floor={floorIndex} Transition={routing.transitionKind} " +
+                    $"NodeId={routing.selectedNodeId} NodeKind={routing.selectedNodeKind} Position={finalPosition}");
+            }
+
+            return finalPosition;
+        }
+
+        internal static DungeonSpawnRoutingResult ResolveSpawnRouting(
+            DungeonLayoutGraph graph,
+            FloorTransitionKind transitionKind,
+            PortalAnchorState portalAnchor,
+            int floorIndex)
+        {
+            if (graph == null)
+            {
+                return new DungeonSpawnRoutingResult(
+                    string.Empty,
+                    "MissingGraph",
+                    transitionKind,
+                    false,
+                    Vector3.up * PlayerSpawnHeight,
+                    true,
+                    "Dungeon graph missing during spawn selection.");
+            }
+
+            if (transitionKind == FloorTransitionKind.ReturnedByPortal &&
+                portalAnchor.isValid &&
+                portalAnchor.floorIndex == floorIndex)
+            {
+                DungeonNode portalNode = !string.IsNullOrWhiteSpace(portalAnchor.roomId)
+                    ? graph.GetNode(portalAnchor.roomId)
+                    : null;
+
+                return new DungeonSpawnRoutingResult(
+                    portalNode != null ? portalNode.nodeId : portalAnchor.roomId,
+                    portalNode != null ? portalNode.nodeKind.ToString() : "PortalAnchor",
+                    transitionKind,
+                    true,
+                    portalAnchor.worldPosition.ToVector3(),
+                    false,
+                    string.Empty);
+            }
+
+            string requestedNodeId = transitionKind switch
+            {
+                FloorTransitionKind.Ascended => graph.transitDownNodeId,
+                FloorTransitionKind.Descended => graph.transitUpNodeId,
+                FloorTransitionKind.ReturnedByPortal => graph.transitUpNodeId,
+                _ => graph.transitUpNodeId
+            };
+
+            DungeonNode requestedNode = graph.GetNode(requestedNodeId);
+            if (requestedNode != null)
+            {
+                return new DungeonSpawnRoutingResult(
+                    requestedNode.nodeId,
+                    requestedNode.nodeKind.ToString(),
+                    transitionKind,
+                    false,
+                    Vector3.zero,
+                    false,
+                    string.Empty);
+            }
+
+            DungeonNode fallbackNode = graph.GetNode(graph.entryHubNodeId);
+            if (fallbackNode != null)
+            {
+                return new DungeonSpawnRoutingResult(
+                    fallbackNode.nodeId,
+                    fallbackNode.nodeKind.ToString(),
+                    transitionKind,
+                    false,
+                    Vector3.zero,
+                    true,
+                    $"Requested spawn node '{requestedNodeId}' missing for transition {transitionKind}; falling back to entry hub '{fallbackNode.nodeId}'.");
+            }
+
+            DungeonNode anyNode = graph.nodes.Count > 0 ? graph.nodes[0] : null;
+            return new DungeonSpawnRoutingResult(
+                anyNode != null ? anyNode.nodeId : string.Empty,
+                anyNode != null ? anyNode.nodeKind.ToString() : "MissingNode",
+                transitionKind,
+                false,
+                Vector3.up * PlayerSpawnHeight,
+                true,
+                $"Requested spawn node '{requestedNodeId}' missing and entry hub '{graph.entryHubNodeId}' was unavailable.");
+        }
+
+        private Vector3 GetSpawnPositionForNode(DungeonLayoutGraph graph, string nodeId)
+        {
+            DungeonRoomBuildRecord room = activeBuildResult != null ? activeBuildResult.FindRoom(nodeId) : null;
+            if (room != null)
+            {
+                if (TryFindSafeSpawnPosition(room, nodeId, out Vector3 safeSpawn))
+                {
+                    return safeSpawn;
+                }
+
+                return new Vector3(room.bounds.center.x, PlayerSpawnHeight, room.bounds.center.z);
+            }
+
+            DungeonNode node = graph != null ? graph.GetNode(nodeId) : null;
+            if (node == null && graph != null)
+            {
+                node = graph.GetNode(graph.entryHubNodeId);
+            }
+
+            return node != null
+                ? GridToWorld(node.gridPosition) + Vector3.up * PlayerSpawnHeight
+                : Vector3.up * PlayerSpawnHeight;
+        }
+
+        private bool TryFindSafeSpawnPosition(DungeonRoomBuildRecord room, string nodeId, out Vector3 spawnPosition)
+        {
+            Vector3 roomCenter = new Vector3(room.bounds.center.x, PlayerSpawnHeight, room.bounds.center.z);
+            float offsetDistance = Mathf.Clamp(Mathf.Min(room.bounds.extents.x, room.bounds.extents.z) * 0.35f, 8f, 14f);
+            Vector3 diagonalOffset = new Vector3(offsetDistance, 0f, offsetDistance);
+
+            Vector3[] candidateOffsets =
+            {
+                new Vector3(0f, 0f, -offsetDistance),
+                new Vector3(offsetDistance, 0f, 0f),
+                new Vector3(0f, 0f, offsetDistance),
+                new Vector3(-offsetDistance, 0f, 0f),
+                diagonalOffset,
+                new Vector3(-diagonalOffset.x, 0f, diagonalOffset.z),
+                new Vector3(diagonalOffset.x, 0f, -diagonalOffset.z),
+                -diagonalOffset,
+                Vector3.zero
+            };
+
+            for (int i = 0; i < candidateOffsets.Length; i++)
+            {
+                Vector3 candidate = roomCenter + candidateOffsets[i];
+                if (IsSpawnCandidateClear(room, nodeId, candidate))
+                {
+                    spawnPosition = candidate;
+                    return true;
+                }
+            }
+
+            spawnPosition = roomCenter;
+            return false;
+        }
+
+        private bool IsSpawnCandidateClear(DungeonRoomBuildRecord room, string nodeId, Vector3 candidate)
+        {
+            if (!IsWithinRoomInterior(room.bounds, candidate, SpawnWallMargin))
+            {
+                return false;
+            }
+
+            Bounds candidateBounds = new Bounds(candidate, new Vector3(SpawnCandidateRadius, 6f, SpawnCandidateRadius));
+            if (activeBuildResult == null)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < activeBuildResult.interactables.Count; i++)
+            {
+                DungeonInteractableBuildRecord interactable = activeBuildResult.interactables[i];
+                if (interactable.nodeId != nodeId)
+                {
+                    continue;
+                }
+
+                Bounds interactableBounds = interactable.bounds;
+                interactableBounds.Expand(new Vector3(SpawnInteractableClearance, 0f, SpawnInteractableClearance));
+                if (interactableBounds.Intersects(candidateBounds))
+                {
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < activeBuildResult.reservedZones.Count; i++)
+            {
+                DungeonReservedZoneRecord zone = activeBuildResult.reservedZones[i];
+                if (zone.ownerId != nodeId || zone.kind != "Doorway")
+                {
+                    continue;
+                }
+
+                Bounds zoneBounds = zone.bounds;
+                zoneBounds.Expand(new Vector3(SpawnDoorwayClearance, 0f, SpawnDoorwayClearance));
+                if (zoneBounds.Intersects(candidateBounds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsWithinRoomInterior(Bounds roomBounds, Vector3 candidate, float margin)
+        {
+            return candidate.x >= roomBounds.min.x + margin &&
+                   candidate.x <= roomBounds.max.x - margin &&
+                   candidate.z >= roomBounds.min.z + margin &&
+                   candidate.z <= roomBounds.max.z - margin;
         }
 
         private void CreateRoom(DungeonNode node, DungeonLayoutGraph graph)

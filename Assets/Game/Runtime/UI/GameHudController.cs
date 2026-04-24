@@ -69,11 +69,15 @@ namespace FrontierDepths.UI
 
         private void HandleEscapeAndResume()
         {
+            if (InputFrameGuard.WasTownServiceCloseConsumedThisFrame)
+            {
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (townHub != null && townHub.IsPanelOpen)
                 {
-                    townHub.CloseService();
                     return;
                 }
 

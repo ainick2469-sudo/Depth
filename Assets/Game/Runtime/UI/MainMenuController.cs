@@ -34,11 +34,13 @@ namespace FrontierDepths.UI
         {
             GameBootstrap.Instance.ProfileService.ResetProgress();
             GameBootstrap.Instance.RunService.EndRun();
+            GameBootstrap.Instance.SceneFlowService.SetPendingTownHubLoadReason(TownHubLoadReason.Default);
             GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
         }
 
         public void LoadGame()
         {
+            GameBootstrap.Instance.SceneFlowService.SetPendingTownHubLoadReason(TownHubLoadReason.Default);
             GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
         }
 

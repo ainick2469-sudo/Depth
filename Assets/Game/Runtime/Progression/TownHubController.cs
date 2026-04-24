@@ -5,12 +5,23 @@ namespace FrontierDepths.Progression
 {
     public sealed class TownHubController : MonoBehaviour
     {
+        private const string DefaultSpawnAnchorName = "TownSpawn_Default";
+        private const string DungeonEntranceSpawnAnchorName = "TownSpawn_DungeonEntranceReturn";
+        private const string PortalReturnSpawnAnchorName = "TownSpawn_PortalReturn";
+        private const float SpawnHeight = 2f;
+        private const float DungeonEntranceOffsetDistance = 8f;
+        private const float PortalReturnOffsetDistance = 8f;
+
         private TownShopService shopService;
         private ShopDefinition activeShop;
         private string lastMessage = "Welcome back to the frontier.";
         private FirstPersonController playerController;
+        private Transform defaultSpawnAnchor;
+        private Transform dungeonEntranceSpawnAnchor;
+        private Transform portalReturnSpawnAnchor;
 
         public bool IsPanelOpen => activeShop != null;
+        public bool WasPanelCloseInputConsumedThisFrame => InputFrameGuard.WasTownServiceCloseConsumedThisFrame;
 
         public string BuildPanelText()
         {
@@ -27,7 +38,7 @@ namespace FrontierDepths.Progression
                 text += $"{i + 1}. {offer.displayName} [{offer.cost}g]\n{offer.description}\n\n";
             }
 
-            text += "Press 1-9 to take an offer. Press Escape to close.";
+            text += "Press 1-9 to take an offer. Press E or Escape to close.";
             if (!string.IsNullOrWhiteSpace(lastMessage))
             {
                 text += $"\n\n{lastMessage}";
@@ -46,11 +57,18 @@ namespace FrontierDepths.Progression
         {
             shopService = new TownShopService(GameBootstrap.Instance.ProfileService);
             playerController = FindAnyObjectByType<FirstPersonController>();
+            EnsureSpawnAnchors();
+            PlacePlayerAtTownSpawn();
         }
 
         private void Update()
         {
             if (!IsPanelOpen)
+            {
+                return;
+            }
+
+            if (HandlePanelInput())
             {
                 return;
             }
@@ -81,6 +99,29 @@ namespace FrontierDepths.Progression
             playerController?.SetUiCaptured(false);
         }
 
+        public bool HandlePanelInput()
+        {
+            if (!IsPanelOpen)
+            {
+                return false;
+            }
+
+            if (!Input.GetKeyDown(KeyCode.E) && !Input.GetKeyDown(KeyCode.Escape))
+            {
+                return false;
+            }
+
+            CloseServiceFromInput();
+            return true;
+        }
+
+        public void CloseServiceFromInput()
+        {
+            InputFrameGuard.MarkTownServiceCloseConsumedThisFrame();
+            CloseService();
+            playerController?.ResumeGameplayCapture();
+        }
+
         private void TrySelect(int index)
         {
             if (activeShop == null)
@@ -89,6 +130,82 @@ namespace FrontierDepths.Progression
             }
 
             shopService.TryExecuteOffer(activeShop, index, out lastMessage);
+        }
+
+        private void PlacePlayerAtTownSpawn()
+        {
+            playerController ??= FindAnyObjectByType<FirstPersonController>();
+            if (playerController == null || GameBootstrap.Instance == null || GameBootstrap.Instance.SceneFlowService == null)
+            {
+                return;
+            }
+
+            TownHubLoadReason reason = GameBootstrap.Instance.SceneFlowService.ConsumePendingTownHubLoadReason();
+            Transform selectedAnchor = GetSpawnAnchor(reason);
+            Vector3 finalPosition = selectedAnchor != null ? selectedAnchor.position : playerController.transform.position;
+            playerController.WarpTo(finalPosition);
+
+            if (Debug.isDebugBuild || Application.isEditor)
+            {
+                string anchorName = selectedAnchor != null ? selectedAnchor.name : "PlayerExistingPosition";
+                Debug.Log($"TownHub spawn routed. Reason={reason} Anchor={anchorName} Position={finalPosition}");
+            }
+        }
+
+        private Transform GetSpawnAnchor(TownHubLoadReason reason)
+        {
+            EnsureSpawnAnchors();
+            return reason switch
+            {
+                TownHubLoadReason.DungeonEntranceReturn => dungeonEntranceSpawnAnchor ?? defaultSpawnAnchor,
+                TownHubLoadReason.DungeonPortalReturn => portalReturnSpawnAnchor ?? dungeonEntranceSpawnAnchor ?? defaultSpawnAnchor,
+                _ => defaultSpawnAnchor ?? dungeonEntranceSpawnAnchor ?? portalReturnSpawnAnchor
+            };
+        }
+
+        private void EnsureSpawnAnchors()
+        {
+            defaultSpawnAnchor ??= FindSceneTransform(DefaultSpawnAnchorName);
+            dungeonEntranceSpawnAnchor ??= FindSceneTransform(DungeonEntranceSpawnAnchorName);
+            portalReturnSpawnAnchor ??= FindSceneTransform(PortalReturnSpawnAnchorName);
+
+            playerController ??= FindAnyObjectByType<FirstPersonController>();
+            Vector3 fallbackPlayerPosition = playerController != null ? playerController.transform.position : new Vector3(0f, SpawnHeight, -28f);
+
+            if (defaultSpawnAnchor == null)
+            {
+                defaultSpawnAnchor = CreateRuntimeSpawnAnchor(DefaultSpawnAnchorName, fallbackPlayerPosition);
+            }
+
+            GameObject dungeonGate = GameObject.Find("DungeonGate");
+            Vector3 dungeonEntrancePosition = dungeonGate != null
+                ? dungeonGate.transform.position - dungeonGate.transform.forward * DungeonEntranceOffsetDistance + Vector3.up * (SpawnHeight - dungeonGate.transform.position.y)
+                : defaultSpawnAnchor.position + new Vector3(0f, 0f, 60f);
+
+            if (dungeonEntranceSpawnAnchor == null)
+            {
+                dungeonEntranceSpawnAnchor = CreateRuntimeSpawnAnchor(DungeonEntranceSpawnAnchorName, dungeonEntrancePosition);
+            }
+
+            Vector3 portalReturnPosition = dungeonEntranceSpawnAnchor.position + Vector3.right * PortalReturnOffsetDistance;
+            if (portalReturnSpawnAnchor == null)
+            {
+                portalReturnSpawnAnchor = CreateRuntimeSpawnAnchor(PortalReturnSpawnAnchorName, portalReturnPosition);
+            }
+        }
+
+        private static Transform FindSceneTransform(string objectName)
+        {
+            GameObject sceneObject = GameObject.Find(objectName);
+            return sceneObject != null ? sceneObject.transform : null;
+        }
+
+        private Transform CreateRuntimeSpawnAnchor(string objectName, Vector3 worldPosition)
+        {
+            GameObject anchorObject = new GameObject(objectName);
+            anchorObject.transform.SetParent(transform, true);
+            anchorObject.transform.position = worldPosition;
+            return anchorObject.transform;
         }
     }
 }
