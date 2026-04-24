@@ -42,7 +42,7 @@ namespace FrontierDepths.UI
 
             if (dungeonScene != null)
             {
-                statusText.text = string.Empty;
+                statusText.text = dungeonScene.GetStatusLine();
             }
             else
             {

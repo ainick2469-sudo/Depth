@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FrontierDepths.Core;
 using UnityEngine;
@@ -12,6 +13,9 @@ namespace FrontierDepths.World
         private const float WallThickness = 1f;
         private const float PrimaryCorridorWidth = 16f;
         private const float SecretCorridorWidth = 16f;
+        private const int MaxBuildAttempts = 3;
+        private const float RoomBoundsHeight = WallHeight + FloorThickness;
+        private const float CorridorZoneHeight = 6f;
 
         private sealed class BoundarySpan
         {
@@ -26,12 +30,15 @@ namespace FrontierDepths.World
         [SerializeField] private Transform runtimeRoot;
         [SerializeField] private float roomSpacing = 56f;
 
-        private readonly IDungeonGenerator generator = new GraphFirstDungeonGenerator();
-        private string statusMessage = "Find the lower stairs, or climb back toward town when the haul feels good enough.";
+        private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+        private DungeonBuildResult activeBuildResult;
+        private DungeonBuildResult currentBuildResult;
+        private bool debugOverlayVisible;
+        private string statusMessage = string.Empty;
 
         public string GetStatusLine()
         {
-            return string.Empty;
+            return debugOverlayVisible ? statusMessage : string.Empty;
         }
 
         private void Start()
@@ -39,6 +46,21 @@ namespace FrontierDepths.World
             runtimeRoot ??= transform;
             roomSpacing = Mathf.Max(150f, roomSpacing);
             BuildFloor();
+        }
+
+        private void Update()
+        {
+            HandleDebugInput();
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (!debugOverlayVisible || currentBuildResult == null)
+            {
+                return;
+            }
+
+            DrawBuildGizmos();
         }
 
         private void BuildFloor()
@@ -51,32 +73,102 @@ namespace FrontierDepths.World
             }
 
             RunState run = bootstrap.RunService.EnsureRun();
-            DungeonLayoutGraph graph = generator.Generate(run.currentFloor);
+            FloorState currentFloor = run.currentFloor ?? new FloorState();
+            int baseSeed = currentFloor.floorSeed == 0
+                ? 1000 + Mathf.Max(1, currentFloor.floorIndex) * 977
+                : currentFloor.floorSeed;
 
-            for (int i = runtimeRoot.childCount - 1; i >= 0; i--)
+            DungeonValidationReport latestReport = null;
+            for (int attempt = 0; attempt < MaxBuildAttempts; attempt++)
             {
-                Destroy(runtimeRoot.GetChild(i).gameObject);
+                int attemptSeed = baseSeed + attempt * 1543;
+                DungeonBuildResult attemptBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, attemptSeed), false);
+                latestReport = DungeonValidator.Validate(attemptBuild);
+                if (latestReport.IsValid)
+                {
+                    ApplySuccessfulBuild(run, attemptBuild);
+                    return;
+                }
+
+                latestReport.LogFailures();
+                ClearRuntimeRoot(true);
             }
 
-            for (int i = 0; i < graph.edges.Count; i++)
+            DungeonBuildResult fallbackBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, baseSeed), true);
+            latestReport = DungeonValidator.Validate(fallbackBuild);
+            currentBuildResult = fallbackBuild;
+            if (latestReport.IsValid)
             {
-                DungeonEdge edge = graph.edges[i];
+                ApplySuccessfulBuild(run, fallbackBuild);
+                return;
+            }
+
+            latestReport.LogFailures();
+            Debug.LogError($"Dungeon fallback validation failed for floor {fallbackBuild.floorIndex} seed {fallbackBuild.seed}.");
+            statusMessage = "Dungeon validation failed. Check console for details.";
+        }
+
+        private DungeonBuildResult BuildFloorAttempt(FloorState floorState, bool useFallback)
+        {
+            ClearRuntimeRoot(true);
+
+            DungeonLayoutGraph graph = useFallback
+                ? generator.GenerateFallback(floorState)
+                : generator.Generate(floorState);
+
+            activeBuildResult = new DungeonBuildResult
+            {
+                graph = graph,
+                floorIndex = Mathf.Max(1, floorState.floorIndex),
+                seed = floorState.floorSeed,
+                usedFallback = useFallback,
+                entryNodeId = graph.entryHubNodeId,
+                transitUpNodeId = graph.transitUpNodeId,
+                transitDownNodeId = graph.transitDownNodeId,
+                landmarkNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Landmark),
+                secretNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Secret)
+            };
+
+            for (int edgeIndex = 0; edgeIndex < graph.edges.Count; edgeIndex++)
+            {
+                DungeonEdge edge = graph.edges[edgeIndex];
+                activeBuildResult.graphEdges.Add(new DungeonGraphEdgeRecord
+                {
+                    edgeKey = DungeonBuildResult.GetEdgeKey(edge.a, edge.b),
+                    a = edge.a,
+                    b = edge.b
+                });
+
                 CreateCorridor(graph.GetNode(edge.a), graph.GetNode(edge.b));
             }
 
-            for (int i = 0; i < graph.nodes.Count; i++)
+            for (int nodeIndex = 0; nodeIndex < graph.nodes.Count; nodeIndex++)
             {
-                CreateRoom(graph.nodes[i], graph);
+                CreateRoom(graph.nodes[nodeIndex], graph);
             }
+
+            activeBuildResult.playerSpawn = GetSpawnPosition(graph);
+            DungeonBuildResult completed = activeBuildResult;
+            activeBuildResult = null;
+            return completed;
+        }
+
+        private void ApplySuccessfulBuild(RunState run, DungeonBuildResult buildResult)
+        {
+            currentBuildResult = buildResult;
+            run.currentFloor.floorSeed = buildResult.seed;
+            GameBootstrap.Instance.RunService.Save();
 
             FirstPersonController player = FindFirstObjectByType<FirstPersonController>();
             if (player != null)
             {
-                player.WarpTo(GetSpawnPosition(graph, run));
+                player.WarpTo(buildResult.playerSpawn);
             }
+
+            RefreshStatusMessage();
         }
 
-        private Vector3 GetSpawnPosition(DungeonLayoutGraph graph, RunState run)
+        private Vector3 GetSpawnPosition(DungeonLayoutGraph graph)
         {
             DungeonNode spawnNode = graph.GetNode(graph.entryHubNodeId);
             return GridToWorld(spawnNode.gridPosition) + Vector3.up * 3.5f;
@@ -85,16 +177,28 @@ namespace FrontierDepths.World
         private void CreateRoom(DungeonNode node, DungeonLayoutGraph graph)
         {
             HashSet<Vector2Int> floorCells = DungeonRoomTemplateLibrary.GetCells(node);
-            GameObject roomRoot = new GameObject($"{node.nodeKind}_{node.label}");
+            GameObject roomRoot = new GameObject($"Room_{node.nodeId}_{node.nodeKind}_{node.roomTemplate}");
             roomRoot.transform.SetParent(runtimeRoot, false);
             roomRoot.transform.position = GridToWorld(node.gridPosition);
 
+            DungeonRoomBuildRecord roomRecord = new DungeonRoomBuildRecord
+            {
+                nodeId = node.nodeId,
+                label = node.label,
+                roomType = node.nodeKind,
+                templateKind = node.roomTemplate,
+                rootObject = roomRoot,
+                bounds = GetRoomBounds(roomRoot.transform.position, floorCells)
+            };
+            activeBuildResult?.rooms.Add(roomRecord);
+
             Dictionary<Vector2Int, float> doorwayWidths = GetDoorwayWidths(node, graph);
             CreateMergedFloors(roomRoot.transform, floorCells, GetFloorColor(node.nodeKind));
-            CreateRoomWalls(roomRoot.transform, node, floorCells, doorwayWidths);
+            roomRecord.hasFloor = floorCells.Count > 0;
+            CreateRoomWalls(roomRoot.transform, node, graph, floorCells, doorwayWidths, roomRecord);
 
             CreateInteriorFeature(roomRoot.transform, node, floorCells);
-            CreateNodeInteractables(roomRoot.transform, node, graph);
+            CreateNodeInteractables(roomRoot.transform, node);
         }
 
         private void CreateCorridor(DungeonNode a, DungeonNode b)
@@ -114,27 +218,70 @@ namespace FrontierDepths.World
 
             Vector3 start = GetDoorWorldPosition(a, direction2D);
             Vector3 end = GetDoorWorldPosition(b, reverseDirection);
+            List<Vector3> routePoints = BuildCorridorRoute(start, end, direction2D);
+            string edgeKey = DungeonBuildResult.GetEdgeKey(a.nodeId, b.nodeId);
+            GameObject corridorRoot = new GameObject($"Corridor_{a.nodeId}_To_{b.nodeId}");
+            corridorRoot.transform.SetParent(runtimeRoot, false);
+
+            int segmentIndex = 0;
+            for (int i = 1; i < routePoints.Count; i++)
+            {
+                Vector3 segmentStart = routePoints[i - 1];
+                Vector3 segmentEnd = routePoints[i];
+                if (Vector3.Distance(segmentStart, segmentEnd) <= 0.05f)
+                {
+                    continue;
+                }
+
+                CreateCorridorSegment(corridorRoot.transform, edgeKey, a.nodeId, b.nodeId, segmentIndex++, corridorWidth, segmentStart, segmentEnd);
+            }
+        }
+
+        private void CreateCorridorSegment(
+            Transform corridorRoot,
+            string edgeKey,
+            string fromNodeId,
+            string toNodeId,
+            int segmentIndex,
+            float corridorWidth,
+            Vector3 start,
+            Vector3 end)
+        {
             Vector3 midpoint = (start + end) * 0.5f;
             Vector3 delta = end - start;
             bool horizontal = Mathf.Abs(delta.x) >= Mathf.Abs(delta.z);
             float corridorLength = Mathf.Max(CellSize * 0.9f, horizontal ? Mathf.Abs(delta.x) : Mathf.Abs(delta.z));
 
-            GameObject corridorRoot = new GameObject($"Corridor_{a.nodeId}_{b.nodeId}");
-            corridorRoot.transform.SetParent(runtimeRoot, false);
+            GameObject segmentRoot = new GameObject($"Corridor_{fromNodeId}_To_{toNodeId}_Segment_{segmentIndex}");
+            segmentRoot.transform.SetParent(corridorRoot, false);
 
-            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            floor.name = "Floor";
-            floor.transform.SetParent(corridorRoot.transform, false);
-            floor.transform.position = midpoint + Vector3.down * (FloorThickness * 0.5f);
-            floor.transform.localScale = horizontal
+            Vector3 floorScale = horizontal
                 ? new Vector3(corridorLength, FloorThickness, corridorWidth)
                 : new Vector3(corridorWidth, FloorThickness, corridorLength);
-            ApplyColor(floor.GetComponent<Renderer>(), new Color(0.19f, 0.18f, 0.17f));
 
-            CreateCorridorWalls(corridorRoot.transform, midpoint, corridorLength, corridorWidth, horizontal);
+            GameObject floor = CreatePrimitive("Floor", segmentRoot.transform, midpoint + Vector3.down * (FloorThickness * 0.5f), floorScale, new Color(0.19f, 0.18f, 0.17f));
+            activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
+            {
+                edgeKey = edgeKey,
+                fromNodeId = fromNodeId,
+                toNodeId = toNodeId,
+                segmentIndex = segmentIndex,
+                start = start,
+                end = end,
+                bounds = GetBounds(floor.transform.position, floorScale),
+                horizontal = horizontal
+            });
+            activeBuildResult?.reservedZones.Add(new DungeonReservedZoneRecord
+            {
+                ownerId = edgeKey,
+                kind = "Corridor",
+                bounds = GetBounds(midpoint + Vector3.up * (CorridorZoneHeight * 0.5f), new Vector3(floorScale.x, CorridorZoneHeight, floorScale.z))
+            });
+
+            CreateCorridorWalls(segmentRoot.transform, edgeKey, midpoint, corridorLength, corridorWidth, horizontal);
         }
 
-        private static void CreateCorridorWalls(Transform parent, Vector3 midpoint, float corridorLength, float corridorWidth, bool horizontal)
+        private void CreateCorridorWalls(Transform parent, string edgeKey, Vector3 midpoint, float corridorLength, float corridorWidth, bool horizontal)
         {
             Vector3 leftOffset = horizontal
                 ? new Vector3(0f, WallHeight * 0.5f - FloorThickness * 0.5f, corridorWidth * 0.5f)
@@ -149,8 +296,366 @@ namespace FrontierDepths.World
                 ? new Vector3(trimmedLength, WallHeight, WallThickness)
                 : new Vector3(WallThickness, WallHeight, trimmedLength);
 
-            CreatePrimitive("LeftWall", parent, midpoint + leftOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
-            CreatePrimitive("RightWall", parent, midpoint + rightOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
+            GameObject leftWall = CreatePrimitive("LeftWall", parent, midpoint + leftOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
+            GameObject rightWall = CreatePrimitive("RightWall", parent, midpoint + rightOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
+            RecordCorridorWall(edgeKey, GetBounds(leftWall.transform.position, wallScale));
+            RecordCorridorWall(edgeKey, GetBounds(rightWall.transform.position, wallScale));
+        }
+
+        private void HandleDebugInput()
+        {
+            if (Input.GetKeyDown(KeyCode.F1))
+            {
+                debugOverlayVisible = !debugOverlayVisible;
+                RefreshStatusMessage();
+            }
+
+            if (Input.GetKeyDown(KeyCode.F2))
+            {
+                RefreshStatusMessage();
+                Debug.Log(string.IsNullOrWhiteSpace(statusMessage) ? "Dungeon build not ready." : statusMessage);
+            }
+
+            bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (Input.GetKeyDown(KeyCode.F5))
+            {
+                if (shiftHeld)
+                {
+                    RegenerateFloorWithNewSeed();
+                }
+                else
+                {
+                    BuildFloor();
+                }
+            }
+
+            if (Input.GetKeyDown(KeyCode.F6))
+            {
+                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.entryNodeId : string.Empty);
+            }
+
+            if (Input.GetKeyDown(KeyCode.F7))
+            {
+                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.transitDownNodeId : string.Empty);
+            }
+
+            if (Input.GetKeyDown(KeyCode.F8))
+            {
+                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.landmarkNodeId : string.Empty);
+            }
+
+            if (Input.GetKeyDown(KeyCode.F9))
+            {
+                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.secretNodeId : string.Empty);
+            }
+
+            if (Input.GetKeyDown(KeyCode.F10) && GameBootstrap.Instance != null)
+            {
+                GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
+            }
+        }
+
+        private void RegenerateFloorWithNewSeed()
+        {
+            if (GameBootstrap.Instance == null || GameBootstrap.Instance.RunService == null)
+            {
+                return;
+            }
+
+            RunState run = GameBootstrap.Instance.RunService.EnsureRun();
+            run.currentFloor.floorSeed = Mathf.Abs(Guid.NewGuid().GetHashCode()) + Mathf.Max(1, run.floorIndex) * 977;
+            GameBootstrap.Instance.RunService.Save();
+            BuildFloor();
+        }
+
+        private void TryTeleportToNode(string nodeId)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId) || currentBuildResult == null)
+            {
+                return;
+            }
+
+            DungeonRoomBuildRecord room = currentBuildResult.FindRoom(nodeId);
+            FirstPersonController player = FindFirstObjectByType<FirstPersonController>();
+            if (room == null || player == null)
+            {
+                return;
+            }
+
+            Vector3 target = new Vector3(room.bounds.center.x, 3.5f, room.bounds.center.z);
+            player.WarpTo(target);
+        }
+
+        private void DrawBuildGizmos()
+        {
+            for (int i = 0; i < currentBuildResult.rooms.Count; i++)
+            {
+                Gizmos.color = GetGizmoColor(currentBuildResult.rooms[i].roomType);
+                Gizmos.DrawWireCube(currentBuildResult.rooms[i].bounds.center, currentBuildResult.rooms[i].bounds.size);
+            }
+
+            Gizmos.color = Color.yellow;
+            for (int i = 0; i < currentBuildResult.corridors.Count; i++)
+            {
+                Gizmos.DrawWireCube(currentBuildResult.corridors[i].bounds.center, currentBuildResult.corridors[i].bounds.size);
+                Gizmos.DrawLine(currentBuildResult.corridors[i].start + Vector3.up, currentBuildResult.corridors[i].end + Vector3.up);
+            }
+
+            Gizmos.color = new Color(1f, 0.5f, 0.1f);
+            for (int i = 0; i < currentBuildResult.reservedZones.Count; i++)
+            {
+                Gizmos.DrawWireCube(currentBuildResult.reservedZones[i].bounds.center, currentBuildResult.reservedZones[i].bounds.size);
+            }
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawSphere(currentBuildResult.playerSpawn, 1.1f);
+        }
+
+        private static FloorState CloneFloorState(FloorState source, int fallbackFloorIndex, int floorSeed)
+        {
+            FloorState clone = new FloorState
+            {
+                floorIndex = source != null && source.floorIndex > 0 ? source.floorIndex : fallbackFloorIndex,
+                floorSeed = floorSeed,
+                floorBandId = source != null ? source.floorBandId : "floorband.frontier_mine",
+                chapterId = source != null ? source.chapterId : "chapter.frontier_descent",
+                themeKitId = source != null ? source.themeKitId : "theme.frontier_town",
+                stairDiscovered = source != null && source.stairDiscovered
+            };
+            clone.Normalize(clone.floorIndex, floorSeed);
+            return clone;
+        }
+
+        private void ClearRuntimeRoot(bool immediate)
+        {
+            if (runtimeRoot == null)
+            {
+                return;
+            }
+
+            for (int i = runtimeRoot.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = runtimeRoot.GetChild(i).gameObject;
+                if (immediate)
+                {
+                    DestroyImmediate(child);
+                }
+                else
+                {
+                    Destroy(child);
+                }
+            }
+        }
+
+        private static string GetNodeIdByKind(DungeonLayoutGraph graph, DungeonNodeKind kind)
+        {
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                if (graph.nodes[i].nodeKind == kind)
+                {
+                    return graph.nodes[i].nodeId;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private void RefreshStatusMessage()
+        {
+            if (currentBuildResult == null)
+            {
+                statusMessage = "Dungeon build not ready.";
+                return;
+            }
+
+            statusMessage = $"Floor {currentBuildResult.floorIndex} | Seed {currentBuildResult.seed} | Rooms {currentBuildResult.rooms.Count} | Corridor Segments {currentBuildResult.corridors.Count} | Fallback {(currentBuildResult.usedFallback ? "Yes" : "No")}";
+        }
+
+        private static List<Vector3> BuildCorridorRoute(Vector3 start, Vector3 end, Vector2Int direction)
+        {
+            List<Vector3> points = new List<Vector3> { start };
+            bool primaryHorizontal = direction.x != 0;
+
+            if (primaryHorizontal)
+            {
+                float midX = (start.x + end.x) * 0.5f;
+                AddRoutePoint(points, new Vector3(midX, start.y, start.z));
+                AddRoutePoint(points, new Vector3(midX, end.y, end.z));
+            }
+            else
+            {
+                float midZ = (start.z + end.z) * 0.5f;
+                AddRoutePoint(points, new Vector3(start.x, start.y, midZ));
+                AddRoutePoint(points, new Vector3(end.x, end.y, midZ));
+            }
+
+            AddRoutePoint(points, end);
+            return points;
+        }
+
+        private static void AddRoutePoint(List<Vector3> points, Vector3 point)
+        {
+            if (points.Count == 0 || Vector3.Distance(points[points.Count - 1], point) > 0.05f)
+            {
+                points.Add(point);
+            }
+        }
+
+        private Bounds GetRoomBounds(Vector3 roomPosition, HashSet<Vector2Int> floorCells)
+        {
+            GetLocalBounds(floorCells, out float minX, out float maxX, out float minZ, out float maxZ);
+            Vector3 center = roomPosition + new Vector3((minX + maxX) * 0.5f, RoomBoundsHeight * 0.5f - FloorThickness * 0.5f, (minZ + maxZ) * 0.5f);
+            Vector3 size = new Vector3(maxX - minX, RoomBoundsHeight, maxZ - minZ);
+            return new Bounds(center, size);
+        }
+
+        private void RecordCorridorWall(string edgeKey, Bounds bounds)
+        {
+            activeBuildResult?.wallSpans.Add(new DungeonWallSpanRecord
+            {
+                ownerId = edgeKey,
+                edgeKey = edgeKey,
+                bounds = bounds,
+                isCorridorWall = true
+            });
+        }
+
+        private void RecordDoorOpening(
+            Transform roomRoot,
+            DungeonNode node,
+            DungeonLayoutGraph graph,
+            Vector2Int direction,
+            float openingWidth,
+            DungeonRoomBuildRecord roomRecord)
+        {
+            if (activeBuildResult == null || activeBuildResult.FindDoorOpening(node.nodeId, direction) != null)
+            {
+                return;
+            }
+
+            DungeonNode neighbor = GetNeighborForDirection(node, graph, direction);
+            string edgeKey = neighbor != null ? DungeonBuildResult.GetEdgeKey(node.nodeId, neighbor.nodeId) : string.Empty;
+            Vector3 doorwayCenter = roomRoot.position + GetDoorLocalPosition(node, direction);
+            Vector3 openingSize = direction.x == 0
+                ? new Vector3(openingWidth, WallHeight, WallThickness * 2f)
+                : new Vector3(WallThickness * 2f, WallHeight, openingWidth);
+
+            GameObject openingMarker = new GameObject($"DoorOpening_{node.nodeId}_{DirectionToToken(direction)}");
+            openingMarker.transform.SetParent(roomRoot, false);
+            openingMarker.transform.localPosition = GetDoorLocalPosition(node, direction);
+
+            activeBuildResult.doorOpenings.Add(new DungeonDoorOpeningRecord
+            {
+                openingId = openingMarker.name,
+                nodeId = node.nodeId,
+                direction = direction,
+                neighborNodeId = neighbor != null ? neighbor.nodeId : string.Empty,
+                edgeKey = edgeKey,
+                openingWidth = openingWidth,
+                center = doorwayCenter,
+                bounds = GetBounds(doorwayCenter + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f), openingSize)
+            });
+            activeBuildResult.reservedZones.Add(new DungeonReservedZoneRecord
+            {
+                ownerId = node.nodeId,
+                kind = "Doorway",
+                bounds = GetDoorwayReservedZone(doorwayCenter, direction, openingWidth)
+            });
+            roomRecord.doorwayCount++;
+        }
+
+        private void RecordInteractable(
+            string nodeId,
+            string interactableType,
+            GameObject interactableObject,
+            bool requiresTownSigil,
+            bool returnsToTown,
+            bool isRequiredReturnRoute)
+        {
+            if (activeBuildResult == null || interactableObject == null)
+            {
+                return;
+            }
+
+            Collider collider = interactableObject.GetComponent<Collider>();
+            Bounds bounds = collider != null
+                ? collider.bounds
+                : new Bounds(interactableObject.transform.position, Vector3.one);
+
+            activeBuildResult.interactables.Add(new DungeonInteractableBuildRecord
+            {
+                nodeId = nodeId,
+                interactableType = interactableType,
+                requiresTownSigil = requiresTownSigil,
+                returnsToTown = returnsToTown,
+                isRequiredReturnRoute = isRequiredReturnRoute,
+                position = interactableObject.transform.position,
+                bounds = bounds
+            });
+        }
+
+        private static DungeonNode GetNeighborForDirection(DungeonNode node, DungeonLayoutGraph graph, Vector2Int direction)
+        {
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                Vector2Int delta = neighbors[i].gridPosition - node.gridPosition;
+                delta.x = Mathf.Clamp(delta.x, -1, 1);
+                delta.y = Mathf.Clamp(delta.y, -1, 1);
+                if (delta == direction)
+                {
+                    return neighbors[i];
+                }
+            }
+
+            return null;
+        }
+
+        private static Bounds GetDoorwayReservedZone(Vector3 doorwayCenter, Vector2Int direction, float openingWidth)
+        {
+            Vector3 size = direction.x == 0
+                ? new Vector3(openingWidth, CorridorZoneHeight, CellSize * 1.75f)
+                : new Vector3(CellSize * 1.75f, CorridorZoneHeight, openingWidth);
+            Vector3 center = doorwayCenter + new Vector3(direction.x * CellSize * 0.5f, CorridorZoneHeight * 0.5f, direction.y * CellSize * 0.5f);
+            return new Bounds(center, size);
+        }
+
+        private static Bounds GetBounds(Vector3 center, Vector3 size)
+        {
+            return new Bounds(center, size);
+        }
+
+        private static string DirectionToToken(Vector2Int direction)
+        {
+            if (direction == new Vector2Int(0, 1))
+            {
+                return "North";
+            }
+
+            if (direction == new Vector2Int(0, -1))
+            {
+                return "South";
+            }
+
+            if (direction == new Vector2Int(1, 0))
+            {
+                return "East";
+            }
+
+            return "West";
+        }
+
+        private static Color GetGizmoColor(DungeonNodeKind kind)
+        {
+            return kind switch
+            {
+                DungeonNodeKind.EntryHub => Color.cyan,
+                DungeonNodeKind.TransitUp => new Color(0.5f, 0.8f, 1f),
+                DungeonNodeKind.TransitDown => Color.red,
+                DungeonNodeKind.Landmark => new Color(0.3f, 0.85f, 0.4f),
+                DungeonNodeKind.Secret => new Color(0.7f, 0.3f, 0.95f),
+                _ => Color.white
+            };
         }
 
         private static void CreateMergedFloors(Transform roomRoot, HashSet<Vector2Int> floorCells, Color color)
@@ -218,11 +723,13 @@ namespace FrontierDepths.World
             return best;
         }
 
-        private static void CreateRoomWalls(
+        private void CreateRoomWalls(
             Transform roomRoot,
             DungeonNode node,
+            DungeonLayoutGraph graph,
             HashSet<Vector2Int> floorCells,
-            Dictionary<Vector2Int, float> doorwayWidths)
+            Dictionary<Vector2Int, float> doorwayWidths,
+            DungeonRoomBuildRecord roomRecord)
         {
             List<BoundarySpan> spans = CollectBoundarySpans(floorCells);
             for (int i = 0; i < spans.Count; i++)
@@ -230,11 +737,11 @@ namespace FrontierDepths.World
                 BoundarySpan span = spans[i];
                 if (doorwayWidths.TryGetValue(span.direction, out float openingWidth))
                 {
-                    CreateWallSpanWithOpening(roomRoot, node, span, openingWidth, node.nodeKind);
+                    CreateWallSpanWithOpening(roomRoot, node, graph, span, openingWidth, node.nodeKind, roomRecord);
                 }
                 else
                 {
-                    CreateWallSpan(roomRoot, span.direction, span.fixedCoord, span.start, span.end, node.nodeKind);
+                    CreateWallSpan(roomRoot, node.nodeId, span.direction, span.fixedCoord, span.start, span.end, node.nodeKind, roomRecord);
                 }
             }
         }
@@ -314,36 +821,41 @@ namespace FrontierDepths.World
             };
         }
 
-        private static void CreateWallSpanWithOpening(
+        private void CreateWallSpanWithOpening(
             Transform roomRoot,
             DungeonNode node,
+            DungeonLayoutGraph graph,
             BoundarySpan span,
             float openingWidth,
-            DungeonNodeKind kind)
+            DungeonNodeKind kind,
+            DungeonRoomBuildRecord roomRecord)
         {
             Vector3 doorwayLocal = GetDoorLocalPosition(node, span.direction);
             float doorwayFixed = span.direction.x == 0 ? doorwayLocal.z : doorwayLocal.x;
             if (Mathf.Abs(doorwayFixed - span.fixedCoord) > 0.01f)
             {
-                CreateWallSpan(roomRoot, span.direction, span.fixedCoord, span.start, span.end, kind);
+                CreateWallSpan(roomRoot, node.nodeId, span.direction, span.fixedCoord, span.start, span.end, kind, roomRecord);
                 return;
             }
 
             float openingCenter = span.direction.x == 0 ? doorwayLocal.x : doorwayLocal.z;
             float openingStart = Mathf.Max(span.start, openingCenter - openingWidth * 0.5f);
             float openingEnd = Mathf.Min(span.end, openingCenter + openingWidth * 0.5f);
+            RecordDoorOpening(roomRoot, node, graph, span.direction, openingWidth, roomRecord);
 
-            CreateWallSpan(roomRoot, span.direction, span.fixedCoord, span.start, openingStart, kind);
-            CreateWallSpan(roomRoot, span.direction, span.fixedCoord, openingEnd, span.end, kind);
+            CreateWallSpan(roomRoot, node.nodeId, span.direction, span.fixedCoord, span.start, openingStart, kind, roomRecord);
+            CreateWallSpan(roomRoot, node.nodeId, span.direction, span.fixedCoord, openingEnd, span.end, kind, roomRecord);
         }
 
-        private static void CreateWallSpan(
+        private void CreateWallSpan(
             Transform roomRoot,
+            string ownerNodeId,
             Vector2Int direction,
             float fixedCoord,
             float start,
             float end,
-            DungeonNodeKind kind)
+            DungeonNodeKind kind,
+            DungeonRoomBuildRecord roomRecord)
         {
             float length = end - start;
             if (length <= 0.05f)
@@ -364,12 +876,20 @@ namespace FrontierDepths.World
                 scale = new Vector3(WallThickness, WallHeight, length + WallThickness);
             }
 
-            CreatePrimitive(
-                $"WallSpan_{direction.x}_{direction.y}_{fixedCoord:F2}_{start:F2}_{end:F2}",
+            GameObject wall = CreatePrimitive(
+                $"Wall_{ownerNodeId}_{DirectionToToken(direction)}_{roomRecord.wallCount}",
                 roomRoot,
                 localPosition,
                 scale,
                 GetWallColor(kind));
+            roomRecord.wallCount++;
+            activeBuildResult?.wallSpans.Add(new DungeonWallSpanRecord
+            {
+                ownerId = ownerNodeId,
+                direction = direction,
+                bounds = GetBounds(wall.transform.position, scale),
+                isCorridorWall = false
+            });
         }
 
         private static bool IsDoorOpeningCell(DungeonNode node, Vector2Int direction, Vector2Int cell, HashSet<Vector2Int> floorCells)
@@ -558,27 +1078,30 @@ namespace FrontierDepths.World
             ApplyColor(ramp.GetComponent<Renderer>(), color);
         }
 
-        private static void CreateNodeInteractables(Transform roomRoot, DungeonNode node, DungeonLayoutGraph graph)
+        private void CreateNodeInteractables(Transform roomRoot, DungeonNode node)
         {
             if (node.nodeKind == DungeonNodeKind.TransitDown)
             {
                 GameObject stairs = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                stairs.name = "LowerStairs";
+                stairs.name = $"Interactable_{node.nodeId}_StairsDown";
                 stairs.transform.SetParent(roomRoot, false);
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(6f, 0.75f, 6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
                 stairs.AddComponent<DungeonStairsInteractable>();
+                RecordInteractable(node.nodeId, "StairsDown", stairs, false, false, false);
             }
             else if (node.nodeKind == DungeonNodeKind.TransitUp)
             {
                 GameObject stairs = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                stairs.name = "UpperStairs";
+                stairs.name = $"Interactable_{node.nodeId}_ReturnLift";
                 stairs.transform.SetParent(roomRoot, false);
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(5.6f, 0.75f, 5.6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
                 stairs.AddComponent<DungeonAscendInteractable>();
+                bool requiredReturnRoute = activeBuildResult != null && activeBuildResult.floorIndex == 1;
+                RecordInteractable(node.nodeId, "ReturnLift", stairs, false, true, requiredReturnRoute);
             }
         }
 
@@ -627,9 +1150,10 @@ namespace FrontierDepths.World
                 Vector2Int delta = neighbors[i].gridPosition - node.gridPosition;
                 delta.x = Mathf.Clamp(delta.x, -1, 1);
                 delta.y = Mathf.Clamp(delta.y, -1, 1);
-                widths[delta] = node.nodeKind == DungeonNodeKind.Secret || neighbors[i].nodeKind == DungeonNodeKind.Secret
+                float corridorWidth = node.nodeKind == DungeonNodeKind.Secret || neighbors[i].nodeKind == DungeonNodeKind.Secret
                     ? SecretCorridorWidth
                     : PrimaryCorridorWidth;
+                widths[delta] = corridorWidth + WallThickness * 2f;
             }
 
             return widths;
@@ -663,7 +1187,7 @@ namespace FrontierDepths.World
             };
         }
 
-        private static void CreatePrimitive(string name, Transform parent, Vector3 localPosition, Vector3 localScale, Color color)
+        private static GameObject CreatePrimitive(string name, Transform parent, Vector3 localPosition, Vector3 localScale, Color color)
         {
             GameObject primitive = GameObject.CreatePrimitive(PrimitiveType.Cube);
             primitive.name = name;
@@ -671,6 +1195,7 @@ namespace FrontierDepths.World
             primitive.transform.localPosition = localPosition;
             primitive.transform.localScale = localScale;
             ApplyColor(primitive.GetComponent<Renderer>(), color);
+            return primitive;
         }
 
         private static void ApplyColor(Renderer renderer, Color color)

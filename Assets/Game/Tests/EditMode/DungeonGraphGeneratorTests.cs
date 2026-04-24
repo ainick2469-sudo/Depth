@@ -85,7 +85,37 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void Generator_UsesMultipleRoomTemplatesOnMidDepthFloor()
+        public void Generator_UsesOnlyGateOneSafeOrdinaryTemplates()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            for (int seedIndex = 0; seedIndex < 6; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 8,
+                    floorSeed = 8800 + seedIndex * 977
+                });
+
+                for (int i = 0; i < graph.nodes.Count; i++)
+                {
+                    DungeonNode node = graph.nodes[i];
+                    if (node.nodeKind == DungeonNodeKind.Ordinary)
+                    {
+                        Assert.IsTrue(
+                            DungeonRoomTemplateLibrary.IsGateOneSafeOrdinaryTemplate(node.roomTemplate),
+                            $"Ordinary node {node.nodeId} used unsafe template {node.roomTemplate}.");
+                    }
+
+                    if (node.nodeKind == DungeonNodeKind.Landmark)
+                    {
+                        Assert.AreEqual(DungeonTemplateFeature.Flat, DungeonRoomTemplateLibrary.GetFeature(node));
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void Generator_UsesMultipleSafeTemplatesOnMidDepthFloor()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
             DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 8, floorSeed = 8800 });
@@ -93,10 +123,43 @@ namespace FrontierDepths.Tests.EditMode
 
             for (int i = 0; i < graph.nodes.Count; i++)
             {
-                templates.Add(graph.nodes[i].roomTemplate);
+                if (graph.nodes[i].nodeKind == DungeonNodeKind.Ordinary)
+                {
+                    templates.Add(graph.nodes[i].roomTemplate);
+                }
             }
 
-            Assert.GreaterOrEqual(templates.Count, 4);
+            Assert.GreaterOrEqual(templates.Count, 2);
+        }
+
+        [Test]
+        public void Generator_AvoidsThreeRoomOrdinaryTemplateStreaks()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            for (int seedIndex = 0; seedIndex < 6; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 8,
+                    floorSeed = 9600 + seedIndex * 977
+                });
+
+                Assert.IsFalse(HasThreeRoomOrdinaryTemplateStreak(graph), $"Found three-room ordinary template streak at seed {9600 + seedIndex * 977}.");
+            }
+        }
+
+        [Test]
+        public void Generator_FallbackLayoutIncludesRequiredGateOneRooms()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            DungeonLayoutGraph graph = generator.GenerateFallback(new FloorState { floorIndex = 1, floorSeed = 4400 });
+
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Landmark));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Secret));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitUp));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitDown));
+            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId));
+            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId));
         }
 
         private static DungeonNode FindByKind(DungeonLayoutGraph graph, DungeonNodeKind kind)
@@ -179,6 +242,45 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return position.y >= 0 ? 2 : 3;
+        }
+
+        private static bool HasThreeRoomOrdinaryTemplateStreak(DungeonLayoutGraph graph)
+        {
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                DungeonNode node = graph.nodes[i];
+                if (node.nodeKind != DungeonNodeKind.Ordinary)
+                {
+                    continue;
+                }
+
+                List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+                for (int neighborIndex = 0; neighborIndex < neighbors.Count; neighborIndex++)
+                {
+                    DungeonNode neighbor = neighbors[neighborIndex];
+                    if (neighbor.nodeKind != DungeonNodeKind.Ordinary || neighbor.roomTemplate != node.roomTemplate)
+                    {
+                        continue;
+                    }
+
+                    List<DungeonNode> secondaryNeighbors = graph.GetNeighbors(neighbor.nodeId);
+                    for (int secondaryIndex = 0; secondaryIndex < secondaryNeighbors.Count; secondaryIndex++)
+                    {
+                        DungeonNode secondary = secondaryNeighbors[secondaryIndex];
+                        if (secondary.nodeId == node.nodeId || secondary.nodeKind != DungeonNodeKind.Ordinary)
+                        {
+                            continue;
+                        }
+
+                        if (secondary.roomTemplate == node.roomTemplate)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }

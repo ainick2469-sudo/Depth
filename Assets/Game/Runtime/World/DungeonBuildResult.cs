@@ -1,0 +1,144 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace FrontierDepths.World
+{
+    public sealed class DungeonBuildResult
+    {
+        public DungeonLayoutGraph graph;
+        public int floorIndex;
+        public int seed;
+        public bool usedFallback;
+        public Vector3 playerSpawn;
+        public string entryNodeId;
+        public string transitUpNodeId;
+        public string transitDownNodeId;
+        public string landmarkNodeId;
+        public string secretNodeId;
+
+        public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
+        public readonly List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();
+        public readonly List<DungeonCorridorBuildRecord> corridors = new List<DungeonCorridorBuildRecord>();
+        public readonly List<DungeonDoorOpeningRecord> doorOpenings = new List<DungeonDoorOpeningRecord>();
+        public readonly List<DungeonWallSpanRecord> wallSpans = new List<DungeonWallSpanRecord>();
+        public readonly List<DungeonReservedZoneRecord> reservedZones = new List<DungeonReservedZoneRecord>();
+        public readonly List<DungeonInteractableBuildRecord> interactables = new List<DungeonInteractableBuildRecord>();
+
+        public static string GetEdgeKey(string a, string b)
+        {
+            return string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+        }
+
+        public DungeonRoomBuildRecord FindRoom(string nodeId)
+        {
+            for (int i = 0; i < rooms.Count; i++)
+            {
+                if (rooms[i].nodeId == nodeId)
+                {
+                    return rooms[i];
+                }
+            }
+
+            return null;
+        }
+
+        public DungeonDoorOpeningRecord FindDoorOpening(string nodeId, Vector2Int direction)
+        {
+            for (int i = 0; i < doorOpenings.Count; i++)
+            {
+                if (doorOpenings[i].nodeId == nodeId && doorOpenings[i].direction == direction)
+                {
+                    return doorOpenings[i];
+                }
+            }
+
+            return null;
+        }
+
+        public List<DungeonCorridorBuildRecord> GetCorridorsForEdge(string edgeKey)
+        {
+            List<DungeonCorridorBuildRecord> matches = new List<DungeonCorridorBuildRecord>();
+            for (int i = 0; i < corridors.Count; i++)
+            {
+                if (corridors[i].edgeKey == edgeKey)
+                {
+                    matches.Add(corridors[i]);
+                }
+            }
+
+            matches.Sort((left, right) => left.segmentIndex.CompareTo(right.segmentIndex));
+            return matches;
+        }
+    }
+
+    public sealed class DungeonGraphEdgeRecord
+    {
+        public string edgeKey;
+        public string a;
+        public string b;
+    }
+
+    public sealed class DungeonRoomBuildRecord
+    {
+        public string nodeId;
+        public string label;
+        public DungeonNodeKind roomType;
+        public DungeonRoomTemplateKind templateKind;
+        public GameObject rootObject;
+        public Bounds bounds;
+        public bool hasFloor;
+        public int wallCount;
+        public int doorwayCount;
+    }
+
+    public sealed class DungeonCorridorBuildRecord
+    {
+        public string edgeKey;
+        public string fromNodeId;
+        public string toNodeId;
+        public int segmentIndex;
+        public Vector3 start;
+        public Vector3 end;
+        public Bounds bounds;
+        public bool horizontal;
+    }
+
+    public sealed class DungeonDoorOpeningRecord
+    {
+        public string openingId;
+        public string nodeId;
+        public Vector2Int direction;
+        public string neighborNodeId;
+        public string edgeKey;
+        public float openingWidth;
+        public Vector3 center;
+        public Bounds bounds;
+    }
+
+    public sealed class DungeonWallSpanRecord
+    {
+        public string ownerId;
+        public string edgeKey;
+        public Vector2Int direction;
+        public Bounds bounds;
+        public bool isCorridorWall;
+    }
+
+    public sealed class DungeonReservedZoneRecord
+    {
+        public string ownerId;
+        public string kind;
+        public Bounds bounds;
+    }
+
+    public sealed class DungeonInteractableBuildRecord
+    {
+        public string nodeId;
+        public string interactableType;
+        public bool requiresTownSigil;
+        public bool returnsToTown;
+        public bool isRequiredReturnRoute;
+        public Vector3 position;
+        public Bounds bounds;
+    }
+}

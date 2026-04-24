@@ -77,6 +77,13 @@ namespace FrontierDepths.World
             return BuildFallbackGraph(baseSeed, floorIndex);
         }
 
+        public DungeonLayoutGraph GenerateFallback(FloorState floorState)
+        {
+            int floorIndex = Mathf.Max(1, floorState.floorIndex);
+            int baseSeed = floorState.floorSeed == 0 ? 1000 + floorIndex * 977 : floorState.floorSeed;
+            return BuildFallbackGraph(baseSeed, floorIndex);
+        }
+
         private static DungeonLayoutGraph BuildGraph(int seed, int floorIndex)
         {
             System.Random random = new System.Random(seed);
@@ -138,29 +145,17 @@ namespace FrontierDepths.World
             Dictionary<Vector2Int, string> occupied = new Dictionary<Vector2Int, string>();
 
             AddNode(graph, occupied, "entry_hub", "Entry Hub", DungeonNodeKind.EntryHub, Vector2Int.zero);
-            AddNode(graph, occupied, "transit_up", "Lift Chamber", DungeonNodeKind.TransitUp, new Vector2Int(1, 0));
-            AddNode(graph, occupied, "north_room", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(0, 1));
-            AddNode(graph, occupied, "south_room", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(0, -1));
-            AddNode(graph, occupied, "west_room", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(-1, 0));
-            AddNode(graph, occupied, "ring_ne", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(1, 1));
-            AddNode(graph, occupied, "ring_nw", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(-1, 1));
-            AddNode(graph, occupied, "ring_sw", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(-1, -1));
-            AddNode(graph, occupied, "landmark", ChooseLabel(LandmarkLabels, random), DungeonNodeKind.Landmark, new Vector2Int(-2, 1));
-            AddNode(graph, occupied, "secret_0", ChooseLabel(SecretLabels, random), DungeonNodeKind.Secret, new Vector2Int(1, -2));
-            AddNode(graph, occupied, "transit_down", "Stair Chamber", DungeonNodeKind.TransitDown, new Vector2Int(-3, 0));
+            AddNode(graph, occupied, "transit_up", floorIndex == 1 ? "Surface Lift" : "Upper Stairs", DungeonNodeKind.TransitUp, new Vector2Int(1, 0));
+            AddNode(graph, occupied, "ordinary_0", ChooseLabel(OrdinaryLabels, random), DungeonNodeKind.Ordinary, new Vector2Int(-1, 0));
+            AddNode(graph, occupied, "landmark", ChooseLabel(LandmarkLabels, random), DungeonNodeKind.Landmark, new Vector2Int(-2, 0));
+            AddNode(graph, occupied, "secret_0", ChooseLabel(SecretLabels, random), DungeonNodeKind.Secret, new Vector2Int(0, -1));
+            AddNode(graph, occupied, "transit_down", "Stair Chamber", DungeonNodeKind.TransitDown, new Vector2Int(-1, 1));
 
             AddEdge(graph, "entry_hub", "transit_up");
-            AddEdge(graph, "entry_hub", "north_room");
-            AddEdge(graph, "entry_hub", "south_room");
-            AddEdge(graph, "entry_hub", "west_room");
-            AddEdge(graph, "north_room", "ring_ne");
-            AddEdge(graph, "north_room", "ring_nw");
-            AddEdge(graph, "west_room", "ring_nw");
-            AddEdge(graph, "west_room", "ring_sw");
-            AddEdge(graph, "south_room", "ring_sw");
-            AddEdge(graph, "south_room", "secret_0");
-            AddEdge(graph, "west_room", "transit_down");
-            AddEdge(graph, "ring_nw", "landmark");
+            AddEdge(graph, "entry_hub", "ordinary_0");
+            AddEdge(graph, "entry_hub", "secret_0");
+            AddEdge(graph, "ordinary_0", "landmark");
+            AddEdge(graph, "ordinary_0", "transit_down");
 
             graph.entryHubNodeId = "entry_hub";
             graph.transitUpNodeId = "transit_up";
@@ -412,10 +407,25 @@ namespace FrontierDepths.World
         private static void AssignTemplates(DungeonLayoutGraph graph, System.Random random)
         {
             Dictionary<string, int> distances = graph.BuildDistanceMap(graph.entryHubNodeId);
-
-            for (int i = 0; i < graph.nodes.Count; i++)
+            List<DungeonNode> orderedNodes = new List<DungeonNode>(graph.nodes);
+            orderedNodes.Sort((left, right) =>
             {
-                DungeonNode node = graph.nodes[i];
+                int leftDistance = distances.TryGetValue(left.nodeId, out int leftFound) ? leftFound : 0;
+                int rightDistance = distances.TryGetValue(right.nodeId, out int rightFound) ? rightFound : 0;
+                int distanceCompare = leftDistance.CompareTo(rightDistance);
+                if (distanceCompare != 0)
+                {
+                    return distanceCompare;
+                }
+
+                return string.CompareOrdinal(left.nodeId, right.nodeId);
+            });
+
+            Dictionary<string, DungeonRoomTemplateKind> assignedTemplates = new Dictionary<string, DungeonRoomTemplateKind>();
+
+            for (int i = 0; i < orderedNodes.Count; i++)
+            {
+                DungeonNode node = orderedNodes[i];
                 int degree = graph.GetDegree(node.nodeId);
                 int distance = distances.TryGetValue(node.nodeId, out int found) ? found : 0;
                 int horizontalLinks = 0;
@@ -434,152 +444,216 @@ namespace FrontierDepths.World
                     }
                 }
 
-                node.roomTemplate = ChooseTemplate(node.nodeKind, degree, distance, random);
+                List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, degree, distance);
+                ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
+                node.roomTemplate = candidates[random.Next(candidates.Count)];
                 node.rotationQuarterTurns = ChooseRotation(node.roomTemplate, horizontalLinks, verticalLinks, random);
+                assignedTemplates[node.nodeId] = node.roomTemplate;
             }
         }
 
-        private static DungeonRoomTemplateKind ChooseTemplate(
+        private static List<DungeonRoomTemplateKind> GetTemplateCandidates(
             DungeonNodeKind kind,
             int degree,
-            int distance,
-            System.Random random)
+            int distance)
         {
             if (kind == DungeonNodeKind.EntryHub)
             {
-                return random.NextDouble() > 0.45d
-                    ? DungeonRoomTemplateKind.SquareChamber
-                    : DungeonRoomTemplateKind.BroadRectangle;
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (kind == DungeonNodeKind.TransitUp)
             {
-                return random.NextDouble() < 0.55d
-                    ? DungeonRoomTemplateKind.BroadRectangle
-                    : DungeonRoomTemplateKind.SquareChamber;
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (kind == DungeonNodeKind.TransitDown)
             {
-                return random.NextDouble() < 0.55d
-                    ? DungeonRoomTemplateKind.BroadRectangle
-                    : DungeonRoomTemplateKind.SquareChamber;
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (kind == DungeonNodeKind.Landmark)
             {
-                double landmarkRoll = random.NextDouble();
-                if (landmarkRoll > 0.78d)
+                return new List<DungeonRoomTemplateKind>
                 {
-                    return DungeonRoomTemplateKind.LongGallery;
-                }
-
-                if (landmarkRoll > 0.52d)
-                {
-                    return DungeonRoomTemplateKind.SplitChamber;
-                }
-
-                if (landmarkRoll > 0.26d)
-                {
-                    return DungeonRoomTemplateKind.BroadRectangle;
-                }
-
-                return DungeonRoomTemplateKind.SquareChamber;
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (kind == DungeonNodeKind.Secret)
             {
-                double secretRoll = random.NextDouble();
-                if (secretRoll > 0.72d)
+                return new List<DungeonRoomTemplateKind>
                 {
-                    return DungeonRoomTemplateKind.LChamber;
-                }
-
-                if (secretRoll > 0.38d)
-                {
-                    return DungeonRoomTemplateKind.SquareChamber;
-                }
-
-                return DungeonRoomTemplateKind.BroadRectangle;
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (degree >= 4)
             {
-                double denseRoll = random.NextDouble();
-                if (denseRoll > 0.82d)
+                return new List<DungeonRoomTemplateKind>
                 {
-                    return DungeonRoomTemplateKind.CruciformChamber;
-                }
-
-                if (denseRoll > 0.58d)
-                {
-                    return DungeonRoomTemplateKind.SplitChamber;
-                }
-
-                if (denseRoll > 0.28d)
-                {
-                    return DungeonRoomTemplateKind.BroadRectangle;
-                }
-
-                return DungeonRoomTemplateKind.SquareChamber;
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.LongGallery
+                };
             }
 
             if (degree == 3)
             {
-                double junctionRoll = random.NextDouble();
-                if (junctionRoll > 0.78d)
+                return new List<DungeonRoomTemplateKind>
                 {
-                    return DungeonRoomTemplateKind.SplitChamber;
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.LongGallery
+                };
+            }
+
+            if (distance >= 5)
+            {
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.LongGallery,
+                    DungeonRoomTemplateKind.BroadRectangle,
+                    DungeonRoomTemplateKind.SquareChamber
+                };
+            }
+
+            return new List<DungeonRoomTemplateKind>
+            {
+                DungeonRoomTemplateKind.SquareChamber,
+                DungeonRoomTemplateKind.BroadRectangle,
+                DungeonRoomTemplateKind.LongGallery
+            };
+        }
+
+        private static void ApplyAntiRepetitionRules(
+            DungeonLayoutGraph graph,
+            DungeonNode node,
+            Dictionary<string, DungeonRoomTemplateKind> assignedTemplates,
+            List<DungeonRoomTemplateKind> candidates)
+        {
+            if (node.nodeKind != DungeonNodeKind.Ordinary || candidates.Count <= 1)
+            {
+                return;
+            }
+
+            List<DungeonRoomTemplateKind> adjacencyFiltered = new List<DungeonRoomTemplateKind>();
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (!UsesAdjacentTemplate(graph, node, candidates[i], assignedTemplates))
+                {
+                    adjacencyFiltered.Add(candidates[i]);
+                }
+            }
+
+            if (adjacencyFiltered.Count > 0)
+            {
+                candidates.Clear();
+                candidates.AddRange(adjacencyFiltered);
+            }
+
+            List<DungeonRoomTemplateKind> streakFiltered = new List<DungeonRoomTemplateKind>();
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (!WouldCreateThreeRoomStreak(graph, node, candidates[i], assignedTemplates))
+                {
+                    streakFiltered.Add(candidates[i]);
+                }
+            }
+
+            if (streakFiltered.Count > 0)
+            {
+                candidates.Clear();
+                candidates.AddRange(streakFiltered);
+            }
+        }
+
+        private static bool UsesAdjacentTemplate(
+            DungeonLayoutGraph graph,
+            DungeonNode node,
+            DungeonRoomTemplateKind template,
+            Dictionary<string, DungeonRoomTemplateKind> assignedTemplates)
+        {
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                DungeonNode neighbor = neighbors[i];
+                if (neighbor.nodeKind != DungeonNodeKind.Ordinary)
+                {
+                    continue;
                 }
 
-                if (junctionRoll > 0.56d)
+                if (assignedTemplates.TryGetValue(neighbor.nodeId, out DungeonRoomTemplateKind assigned) && assigned == template)
                 {
-                    return DungeonRoomTemplateKind.LChamber;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool WouldCreateThreeRoomStreak(
+            DungeonLayoutGraph graph,
+            DungeonNode node,
+            DungeonRoomTemplateKind template,
+            Dictionary<string, DungeonRoomTemplateKind> assignedTemplates)
+        {
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                DungeonNode neighbor = neighbors[i];
+                if (neighbor.nodeKind != DungeonNodeKind.Ordinary)
+                {
+                    continue;
                 }
 
-                if (junctionRoll > 0.24d)
+                if (!assignedTemplates.TryGetValue(neighbor.nodeId, out DungeonRoomTemplateKind assigned) || assigned != template)
                 {
-                    return DungeonRoomTemplateKind.BroadRectangle;
+                    continue;
                 }
 
-                return DungeonRoomTemplateKind.SquareChamber;
+                List<DungeonNode> secondaryNeighbors = graph.GetNeighbors(neighbor.nodeId);
+                for (int secondaryIndex = 0; secondaryIndex < secondaryNeighbors.Count; secondaryIndex++)
+                {
+                    DungeonNode secondary = secondaryNeighbors[secondaryIndex];
+                    if (secondary.nodeId == node.nodeId || secondary.nodeKind != DungeonNodeKind.Ordinary)
+                    {
+                        continue;
+                    }
+
+                    if (assignedTemplates.TryGetValue(secondary.nodeId, out DungeonRoomTemplateKind secondaryTemplate) && secondaryTemplate == template)
+                    {
+                        return true;
+                    }
+                }
             }
 
-            if (distance >= 5 && random.NextDouble() > 0.7d)
-            {
-                return DungeonRoomTemplateKind.LongGallery;
-            }
-
-            double ordinaryRoll = random.NextDouble();
-            if (ordinaryRoll > 0.88d)
-            {
-                return DungeonRoomTemplateKind.SquareChamber;
-            }
-
-            if (ordinaryRoll > 0.68d)
-            {
-                return DungeonRoomTemplateKind.LongGallery;
-            }
-
-            if (ordinaryRoll > 0.42d)
-            {
-                return DungeonRoomTemplateKind.LChamber;
-            }
-
-            if (ordinaryRoll > 0.18d)
-            {
-                return DungeonRoomTemplateKind.BroadRectangle;
-            }
-
-            return DungeonRoomTemplateKind.CruciformChamber;
+            return false;
         }
 
         private static int ChooseRotation(DungeonRoomTemplateKind template, int horizontalLinks, int verticalLinks, System.Random random)
         {
             if (template == DungeonRoomTemplateKind.LongGallery ||
-                template == DungeonRoomTemplateKind.BroadRectangle ||
-                template == DungeonRoomTemplateKind.SplitChamber ||
-                template == DungeonRoomTemplateKind.BalconyBridgeChamber)
+                template == DungeonRoomTemplateKind.BroadRectangle)
             {
                 if (horizontalLinks > verticalLinks)
                 {

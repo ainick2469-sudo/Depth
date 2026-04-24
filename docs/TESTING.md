@@ -3,20 +3,21 @@
 ## EditMode Expectations
 - geometry validation catches blocked corridors, bad openings, and bad spawns
 - known-bad seeds do not reproduce blocked openings or unreachable required rooms
-- damage reduces health correctly
-- death events fire once
-- revolver respects fire rate and reload
 - safe room template subset is enforced
-- reward stacking follows flat-then-percent order and clamps correctly
+- floor-1 return route never requires Town Sigil
+- duplicate required return interactables are rejected
+- fallback layout builds and passes validation
 
 ## PlayMode Expectations
 - `MainMenu -> New Game -> TownHub`
 - `TownHub -> DungeonRuntime`
-- descend, spawn in entry hub, clear enemies, choose reward, descend stairs
+- spawn in entry hub
+- secret path is traversable if generated
+- floor-1 return goes back to town without Town Sigil
 - return to town safely from floor 1
 
 ## Manual Verification Path
-`MainMenu -> New Game -> TownHub -> Dungeon Gate -> DungeonRuntime -> kill enemies -> choose reward -> descend stairs -> return to town`
+`MainMenu -> New Game -> TownHub -> Dungeon Gate -> DungeonRuntime -> inspect geometry -> return to town`
 
 ## Gate Reporting
 At the end of each gate, report:

@@ -10,9 +10,15 @@ These are the intended development-only controls for the current milestone:
   Regenerate current floor with the same seed
 - `Shift+F5`
   Regenerate current floor with a new seed
-- Teleport controls
-  Teleport to entry / stairs / landmark / secret
-- Safe return control
+- `F6`
+  Teleport to entry
+- `F7`
+  Teleport to stairs down
+- `F8`
+  Teleport to landmark
+- `F9`
+  Teleport to secret
+- `F10`
   Return safely to `TownHub`
 
 Additions for later gates:

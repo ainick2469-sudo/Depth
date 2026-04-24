@@ -21,7 +21,6 @@ Document the rules, stabilize the dungeon, and prove the loop.
   - square chamber
   - broad rectangle
   - long gallery
-  - one simple offset connector room
 - Disable unstable ordinary-room templates.
 - Add anti-repetition rules so clusters do not collapse into identical rooms.
 - Corridor/doorway joins must be correct.
@@ -33,7 +32,8 @@ Document the rules, stabilize the dungeon, and prove the loop.
 - Remove debug-ish dungeon overlay text from normal play.
 
 Validation:
-- validate corridors, openings, reachability, spawn safety, feature overlap, and interactable placement
+- validate the rendered build result, not only the logical graph
+- validate corridors, openings, reachability, spawn safety, and interactable placement
 - retry up to 3 times on failure
 - fall back to a guaranteed-safe debug layout if needed
 

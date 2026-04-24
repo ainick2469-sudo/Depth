@@ -5,6 +5,13 @@ namespace FrontierDepths.World
 {
     public static class DungeonRoomTemplateLibrary
     {
+        private static readonly DungeonRoomTemplateKind[] GateOneSafeOrdinaryTemplates =
+        {
+            DungeonRoomTemplateKind.SquareChamber,
+            DungeonRoomTemplateKind.BroadRectangle,
+            DungeonRoomTemplateKind.LongGallery
+        };
+
         public sealed class TemplateData
         {
             public DungeonTemplateFeature feature;
@@ -167,6 +174,26 @@ namespace FrontierDepths.World
         public static DungeonTemplateFeature GetFeature(DungeonNode node)
         {
             return GetTemplate(node.roomTemplate).feature;
+        }
+
+        public static bool IsGateOneSafeOrdinaryTemplate(DungeonRoomTemplateKind kind)
+        {
+            for (int i = 0; i < GateOneSafeOrdinaryTemplates.Length; i++)
+            {
+                if (GateOneSafeOrdinaryTemplates[i] == kind)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static DungeonRoomTemplateKind[] GetGateOneSafeOrdinaryTemplates()
+        {
+            DungeonRoomTemplateKind[] copy = new DungeonRoomTemplateKind[GateOneSafeOrdinaryTemplates.Length];
+            GateOneSafeOrdinaryTemplates.CopyTo(copy, 0);
+            return copy;
         }
 
         public static Vector2Int Rotate(Vector2Int cell, int quarterTurns)

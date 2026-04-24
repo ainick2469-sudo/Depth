@@ -9,14 +9,16 @@
 - Landmark rooms stay flat and aligned during this milestone.
 
 ## Validation Rules
-After generation and rendering, validate:
+After generation and rendering, validate the actual `DungeonBuildResult`:
 - every graph edge has a rendered corridor
 - every rendered corridor connects to valid room openings
+- no corridor mouth is blocked by a wall span
 - every connected room has a floor, walls, and at least one valid doorway
 - entry, stairs, return route, landmark, and secret are reachable
 - player spawn is inside the entry room and clear of geometry
-- room features do not overlap doorways, corridor mouths, stairs, spawn, or required interactables
 - no interactable spawns inside walls or outside the playable floor
+- floor-1 return route exists and does not require Town Sigil
+- no duplicate required return-to-town interactables exist
 
 ## Spawn Safety Rules
 Enemy, chest, shrine, and interactable spawning must use validated spawn points.
@@ -36,6 +38,8 @@ If validation fails:
   - entry room
   - one ordinary room
   - one landmark room
+  - one simple secret spur
   - stairs down
   - floor-1 return route when needed
+- validate the fallback layout too
 - never silently continue with broken required geometry
