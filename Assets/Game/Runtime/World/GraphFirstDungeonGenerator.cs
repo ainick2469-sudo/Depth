@@ -7,6 +7,8 @@ namespace FrontierDepths.World
 {
     public sealed class GraphFirstDungeonGenerator : IDungeonGenerator
     {
+        public bool LastGenerationUsedFallback { get; private set; }
+
         private struct ExpansionCandidate
         {
             public string parentId;
@@ -64,6 +66,7 @@ namespace FrontierDepths.World
         {
             int floorIndex = Mathf.Max(1, floorState.floorIndex);
             int baseSeed = floorState.floorSeed == 0 ? 1000 + floorIndex * 977 : floorState.floorSeed;
+            LastGenerationUsedFallback = false;
 
             for (int attempt = 0; attempt < 16; attempt++)
             {
@@ -74,6 +77,7 @@ namespace FrontierDepths.World
                 }
             }
 
+            LastGenerationUsedFallback = true;
             return BuildFallbackGraph(baseSeed, floorIndex);
         }
 
@@ -81,6 +85,7 @@ namespace FrontierDepths.World
         {
             int floorIndex = Mathf.Max(1, floorState.floorIndex);
             int baseSeed = floorState.floorSeed == 0 ? 1000 + floorIndex * 977 : floorState.floorSeed;
+            LastGenerationUsedFallback = true;
             return BuildFallbackGraph(baseSeed, floorIndex);
         }
 

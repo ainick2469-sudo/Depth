@@ -16,6 +16,9 @@ namespace FrontierDepths.World
         private const int MaxBuildAttempts = 3;
         private const float RoomBoundsHeight = WallHeight + FloorThickness;
         private const float CorridorZoneHeight = 6f;
+        private const float DoorwayClearance = 0.25f;
+        private const float CorridorRoomOverlap = 0.75f;
+        private const float DoorwayAlignmentEpsilon = 0.05f;
 
         private sealed class BoundarySpan
         {
@@ -33,6 +36,7 @@ namespace FrontierDepths.World
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private DungeonBuildResult activeBuildResult;
         private DungeonBuildResult currentBuildResult;
+        private DungeonBuildResult emergencyDebugBuildResult;
         private bool debugOverlayVisible;
         private string statusMessage = string.Empty;
 
@@ -55,7 +59,7 @@ namespace FrontierDepths.World
 
         private void OnDrawGizmos()
         {
-            if (!debugOverlayVisible || currentBuildResult == null)
+            if (!debugOverlayVisible || GetVisibleBuildResult() == null)
             {
                 return;
             }
@@ -72,6 +76,8 @@ namespace FrontierDepths.World
                 return;
             }
 
+            currentBuildResult = null;
+            emergencyDebugBuildResult = null;
             RunState run = bootstrap.RunService.EnsureRun();
             FloorState currentFloor = run.currentFloor ?? new FloorState();
             int baseSeed = currentFloor.floorSeed == 0
@@ -82,33 +88,39 @@ namespace FrontierDepths.World
             for (int attempt = 0; attempt < MaxBuildAttempts; attempt++)
             {
                 int attemptSeed = baseSeed + attempt * 1543;
-                DungeonBuildResult attemptBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, attemptSeed), false);
+                DungeonBuildResult attemptBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, attemptSeed), false, attempt + 1, MaxBuildAttempts);
                 latestReport = DungeonValidator.Validate(attemptBuild);
+                FinalizeValidation(attemptBuild, latestReport, false);
+                Debug.Log(attemptBuild.validationSummary);
                 if (latestReport.IsValid)
                 {
                     ApplySuccessfulBuild(run, attemptBuild);
                     return;
                 }
 
-                latestReport.LogFailures();
+                latestReport.LogFailures(attemptBuild);
                 ClearRuntimeRoot(true);
             }
 
-            DungeonBuildResult fallbackBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, baseSeed), true);
+            DungeonBuildResult fallbackBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, baseSeed), true, 1, 1);
             latestReport = DungeonValidator.Validate(fallbackBuild);
-            currentBuildResult = fallbackBuild;
+            FinalizeValidation(fallbackBuild, latestReport, !latestReport.IsValid);
+            Debug.Log(fallbackBuild.validationSummary);
             if (latestReport.IsValid)
             {
                 ApplySuccessfulBuild(run, fallbackBuild);
                 return;
             }
 
-            latestReport.LogFailures();
+            emergencyDebugBuildResult = fallbackBuild;
+            currentBuildResult = null;
+            SetVisibleInteractablesEnabled(false);
+            latestReport.LogFailures(fallbackBuild);
             Debug.LogError($"Dungeon fallback validation failed for floor {fallbackBuild.floorIndex} seed {fallbackBuild.seed}.");
-            statusMessage = "Dungeon validation failed. Check console for details.";
+            statusMessage = $"{fallbackBuild.validationSummary} | Emergency debug layout left visible.";
         }
 
-        private DungeonBuildResult BuildFloorAttempt(FloorState floorState, bool useFallback)
+        private DungeonBuildResult BuildFloorAttempt(FloorState floorState, bool useFallback, int attemptNumber, int attemptCount)
         {
             ClearRuntimeRoot(true);
 
@@ -121,7 +133,11 @@ namespace FrontierDepths.World
                 graph = graph,
                 floorIndex = Mathf.Max(1, floorState.floorIndex),
                 seed = floorState.floorSeed,
-                usedFallback = useFallback,
+                usedFallback = useFallback || generator.LastGenerationUsedFallback,
+                requestedFallback = useFallback,
+                generatorReturnedFallbackGraph = generator.LastGenerationUsedFallback,
+                attemptNumber = Mathf.Max(1, attemptNumber),
+                attemptCount = Mathf.Max(1, attemptCount),
                 entryNodeId = graph.entryHubNodeId,
                 transitUpNodeId = graph.transitUpNodeId,
                 transitDownNodeId = graph.transitDownNodeId,
@@ -155,7 +171,10 @@ namespace FrontierDepths.World
 
         private void ApplySuccessfulBuild(RunState run, DungeonBuildResult buildResult)
         {
+            buildResult.isEmergencyDebugBuild = false;
+            emergencyDebugBuildResult = null;
             currentBuildResult = buildResult;
+            SetVisibleInteractablesEnabled(true);
             run.currentFloor.floorSeed = buildResult.seed;
             GameBootstrap.Instance.RunService.Save();
 
@@ -219,6 +238,7 @@ namespace FrontierDepths.World
             Vector3 start = GetDoorWorldPosition(a, direction2D);
             Vector3 end = GetDoorWorldPosition(b, reverseDirection);
             List<Vector3> routePoints = BuildCorridorRoute(start, end, direction2D);
+            routePoints = ExpandRouteEndpointsIntoRooms(routePoints, direction2D, CorridorRoomOverlap);
             string edgeKey = DungeonBuildResult.GetEdgeKey(a.nodeId, b.nodeId);
             GameObject corridorRoot = new GameObject($"Corridor_{a.nodeId}_To_{b.nodeId}");
             corridorRoot.transform.SetParent(runtimeRoot, false);
@@ -258,6 +278,11 @@ namespace FrontierDepths.World
             Vector3 floorScale = horizontal
                 ? new Vector3(corridorLength, FloorThickness, corridorWidth)
                 : new Vector3(corridorWidth, FloorThickness, corridorLength);
+            float corridorOuterWidth = GetCorridorOuterWidth(corridorWidth);
+            Vector3 outerBoundsSize = horizontal
+                ? new Vector3(corridorLength, WallHeight, corridorOuterWidth)
+                : new Vector3(corridorOuterWidth, WallHeight, corridorLength);
+            Vector3 outerBoundsCenter = midpoint + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f);
 
             GameObject floor = CreatePrimitive("Floor", segmentRoot.transform, midpoint + Vector3.down * (FloorThickness * 0.5f), floorScale, new Color(0.19f, 0.18f, 0.17f));
             activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
@@ -269,6 +294,7 @@ namespace FrontierDepths.World
                 start = start,
                 end = end,
                 bounds = GetBounds(floor.transform.position, floorScale),
+                outerBounds = GetBounds(outerBoundsCenter, outerBoundsSize),
                 horizontal = horizontal
             });
             activeBuildResult?.reservedZones.Add(new DungeonReservedZoneRecord
@@ -331,22 +357,26 @@ namespace FrontierDepths.World
 
             if (Input.GetKeyDown(KeyCode.F6))
             {
-                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.entryNodeId : string.Empty);
+                DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+                TryTeleportToNode(visibleBuild != null ? visibleBuild.entryNodeId : string.Empty);
             }
 
             if (Input.GetKeyDown(KeyCode.F7))
             {
-                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.transitDownNodeId : string.Empty);
+                DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+                TryTeleportToNode(visibleBuild != null ? visibleBuild.transitDownNodeId : string.Empty);
             }
 
             if (Input.GetKeyDown(KeyCode.F8))
             {
-                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.landmarkNodeId : string.Empty);
+                DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+                TryTeleportToNode(visibleBuild != null ? visibleBuild.landmarkNodeId : string.Empty);
             }
 
             if (Input.GetKeyDown(KeyCode.F9))
             {
-                TryTeleportToNode(currentBuildResult != null ? currentBuildResult.secretNodeId : string.Empty);
+                DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+                TryTeleportToNode(visibleBuild != null ? visibleBuild.secretNodeId : string.Empty);
             }
 
             if (Input.GetKeyDown(KeyCode.F10) && GameBootstrap.Instance != null)
@@ -370,12 +400,13 @@ namespace FrontierDepths.World
 
         private void TryTeleportToNode(string nodeId)
         {
-            if (string.IsNullOrWhiteSpace(nodeId) || currentBuildResult == null)
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            if (string.IsNullOrWhiteSpace(nodeId) || visibleBuild == null)
             {
                 return;
             }
 
-            DungeonRoomBuildRecord room = currentBuildResult.FindRoom(nodeId);
+            DungeonRoomBuildRecord room = visibleBuild.FindRoom(nodeId);
             FirstPersonController player = FindFirstObjectByType<FirstPersonController>();
             if (room == null || player == null)
             {
@@ -388,27 +419,53 @@ namespace FrontierDepths.World
 
         private void DrawBuildGizmos()
         {
-            for (int i = 0; i < currentBuildResult.rooms.Count; i++)
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            if (visibleBuild == null)
             {
-                Gizmos.color = GetGizmoColor(currentBuildResult.rooms[i].roomType);
-                Gizmos.DrawWireCube(currentBuildResult.rooms[i].bounds.center, currentBuildResult.rooms[i].bounds.size);
+                return;
+            }
+
+            for (int i = 0; i < visibleBuild.rooms.Count; i++)
+            {
+                Gizmos.color = GetGizmoColor(visibleBuild.rooms[i].roomType);
+                Gizmos.DrawWireCube(visibleBuild.rooms[i].bounds.center, visibleBuild.rooms[i].bounds.size);
             }
 
             Gizmos.color = Color.yellow;
-            for (int i = 0; i < currentBuildResult.corridors.Count; i++)
+            for (int i = 0; i < visibleBuild.corridors.Count; i++)
             {
-                Gizmos.DrawWireCube(currentBuildResult.corridors[i].bounds.center, currentBuildResult.corridors[i].bounds.size);
-                Gizmos.DrawLine(currentBuildResult.corridors[i].start + Vector3.up, currentBuildResult.corridors[i].end + Vector3.up);
+                Gizmos.DrawWireCube(visibleBuild.corridors[i].bounds.center, visibleBuild.corridors[i].bounds.size);
+                Gizmos.DrawLine(visibleBuild.corridors[i].start + Vector3.up, visibleBuild.corridors[i].end + Vector3.up);
+                Gizmos.DrawSphere(visibleBuild.corridors[i].start + Vector3.up, 0.35f);
+                Gizmos.DrawSphere(visibleBuild.corridors[i].end + Vector3.up, 0.35f);
+            }
+
+            Gizmos.color = new Color(0.2f, 0.75f, 1f);
+            for (int i = 0; i < visibleBuild.corridors.Count; i++)
+            {
+                Gizmos.DrawWireCube(visibleBuild.corridors[i].outerBounds.center, visibleBuild.corridors[i].outerBounds.size);
+            }
+
+            Gizmos.color = new Color(0.25f, 1f, 0.35f);
+            for (int i = 0; i < visibleBuild.doorOpenings.Count; i++)
+            {
+                Gizmos.DrawWireCube(visibleBuild.doorOpenings[i].visualBounds.center, visibleBuild.doorOpenings[i].visualBounds.size);
+            }
+
+            Gizmos.color = new Color(0.85f, 0.25f, 1f);
+            for (int i = 0; i < visibleBuild.doorOpenings.Count; i++)
+            {
+                Gizmos.DrawWireCube(visibleBuild.doorOpenings[i].bounds.center, visibleBuild.doorOpenings[i].bounds.size);
             }
 
             Gizmos.color = new Color(1f, 0.5f, 0.1f);
-            for (int i = 0; i < currentBuildResult.reservedZones.Count; i++)
+            for (int i = 0; i < visibleBuild.reservedZones.Count; i++)
             {
-                Gizmos.DrawWireCube(currentBuildResult.reservedZones[i].bounds.center, currentBuildResult.reservedZones[i].bounds.size);
+                Gizmos.DrawWireCube(visibleBuild.reservedZones[i].bounds.center, visibleBuild.reservedZones[i].bounds.size);
             }
 
             Gizmos.color = Color.cyan;
-            Gizmos.DrawSphere(currentBuildResult.playerSpawn, 1.1f);
+            Gizmos.DrawSphere(visibleBuild.playerSpawn, 1.1f);
         }
 
         private static FloorState CloneFloorState(FloorState source, int fallbackFloorIndex, int floorSeed)
@@ -460,30 +517,103 @@ namespace FrontierDepths.World
             return string.Empty;
         }
 
+        private DungeonBuildResult GetVisibleBuildResult()
+        {
+            return emergencyDebugBuildResult ?? currentBuildResult;
+        }
+
+        private static void FinalizeValidation(DungeonBuildResult buildResult, DungeonValidationReport report, bool isEmergencyDebugBuild)
+        {
+            if (buildResult == null)
+            {
+                return;
+            }
+
+            buildResult.validationPassed = report != null && report.IsValid;
+            buildResult.validationFailureCount = report != null ? report.failures.Count : 0;
+            buildResult.validationWarningCount = report != null ? report.warnings.Count : 0;
+            buildResult.isEmergencyDebugBuild = isEmergencyDebugBuild;
+            buildResult.validationSummary = report != null
+                ? report.ToSummaryString(buildResult)
+                : ComposeBuildSummary(buildResult);
+        }
+
+        private static string ComposeBuildSummary(DungeonBuildResult buildResult)
+        {
+            if (buildResult == null)
+            {
+                return "Dungeon build not ready.";
+            }
+
+            string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
+            return $"Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | Corridor Segments {buildResult.corridors.Count} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+        }
+
+        private void SetVisibleInteractablesEnabled(bool enabled)
+        {
+            if (runtimeRoot == null)
+            {
+                return;
+            }
+
+            MonoBehaviour[] behaviours = runtimeRoot.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                if (behaviours[i] is IInteractable)
+                {
+                    behaviours[i].enabled = enabled;
+                }
+            }
+
+            Collider[] colliders = runtimeRoot.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                if (colliders[i].name.StartsWith("Interactable_", StringComparison.Ordinal))
+                {
+                    colliders[i].enabled = enabled;
+                }
+            }
+        }
+
         private void RefreshStatusMessage()
         {
-            if (currentBuildResult == null)
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            if (visibleBuild == null)
             {
                 statusMessage = "Dungeon build not ready.";
                 return;
             }
 
-            statusMessage = $"Floor {currentBuildResult.floorIndex} | Seed {currentBuildResult.seed} | Rooms {currentBuildResult.rooms.Count} | Corridor Segments {currentBuildResult.corridors.Count} | Fallback {(currentBuildResult.usedFallback ? "Yes" : "No")}";
+            statusMessage = string.IsNullOrWhiteSpace(visibleBuild.validationSummary)
+                ? ComposeBuildSummary(visibleBuild)
+                : visibleBuild.validationSummary;
         }
 
-        private static List<Vector3> BuildCorridorRoute(Vector3 start, Vector3 end, Vector2Int direction)
+        internal static List<Vector3> BuildCorridorRoute(Vector3 start, Vector3 end, Vector2Int direction)
         {
             List<Vector3> points = new List<Vector3> { start };
             bool primaryHorizontal = direction.x != 0;
 
             if (primaryHorizontal)
             {
+                if (Mathf.Abs(start.z - end.z) <= DoorwayAlignmentEpsilon)
+                {
+                    AddRoutePoint(points, end);
+                    return points;
+                }
+
                 float midX = (start.x + end.x) * 0.5f;
                 AddRoutePoint(points, new Vector3(midX, start.y, start.z));
                 AddRoutePoint(points, new Vector3(midX, end.y, end.z));
             }
             else
             {
+                if (Mathf.Abs(start.x - end.x) <= DoorwayAlignmentEpsilon)
+                {
+                    AddRoutePoint(points, end);
+                    return points;
+                }
+
                 float midZ = (start.z + end.z) * 0.5f;
                 AddRoutePoint(points, new Vector3(start.x, start.y, midZ));
                 AddRoutePoint(points, new Vector3(end.x, end.y, midZ));
@@ -491,6 +621,26 @@ namespace FrontierDepths.World
 
             AddRoutePoint(points, end);
             return points;
+        }
+
+        internal static List<Vector3> ExpandRouteEndpointsIntoRooms(List<Vector3> routePoints, Vector2Int direction, float overlap)
+        {
+            List<Vector3> expanded = routePoints != null ? new List<Vector3>(routePoints) : new List<Vector3>();
+            if (expanded.Count < 2 || overlap <= 0f)
+            {
+                return expanded;
+            }
+
+            Vector3 primaryDirection = new Vector3(direction.x, 0f, direction.y);
+            if (primaryDirection.sqrMagnitude <= 0f)
+            {
+                return expanded;
+            }
+
+            primaryDirection.Normalize();
+            expanded[0] -= primaryDirection * overlap;
+            expanded[expanded.Count - 1] += primaryDirection * overlap;
+            return expanded;
         }
 
         private static void AddRoutePoint(List<Vector3> points, Vector3 point)
@@ -525,7 +675,7 @@ namespace FrontierDepths.World
             DungeonNode node,
             DungeonLayoutGraph graph,
             Vector2Int direction,
-            float openingWidth,
+            float visualOpeningWidth,
             DungeonRoomBuildRecord roomRecord)
         {
             if (activeBuildResult == null || activeBuildResult.FindDoorOpening(node.nodeId, direction) != null)
@@ -536,9 +686,14 @@ namespace FrontierDepths.World
             DungeonNode neighbor = GetNeighborForDirection(node, graph, direction);
             string edgeKey = neighbor != null ? DungeonBuildResult.GetEdgeKey(node.nodeId, neighbor.nodeId) : string.Empty;
             Vector3 doorwayCenter = roomRoot.position + GetDoorLocalPosition(node, direction);
-            Vector3 openingSize = direction.x == 0
-                ? new Vector3(openingWidth, WallHeight, WallThickness * 2f)
-                : new Vector3(WallThickness * 2f, WallHeight, openingWidth);
+            float validationOpeningWidth = GetValidationDoorwayWidth(visualOpeningWidth);
+            Vector3 visualOpeningSize = direction.x == 0
+                ? new Vector3(visualOpeningWidth, WallHeight, WallThickness * 2f)
+                : new Vector3(WallThickness * 2f, WallHeight, visualOpeningWidth);
+            Vector3 validationOpeningSize = direction.x == 0
+                ? new Vector3(validationOpeningWidth, WallHeight, WallThickness * 2f)
+                : new Vector3(WallThickness * 2f, WallHeight, validationOpeningWidth);
+            Vector3 openingBoundsCenter = doorwayCenter + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f);
 
             GameObject openingMarker = new GameObject($"DoorOpening_{node.nodeId}_{DirectionToToken(direction)}");
             openingMarker.transform.SetParent(roomRoot, false);
@@ -551,15 +706,18 @@ namespace FrontierDepths.World
                 direction = direction,
                 neighborNodeId = neighbor != null ? neighbor.nodeId : string.Empty,
                 edgeKey = edgeKey,
-                openingWidth = openingWidth,
+                openingWidth = validationOpeningWidth,
+                visualOpeningWidth = visualOpeningWidth,
+                validationOpeningWidth = validationOpeningWidth,
                 center = doorwayCenter,
-                bounds = GetBounds(doorwayCenter + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f), openingSize)
+                visualBounds = GetBounds(openingBoundsCenter, visualOpeningSize),
+                bounds = GetBounds(openingBoundsCenter, validationOpeningSize)
             });
             activeBuildResult.reservedZones.Add(new DungeonReservedZoneRecord
             {
                 ownerId = node.nodeId,
                 kind = "Doorway",
-                bounds = GetDoorwayReservedZone(doorwayCenter, direction, openingWidth)
+                bounds = GetDoorwayReservedZone(doorwayCenter, direction, validationOpeningWidth)
             });
             roomRecord.doorwayCount++;
         }
@@ -868,12 +1026,12 @@ namespace FrontierDepths.World
             if (direction.x == 0)
             {
                 localPosition = new Vector3((start + end) * 0.5f, WallHeight * 0.5f - FloorThickness * 0.5f, fixedCoord);
-                scale = new Vector3(length + WallThickness, WallHeight, WallThickness);
+                scale = new Vector3(length, WallHeight, WallThickness);
             }
             else
             {
                 localPosition = new Vector3(fixedCoord, WallHeight * 0.5f - FloorThickness * 0.5f, (start + end) * 0.5f);
-                scale = new Vector3(WallThickness, WallHeight, length + WallThickness);
+                scale = new Vector3(WallThickness, WallHeight, length);
             }
 
             GameObject wall = CreatePrimitive(
@@ -1141,6 +1299,21 @@ namespace FrontierDepths.World
             return CellToLocalPosition(socket) + new Vector3(direction.x * CellSize * 0.5f, 0f, direction.y * CellSize * 0.5f);
         }
 
+        internal static float GetCorridorOuterWidth(float corridorWidth)
+        {
+            return corridorWidth + WallThickness;
+        }
+
+        internal static float GetVisualDoorwayWidth(float corridorWidth)
+        {
+            return GetCorridorOuterWidth(corridorWidth);
+        }
+
+        internal static float GetValidationDoorwayWidth(float visualOpeningWidth)
+        {
+            return visualOpeningWidth + DoorwayClearance * 2f;
+        }
+
         private static Dictionary<Vector2Int, float> GetDoorwayWidths(DungeonNode node, DungeonLayoutGraph graph)
         {
             Dictionary<Vector2Int, float> widths = new Dictionary<Vector2Int, float>();
@@ -1153,7 +1326,7 @@ namespace FrontierDepths.World
                 float corridorWidth = node.nodeKind == DungeonNodeKind.Secret || neighbors[i].nodeKind == DungeonNodeKind.Secret
                     ? SecretCorridorWidth
                     : PrimaryCorridorWidth;
-                widths[delta] = corridorWidth + WallThickness * 2f;
+                widths[delta] = GetVisualDoorwayWidth(corridorWidth);
             }
 
             return widths;

@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Reflection;
+using FrontierDepths.Core;
 using FrontierDepths.World;
 using NUnit.Framework;
 using UnityEngine;
@@ -38,13 +40,32 @@ namespace FrontierDepths.Tests.EditMode
             {
                 ownerId = opening.nodeId,
                 direction = opening.direction,
-                bounds = opening.bounds,
+                bounds = opening.visualBounds,
                 isCorridorWall = false
             });
 
             DungeonValidationReport report = DungeonValidator.Validate(build);
 
             Assert.IsFalse(report.IsValid);
+        }
+
+        [Test]
+        public void Validator_AllowsTrimmedWallSpanBesideDoorwayOpening()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonDoorOpeningRecord opening = build.doorOpenings[0];
+            build.wallSpans.Add(new DungeonWallSpanRecord
+            {
+                ownerId = opening.nodeId,
+                direction = opening.direction,
+                bounds = CreateTouchingWallBounds(opening),
+                isCorridorWall = false
+            });
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
+            Assert.IsFalse(report.HasWarnings, report.ToSummaryString(build));
         }
 
         [Test]
@@ -79,6 +100,65 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Validator_DetectsCorridorMissingDoorwayOverlap()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonCorridorBuildRecord corridor = build.corridors[0];
+            corridor.bounds = new Bounds(corridor.bounds.center + new Vector3(0f, 0f, 30f), corridor.bounds.size);
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsFalse(report.IsValid);
+        }
+
+        [Test]
+        public void Validator_WarnsWhenVisualDoorwayExceedsCorridorOuterEnvelope()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonDoorOpeningRecord opening = build.doorOpenings[0];
+            opening.visualBounds = ExpandOpeningWidth(opening.visualBounds, opening.direction, 0.5f);
+            opening.visualOpeningWidth += 0.5f;
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
+            Assert.IsTrue(report.HasWarnings, report.ToSummaryString(build));
+        }
+
+        [Test]
+        public void Validator_WarnsWhenCorridorOuterBoundsDoNotReachVisualDoorway()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonCorridorBuildRecord corridor = build.corridors[0];
+            corridor.outerBounds = new Bounds(corridor.outerBounds.center + new Vector3(7f, 0f, 0f), corridor.outerBounds.size);
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
+            Assert.IsTrue(report.HasWarnings, report.ToSummaryString(build));
+        }
+
+        [Test]
+        public void Controller_FallbackBuild_PassesValidation()
+        {
+            GameObject root = new GameObject("DungeonSceneControllerValidationTest");
+
+            try
+            {
+                DungeonBuildResult build = InvokeBuildFloorAttempt(root, useFallback: true);
+                DungeonValidationReport report = DungeonValidator.Validate(build);
+
+                Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
+                Assert.IsTrue(build.usedFallback);
+                Assert.IsTrue(build.requestedFallback);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void Validator_AcceptsFallbackLikeValidBuild()
         {
             DungeonBuildResult build = CreateValidBuildResult();
@@ -86,6 +166,7 @@ namespace FrontierDepths.Tests.EditMode
             DungeonValidationReport report = DungeonValidator.Validate(build);
 
             Assert.IsTrue(report.IsValid);
+            Assert.IsFalse(report.HasWarnings, report.ToSummaryString(build));
         }
 
         private static DungeonBuildResult CreateValidBuildResult()
@@ -197,9 +278,14 @@ namespace FrontierDepths.Tests.EditMode
             Vector3 end = toCenter - direction * 6f;
             Vector3 midpoint = (start + end) * 0.5f;
             bool horizontal = Mathf.Abs(end.x - start.x) >= Mathf.Abs(end.z - start.z);
+            float corridorWidth = 16f;
+            float corridorOuterWidth = DungeonSceneController.GetCorridorOuterWidth(corridorWidth);
             Vector3 size = horizontal
-                ? new Vector3(Mathf.Abs(end.x - start.x), 2f, 16f)
-                : new Vector3(16f, 2f, Mathf.Abs(end.z - start.z));
+                ? new Vector3(Mathf.Abs(end.x - start.x), 2f, corridorWidth)
+                : new Vector3(corridorWidth, 2f, Mathf.Abs(end.z - start.z));
+            Vector3 outerSize = horizontal
+                ? new Vector3(Mathf.Abs(end.x - start.x), 12f, corridorOuterWidth)
+                : new Vector3(corridorOuterWidth, 12f, Mathf.Abs(end.z - start.z));
 
             build.corridors.Add(new DungeonCorridorBuildRecord
             {
@@ -210,6 +296,7 @@ namespace FrontierDepths.Tests.EditMode
                 start = start,
                 end = end,
                 bounds = new Bounds(midpoint, size),
+                outerBounds = new Bounds(midpoint + new Vector3(0f, 5.5f, 0f), outerSize),
                 horizontal = horizontal
             });
 
@@ -222,9 +309,14 @@ namespace FrontierDepths.Tests.EditMode
         private static void AddOpening(DungeonBuildResult build, string nodeId, string neighborNodeId, Vector3 roomCenter, Vector2Int direction, string edgeKey)
         {
             Vector3 center = roomCenter + new Vector3(direction.x * 6f, 6f, direction.y * 6f);
-            Vector3 size = direction.x == 0
-                ? new Vector3(18f, 12f, 2f)
-                : new Vector3(2f, 12f, 18f);
+            float visualOpeningWidth = DungeonSceneController.GetVisualDoorwayWidth(16f);
+            float validationOpeningWidth = DungeonSceneController.GetValidationDoorwayWidth(visualOpeningWidth);
+            Vector3 visualSize = direction.x == 0
+                ? new Vector3(visualOpeningWidth, 12f, 2f)
+                : new Vector3(2f, 12f, visualOpeningWidth);
+            Vector3 validationSize = direction.x == 0
+                ? new Vector3(validationOpeningWidth, 12f, 2f)
+                : new Vector3(2f, 12f, validationOpeningWidth);
 
             build.doorOpenings.Add(new DungeonDoorOpeningRecord
             {
@@ -233,15 +325,18 @@ namespace FrontierDepths.Tests.EditMode
                 neighborNodeId = neighborNodeId,
                 direction = direction,
                 edgeKey = edgeKey,
-                openingWidth = 18f,
+                openingWidth = validationOpeningWidth,
+                visualOpeningWidth = visualOpeningWidth,
+                validationOpeningWidth = validationOpeningWidth,
                 center = center,
-                bounds = new Bounds(center, size)
+                visualBounds = new Bounds(center, visualSize),
+                bounds = new Bounds(center, validationSize)
             });
             build.reservedZones.Add(new DungeonReservedZoneRecord
             {
                 ownerId = nodeId,
                 kind = "Doorway",
-                bounds = new Bounds(center, new Vector3(Mathf.Max(size.x, 18f), 6f, Mathf.Max(size.z, 18f)))
+                bounds = new Bounds(center, new Vector3(Mathf.Max(validationSize.x, 18f), 6f, Mathf.Max(validationSize.z, 18f)))
             });
         }
 
@@ -253,6 +348,54 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return delta.z >= 0f ? new Vector2Int(0, 1) : new Vector2Int(0, -1);
+        }
+
+        private static Bounds CreateTouchingWallBounds(DungeonDoorOpeningRecord opening)
+        {
+            const float spanLength = 4f;
+            Bounds referenceBounds = opening.visualBounds;
+
+            if (opening.direction.x == 0)
+            {
+                float centerX = referenceBounds.max.x + spanLength * 0.5f;
+                return new Bounds(
+                    new Vector3(centerX, referenceBounds.center.y, referenceBounds.center.z),
+                    new Vector3(spanLength, referenceBounds.size.y, referenceBounds.size.z));
+            }
+
+            float centerZ = referenceBounds.max.z + spanLength * 0.5f;
+            return new Bounds(
+                new Vector3(referenceBounds.center.x, referenceBounds.center.y, centerZ),
+                new Vector3(referenceBounds.size.x, referenceBounds.size.y, spanLength));
+        }
+
+        private static Bounds ExpandOpeningWidth(Bounds bounds, Vector2Int direction, float extraWidth)
+        {
+            Vector3 size = bounds.size;
+            if (direction.x == 0)
+            {
+                size.x += extraWidth;
+            }
+            else
+            {
+                size.z += extraWidth;
+            }
+
+            return new Bounds(bounds.center, size);
+        }
+
+        private static DungeonBuildResult InvokeBuildFloorAttempt(GameObject root, bool useFallback)
+        {
+            DungeonSceneController controller = root.AddComponent<DungeonSceneController>();
+            typeof(DungeonSceneController).GetField("runtimeRoot", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, root.transform);
+            typeof(DungeonSceneController).GetField("roomSpacing", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, 150f);
+
+            MethodInfo method = typeof(DungeonSceneController).GetMethod("BuildFloorAttempt", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(method, "Expected DungeonSceneController.BuildFloorAttempt to exist.");
+
+            FloorState state = new FloorState { floorIndex = 1, floorSeed = 4400 };
+            state.Normalize(state.floorIndex, state.floorSeed);
+            return (DungeonBuildResult)method.Invoke(controller, new object[] { state, useFallback, 1, 1 });
         }
     }
 }

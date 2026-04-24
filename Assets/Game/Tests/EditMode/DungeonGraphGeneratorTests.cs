@@ -160,6 +160,17 @@ namespace FrontierDepths.Tests.EditMode
             Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitDown));
             Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId));
             Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId));
+
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                DungeonNode node = graph.nodes[i];
+                if (node.nodeKind == DungeonNodeKind.Ordinary)
+                {
+                    Assert.IsTrue(
+                        DungeonRoomTemplateLibrary.IsGateOneSafeOrdinaryTemplate(node.roomTemplate),
+                        $"Fallback ordinary node {node.nodeId} used unsafe template {node.roomTemplate}.");
+                }
+            }
         }
 
         private static DungeonNode FindByKind(DungeonLayoutGraph graph, DungeonNodeKind kind)

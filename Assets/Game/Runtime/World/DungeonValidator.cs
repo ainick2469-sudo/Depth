@@ -1,13 +1,16 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 namespace FrontierDepths.World
 {
     public sealed class DungeonValidationReport
     {
-        public readonly List<DungeonValidationFailure> failures = new List<DungeonValidationFailure>();
+        public readonly List<DungeonValidationIssue> failures = new List<DungeonValidationIssue>();
+        public readonly List<DungeonValidationIssue> warnings = new List<DungeonValidationIssue>();
 
         public bool IsValid => failures.Count == 0;
+        public bool HasWarnings => warnings.Count > 0;
 
         public void AddFailure(
             DungeonBuildResult buildResult,
@@ -16,27 +19,134 @@ namespace FrontierDepths.World
             DungeonRoomTemplateKind templateKind,
             string reason)
         {
-            failures.Add(new DungeonValidationFailure
+            failures.Add(CreateIssue(buildResult, nodeId, roomType, templateKind, reason, "failed"));
+        }
+
+        public void AddWarning(
+            DungeonBuildResult buildResult,
+            string nodeId,
+            DungeonNodeKind roomType,
+            DungeonRoomTemplateKind templateKind,
+            string reason)
+        {
+            warnings.Add(CreateIssue(buildResult, nodeId, roomType, templateKind, reason, "warning"));
+        }
+
+        public string ToSummaryString(DungeonBuildResult buildResult, int maxReasons = 5)
+        {
+            string state = IsValid ? "VALID" : "INVALID";
+            if (buildResult == null)
+            {
+                return $"Dungeon build {state} | Failures {failures.Count}";
+            }
+
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Dungeon build ");
+            builder.Append(state);
+            builder.Append(" | Floor ");
+            builder.Append(buildResult.floorIndex);
+            builder.Append(" | Seed ");
+            builder.Append(buildResult.seed);
+            builder.Append(" | Attempt ");
+            builder.Append(Mathf.Max(1, buildResult.attemptNumber));
+            builder.Append("/");
+            builder.Append(Mathf.Max(1, buildResult.attemptCount));
+            builder.Append(" | RequestedFallback ");
+            builder.Append(buildResult.requestedFallback ? "Yes" : "No");
+            builder.Append(" | GeneratorFallback ");
+            builder.Append(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No");
+            builder.Append(" | Emergency ");
+            builder.Append(buildResult.isEmergencyDebugBuild ? "Yes" : "No");
+            builder.Append(" | Rooms ");
+            builder.Append(buildResult.rooms.Count);
+            builder.Append(" | CorridorSegments ");
+            builder.Append(buildResult.corridors.Count);
+            builder.Append(" | Warnings ");
+            builder.Append(warnings.Count);
+            builder.Append(" | Failures ");
+            builder.Append(failures.Count);
+
+            if (failures.Count > 0)
+            {
+                builder.Append(" | Reasons ");
+                builder.Append(GetGroupedSummary(failures, maxReasons));
+            }
+
+            if (warnings.Count > 0)
+            {
+                builder.Append(" | WarningReasons ");
+                builder.Append(GetGroupedSummary(warnings, maxReasons));
+            }
+
+            return builder.ToString();
+        }
+
+        public void LogFailures(DungeonBuildResult buildResult, int maxReasons = 5)
+        {
+            Debug.LogError(ToSummaryString(buildResult, maxReasons));
+            for (int i = 0; i < warnings.Count; i++)
+            {
+                Debug.LogWarning(warnings[i].ToLogString());
+            }
+
+            for (int i = 0; i < failures.Count; i++)
+            {
+                Debug.LogError(failures[i].ToLogString());
+            }
+        }
+
+        private static DungeonValidationIssue CreateIssue(
+            DungeonBuildResult buildResult,
+            string nodeId,
+            DungeonNodeKind roomType,
+            DungeonRoomTemplateKind templateKind,
+            string reason,
+            string severity)
+        {
+            return new DungeonValidationIssue
             {
                 seed = buildResult != null ? buildResult.seed : 0,
                 floorIndex = buildResult != null ? buildResult.floorIndex : 0,
                 nodeId = nodeId ?? string.Empty,
                 roomType = roomType,
                 templateKind = templateKind,
-                reason = reason ?? "Unknown failure."
-            });
+                reason = reason ?? "Unknown issue.",
+                severity = severity
+            };
         }
 
-        public void LogFailures()
+        private static string GetGroupedSummary(List<DungeonValidationIssue> issues, int maxReasons)
         {
-            for (int i = 0; i < failures.Count; i++)
+            Dictionary<string, int> counts = new Dictionary<string, int>();
+            for (int i = 0; i < issues.Count; i++)
             {
-                Debug.LogError(failures[i].ToLogString());
+                string reason = string.IsNullOrWhiteSpace(issues[i].reason) ? "Unknown issue." : issues[i].reason;
+                if (!counts.TryAdd(reason, 1))
+                {
+                    counts[reason]++;
+                }
             }
+
+            List<KeyValuePair<string, int>> grouped = new List<KeyValuePair<string, int>>(counts);
+            grouped.Sort((left, right) =>
+            {
+                int countComparison = right.Value.CompareTo(left.Value);
+                return countComparison != 0 ? countComparison : string.CompareOrdinal(left.Key, right.Key);
+            });
+
+            int limit = Mathf.Clamp(maxReasons, 1, grouped.Count);
+            List<string> parts = new List<string>(limit);
+            for (int i = 0; i < limit; i++)
+            {
+                KeyValuePair<string, int> entry = grouped[i];
+                parts.Add(entry.Value > 1 ? $"{entry.Key} x{entry.Value}" : entry.Key);
+            }
+
+            return string.Join(" | ", parts);
         }
     }
 
-    public sealed class DungeonValidationFailure
+    public sealed class DungeonValidationIssue
     {
         public int seed;
         public int floorIndex;
@@ -44,16 +154,19 @@ namespace FrontierDepths.World
         public DungeonNodeKind roomType;
         public DungeonRoomTemplateKind templateKind;
         public string reason;
+        public string severity;
 
         public string ToLogString()
         {
-            return $"Dungeon validation failed: seed={seed}, floor={floorIndex}, node={nodeId}, roomType={roomType}, template={templateKind}, reason={reason}";
+            return $"Dungeon validation {severity}: seed={seed}, floor={floorIndex}, node={nodeId}, roomType={roomType}, template={templateKind}, reason={reason}";
         }
     }
 
     public static class DungeonValidator
     {
         private const float IntersectionPadding = 0.1f;
+        private const float OpeningWallTolerance = 0.02f;
+        private const float SeamTolerance = 0.1f;
 
         public static DungeonValidationReport Validate(DungeonBuildResult buildResult)
         {
@@ -126,6 +239,8 @@ namespace FrontierDepths.World
 
                 ValidateOpeningAgainstWalls(buildResult, report, aNode, aOpening);
                 ValidateOpeningAgainstWalls(buildResult, report, bNode, bOpening);
+                WarnOnCorridorSeamMismatch(buildResult, report, aNode, aOpening, first);
+                WarnOnCorridorSeamMismatch(buildResult, report, bNode, bOpening, last);
             }
         }
 
@@ -280,6 +395,7 @@ namespace FrontierDepths.World
             DungeonNode node,
             DungeonDoorOpeningRecord opening)
         {
+            Bounds visualOpening = opening.visualBounds.size == Vector3.zero ? opening.bounds : opening.visualBounds;
             for (int i = 0; i < buildResult.wallSpans.Count; i++)
             {
                 DungeonWallSpanRecord wall = buildResult.wallSpans[i];
@@ -288,7 +404,7 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                if (IntersectsExpanded(wall.bounds, opening.bounds))
+                if (IntersectsWithToleranceXZ(wall.bounds, visualOpening, OpeningWallTolerance))
                 {
                     report.AddFailure(buildResult, node.nodeId, node.nodeKind, node.roomTemplate, $"Doorway opening {opening.openingId} is blocked by a wall span.");
                     return;
@@ -309,6 +425,53 @@ namespace FrontierDepths.World
             a.Expand(IntersectionPadding);
             b.Expand(IntersectionPadding);
             return a.Intersects(b);
+        }
+
+        private static bool IntersectsWithToleranceXZ(Bounds a, Bounds b, float tolerance)
+        {
+            return a.min.x < b.max.x - tolerance &&
+                   a.max.x > b.min.x + tolerance &&
+                   a.min.z < b.max.z - tolerance &&
+                   a.max.z > b.min.z + tolerance;
+        }
+
+        private static void WarnOnCorridorSeamMismatch(
+            DungeonBuildResult buildResult,
+            DungeonValidationReport report,
+            DungeonNode node,
+            DungeonDoorOpeningRecord opening,
+            DungeonCorridorBuildRecord corridor)
+        {
+            Bounds visualOpening = opening.visualBounds.size == Vector3.zero ? opening.bounds : opening.visualBounds;
+            Bounds corridorOuter = corridor.outerBounds.size == Vector3.zero ? corridor.bounds : corridor.outerBounds;
+            float overlapDepth = GetDirectionalOverlap(corridorOuter, visualOpening, opening.direction);
+            if (overlapDepth < SeamTolerance)
+            {
+                report.AddWarning(buildResult, node.nodeId, node.nodeKind, node.roomTemplate, $"Corridor mouth for edge {opening.edgeKey} overlaps visual doorway by {overlapDepth:0.###}, below seam tolerance {SeamTolerance:0.###}.");
+            }
+
+            float corridorOuterWidth = GetLateralSize(corridorOuter, opening.direction);
+            float visualOpeningWidth = GetLateralSize(visualOpening, opening.direction);
+            float widthGap = visualOpeningWidth - corridorOuterWidth;
+            if (widthGap > SeamTolerance)
+            {
+                report.AddWarning(buildResult, node.nodeId, node.nodeKind, node.roomTemplate, $"Visual doorway opening {opening.openingId} is wider than corridor outer envelope by {widthGap:0.###}.");
+            }
+        }
+
+        private static float GetDirectionalOverlap(Bounds corridorOuter, Bounds opening, Vector2Int direction)
+        {
+            if (direction.x == 0)
+            {
+                return Mathf.Max(0f, Mathf.Min(corridorOuter.max.z, opening.max.z) - Mathf.Max(corridorOuter.min.z, opening.min.z));
+            }
+
+            return Mathf.Max(0f, Mathf.Min(corridorOuter.max.x, opening.max.x) - Mathf.Max(corridorOuter.min.x, opening.min.x));
+        }
+
+        private static float GetLateralSize(Bounds bounds, Vector2Int direction)
+        {
+            return direction.x == 0 ? bounds.size.x : bounds.size.z;
         }
 
         private static Vector2Int ClampToCardinal(Vector2Int delta)

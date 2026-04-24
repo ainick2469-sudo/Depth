@@ -9,6 +9,15 @@ namespace FrontierDepths.World
         public int floorIndex;
         public int seed;
         public bool usedFallback;
+        public bool requestedFallback;
+        public bool generatorReturnedFallbackGraph;
+        public bool validationPassed;
+        public bool isEmergencyDebugBuild;
+        public int validationFailureCount;
+        public int validationWarningCount;
+        public int attemptNumber;
+        public int attemptCount;
+        public string validationSummary;
         public Vector3 playerSpawn;
         public string entryNodeId;
         public string transitUpNodeId;
@@ -100,6 +109,7 @@ namespace FrontierDepths.World
         public Vector3 start;
         public Vector3 end;
         public Bounds bounds;
+        public Bounds outerBounds;
         public bool horizontal;
     }
 
@@ -111,7 +121,10 @@ namespace FrontierDepths.World
         public string neighborNodeId;
         public string edgeKey;
         public float openingWidth;
+        public float visualOpeningWidth;
+        public float validationOpeningWidth;
         public Vector3 center;
+        public Bounds visualBounds;
         public Bounds bounds;
     }
 
