@@ -54,6 +54,60 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Generator_KeepsFloorOneNormalBuildsWithinReducedRoomBudget()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            bool validatedNormalBuild = false;
+
+            for (int seedIndex = 0; seedIndex < 8; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 1,
+                    floorSeed = 2100 + seedIndex * 977
+                });
+
+                if (generator.LastGenerationUsedFallback)
+                {
+                    AssertFallbackSafeInvariants(graph);
+                    continue;
+                }
+
+                validatedNormalBuild = true;
+                Assert.That(graph.nodes.Count, Is.InRange(10, 14));
+            }
+
+            Assert.IsTrue(validatedNormalBuild, "Expected at least one normal floor-1 build in the seed sample.");
+        }
+
+        [Test]
+        public void Generator_KeepsFloorThreeNormalBuildsWithinReducedRoomBudget()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            bool validatedNormalBuild = false;
+
+            for (int seedIndex = 0; seedIndex < 8; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 3,
+                    floorSeed = 5100 + seedIndex * 977
+                });
+
+                if (generator.LastGenerationUsedFallback)
+                {
+                    AssertFallbackSafeInvariants(graph);
+                    continue;
+                }
+
+                validatedNormalBuild = true;
+                Assert.That(graph.nodes.Count, Is.InRange(12, 16));
+            }
+
+            Assert.IsTrue(validatedNormalBuild, "Expected at least one normal floor-3 build in the seed sample.");
+        }
+
+        [Test]
         public void Generator_SpreadsSpecialRoomsApart()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();

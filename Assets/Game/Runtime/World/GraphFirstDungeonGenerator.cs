@@ -141,7 +141,7 @@ namespace FrontierDepths.World
                 ConnectToAdjacentOccupied(graph, occupied, nodeId, choice.position, random, Manhattan(choice.position) <= 2);
             }
 
-            EnsureOuterCoverage(graph, occupied, random, targetRoomCount, maxRadius, ref nextOrdinaryId);
+            EnsureOuterCoverage(graph, occupied, random, floorIndex, targetRoomCount, maxRadius, ref nextOrdinaryId);
             AddLoopEdges(graph, occupied, random, floorIndex);
             AssignSpecialRooms(graph, occupied, random, floorIndex, ref nextSecretId);
             AssignTemplates(graph, random);
@@ -441,13 +441,15 @@ namespace FrontierDepths.World
                 int distance = distances.TryGetValue(node.nodeId, out int found) ? found : 0;
                 DungeonExitMask requiredExits = GetRequiredExitMask(graph, node);
                 List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, requiredExits, degree, distance);
-                ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
                 FilterTemplatesByRotationFit(candidates, requiredExits);
+                ApplySizeTierPreference(node.nodeKind, candidates, random);
+                ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
 
                 if (candidates.Count == 0)
                 {
                     candidates = GetFallbackTemplateCandidates(node.nodeKind, requiredExits);
                     FilterTemplatesByRotationFit(candidates, requiredExits);
+                    ApplySizeTierPreference(node.nodeKind, candidates, random);
                 }
 
                 if (candidates.Count == 0)
@@ -475,9 +477,9 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
-                    DungeonRoomTemplateKind.SquareChamber,
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.OctagonChamberSafe,
+                    DungeonRoomTemplateKind.SquareChamber
                 };
             }
 
@@ -486,8 +488,7 @@ namespace FrontierDepths.World
                 return new List<DungeonRoomTemplateKind>
                 {
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.SquareChamber
                 };
             }
 
@@ -496,8 +497,7 @@ namespace FrontierDepths.World
                 return new List<DungeonRoomTemplateKind>
                 {
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.SquareChamber
                 };
             }
 
@@ -505,9 +505,9 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
+                    DungeonRoomTemplateKind.OctagonChamberSafe,
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.SquareChamber
                 };
             }
 
@@ -516,8 +516,7 @@ namespace FrontierDepths.World
                 return new List<DungeonRoomTemplateKind>
                 {
                     DungeonRoomTemplateKind.AlcoveRoomSafe,
-                    DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.SquareChamber
                 };
             }
 
@@ -525,8 +524,9 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
-                    DungeonRoomTemplateKind.SquareChamber,
                     DungeonRoomTemplateKind.AlcoveRoomSafe,
+                    DungeonRoomTemplateKind.SquareChamber,
+                    DungeonRoomTemplateKind.BroadRectangle,
                     DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
@@ -587,6 +587,95 @@ namespace FrontierDepths.World
             }
 
             return fallback;
+        }
+
+        private static void ApplySizeTierPreference(
+            DungeonNodeKind kind,
+            List<DungeonRoomTemplateKind> candidates,
+            System.Random random)
+        {
+            if (candidates.Count <= 1)
+            {
+                return;
+            }
+
+            DungeonRoomSizeTier desiredTier = ChooseDesiredSizeTier(kind, random);
+            DungeonRoomSizeTier[] fallbackOrder = GetFallbackTierOrder(desiredTier);
+            for (int orderIndex = 0; orderIndex < fallbackOrder.Length; orderIndex++)
+            {
+                List<DungeonRoomTemplateKind> matching = new List<DungeonRoomTemplateKind>();
+                for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
+                {
+                    if (DungeonRoomTemplateLibrary.GetSizeTier(candidates[candidateIndex]) == fallbackOrder[orderIndex])
+                    {
+                        matching.Add(candidates[candidateIndex]);
+                    }
+                }
+
+                if (matching.Count == 0)
+                {
+                    continue;
+                }
+
+                candidates.Clear();
+                candidates.AddRange(matching);
+                return;
+            }
+        }
+
+        private static DungeonRoomSizeTier ChooseDesiredSizeTier(DungeonNodeKind kind, System.Random random)
+        {
+            int roll = random.Next(100);
+            return kind switch
+            {
+                DungeonNodeKind.EntryHub => DungeonRoomSizeTier.Large,
+                DungeonNodeKind.Landmark => roll < 40 ? DungeonRoomSizeTier.Large : DungeonRoomSizeTier.Grand,
+                DungeonNodeKind.TransitUp => roll < 45 ? DungeonRoomSizeTier.Medium : DungeonRoomSizeTier.Large,
+                DungeonNodeKind.TransitDown => roll < 45 ? DungeonRoomSizeTier.Medium : DungeonRoomSizeTier.Large,
+                DungeonNodeKind.Secret => roll < 45 ? DungeonRoomSizeTier.Small : DungeonRoomSizeTier.Medium,
+                _ => roll switch
+                {
+                    < 10 => DungeonRoomSizeTier.Small,
+                    < 55 => DungeonRoomSizeTier.Medium,
+                    < 90 => DungeonRoomSizeTier.Large,
+                    _ => DungeonRoomSizeTier.Grand
+                }
+            };
+        }
+
+        private static DungeonRoomSizeTier[] GetFallbackTierOrder(DungeonRoomSizeTier desiredTier)
+        {
+            return desiredTier switch
+            {
+                DungeonRoomSizeTier.Small => new[]
+                {
+                    DungeonRoomSizeTier.Small,
+                    DungeonRoomSizeTier.Medium,
+                    DungeonRoomSizeTier.Large,
+                    DungeonRoomSizeTier.Grand
+                },
+                DungeonRoomSizeTier.Medium => new[]
+                {
+                    DungeonRoomSizeTier.Medium,
+                    DungeonRoomSizeTier.Large,
+                    DungeonRoomSizeTier.Small,
+                    DungeonRoomSizeTier.Grand
+                },
+                DungeonRoomSizeTier.Large => new[]
+                {
+                    DungeonRoomSizeTier.Large,
+                    DungeonRoomSizeTier.Grand,
+                    DungeonRoomSizeTier.Medium,
+                    DungeonRoomSizeTier.Small
+                },
+                _ => new[]
+                {
+                    DungeonRoomSizeTier.Grand,
+                    DungeonRoomSizeTier.Large,
+                    DungeonRoomSizeTier.Medium,
+                    DungeonRoomSizeTier.Small
+                }
+            };
         }
 
         private static void ApplyAntiRepetitionRules(
@@ -894,15 +983,16 @@ namespace FrontierDepths.World
                         score += Mathf.Max(0, targetPerSector - sectorCounts[sector]) * 1.8f;
                     }
 
-                    score += adjacentOccupied == 2 ? 6f : 0f;
-                    score += adjacentOccupied >= 3 ? 4.25f : 0f;
-                    score += adjacentOccupied == 1 ? -1.5f : 0f;
+                    score += adjacentOccupied == 2 ? 7.25f : 0f;
+                    score += adjacentOccupied >= 3 ? 5.75f : 0f;
+                    score += adjacentOccupied == 1 ? -2.4f : 0f;
                     score += radius <= 2 ? 2.2f : 0f;
-                    score -= centerDistance * 1.1f;
-                    score -= boundsExpansion * 1.45f;
+                    score += boundsExpansion == 0 && adjacentOccupied >= 2 ? 1.2f : 0f;
+                    score -= centerDistance * 1.35f;
+                    score -= boundsExpansion * 1.8f;
                     score += degree <= 2 ? 0.9f : -0.5f;
-                    score -= Mathf.Max(0, openCount - 2) * 0.18f;
-                    score -= radius >= 4 && adjacentOccupied <= 1 ? 1.8f : 0f;
+                    score -= Mathf.Max(0, openCount - 2) * 0.35f;
+                    score -= radius >= 4 && adjacentOccupied <= 1 ? 3.25f : 0f;
                     score += (float)random.NextDouble();
 
                     ExpansionCandidate candidate = new ExpansionCandidate
@@ -926,12 +1016,13 @@ namespace FrontierDepths.World
             DungeonLayoutGraph graph,
             Dictionary<Vector2Int, string> occupied,
             System.Random random,
+            int floorIndex,
             int targetRoomCount,
             int maxRadius,
             ref int nextOrdinaryId)
         {
             int[] sectorCounts = GetSectorCounts(graph);
-            int minimumSectors = targetRoomCount >= 24 ? 4 : 3;
+            int minimumSectors = floorIndex >= 4 ? 4 : 3;
             int covered = 0;
             for (int i = 0; i < sectorCounts.Length; i++)
             {
@@ -1206,19 +1297,24 @@ namespace FrontierDepths.World
 
         private static int GetTargetRoomCount(int floorIndex, System.Random random)
         {
+            if (floorIndex <= 1)
+            {
+                return random.Next(10, 15);
+            }
+
             if (floorIndex <= 3)
             {
-                return random.Next(16, 23);
+                return random.Next(12, 17);
             }
 
             if (floorIndex <= 8)
             {
-                return random.Next(22, 31);
+                return random.Next(16, 23);
             }
 
             if (floorIndex <= 15)
             {
-                return random.Next(30, 41);
+                return random.Next(22, 31);
             }
 
             int baseCount = 38 + Mathf.Min(12, floorIndex - 15);
@@ -1227,19 +1323,24 @@ namespace FrontierDepths.World
 
         private static int GetMinimumRoomCount(int floorIndex)
         {
+            if (floorIndex <= 1)
+            {
+                return 10;
+            }
+
             if (floorIndex <= 3)
             {
-                return 16;
+                return 12;
             }
 
             if (floorIndex <= 8)
             {
-                return 22;
+                return 16;
             }
 
             if (floorIndex <= 15)
             {
-                return 30;
+                return 22;
             }
 
             return 38;
@@ -1247,7 +1348,7 @@ namespace FrontierDepths.World
 
         private static int GetMaxRadius(int floorIndex, int targetRoomCount)
         {
-            return Mathf.Clamp(4 + floorIndex / 2 + targetRoomCount / 18, 6, 16);
+            return Mathf.Clamp(3 + floorIndex / 3 + targetRoomCount / 18, 5, 14);
         }
 
         private static void AddNode(

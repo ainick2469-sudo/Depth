@@ -1,5 +1,6 @@
 using FrontierDepths.World;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace FrontierDepths.Tests.EditMode
 {
@@ -50,8 +51,24 @@ namespace FrontierDepths.Tests.EditMode
         {
             float normalized = DungeonSceneController.NormalizeRoomSpacing(56f);
 
-            Assert.AreEqual(92f, normalized, 0.01f);
-            Assert.LessOrEqual(DungeonSceneController.GetMinimumSafeRoomSpacing(), normalized);
+            Assert.That(normalized, Is.InRange(78f, 86f));
+            Assert.AreEqual(DungeonSceneController.GetMinimumSafeRoomSpacing(), normalized, 0.01f);
+        }
+
+        [Test]
+        public void KeyCombatTemplates_HaveLargerCombatReadyFootprints()
+        {
+            AssertFootprint(DungeonRoomTemplateKind.SquareChamber, 42f, 42f);
+            AssertFootprint(DungeonRoomTemplateKind.BroadRectangle, 54f, 42f);
+            AssertFootprint(DungeonRoomTemplateKind.LongGallery, 66f, 30f);
+        }
+
+        private static void AssertFootprint(DungeonRoomTemplateKind kind, float expectedWidth, float expectedLength)
+        {
+            Vector2 footprint = DungeonRoomTemplateLibrary.GetFootprintSize(kind, 0, 6f);
+
+            Assert.That(footprint.x, Is.EqualTo(expectedWidth).Within(0.01f));
+            Assert.That(footprint.y, Is.EqualTo(expectedLength).Within(0.01f));
         }
     }
 }

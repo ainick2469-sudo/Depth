@@ -26,6 +26,10 @@ namespace FrontierDepths.World
         public string transitDownNodeId;
         public string landmarkNodeId;
         public string secretNodeId;
+        public float averageRoomFootprint;
+        public float largestRoomFootprint;
+        public float averageCorridorLength;
+        public float maxCorridorLength;
 
         public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
         public readonly List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();
@@ -34,6 +38,7 @@ namespace FrontierDepths.World
         public readonly List<DungeonWallSpanRecord> wallSpans = new List<DungeonWallSpanRecord>();
         public readonly List<DungeonReservedZoneRecord> reservedZones = new List<DungeonReservedZoneRecord>();
         public readonly List<DungeonInteractableBuildRecord> interactables = new List<DungeonInteractableBuildRecord>();
+        public readonly List<DungeonSpawnPointRecord> spawnPoints = new List<DungeonSpawnPointRecord>();
 
         public static string GetEdgeKey(string a, string b)
         {
@@ -80,6 +85,35 @@ namespace FrontierDepths.World
             matches.Sort((left, right) => left.segmentIndex.CompareTo(right.segmentIndex));
             return matches;
         }
+
+        public List<DungeonSpawnPointRecord> GetSpawnPoints(string nodeId, DungeonSpawnPointCategory category)
+        {
+            List<DungeonSpawnPointRecord> matches = new List<DungeonSpawnPointRecord>();
+            for (int i = 0; i < spawnPoints.Count; i++)
+            {
+                if (spawnPoints[i].nodeId == nodeId && spawnPoints[i].category == category)
+                {
+                    matches.Add(spawnPoints[i]);
+                }
+            }
+
+            matches.Sort((left, right) => right.score.CompareTo(left.score));
+            return matches;
+        }
+
+        public int GetSpawnPointCount(DungeonSpawnPointCategory category)
+        {
+            int count = 0;
+            for (int i = 0; i < spawnPoints.Count; i++)
+            {
+                if (spawnPoints[i].category == category)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
     }
 
     public sealed class DungeonGraphEdgeRecord
@@ -96,10 +130,14 @@ namespace FrontierDepths.World
         public DungeonNodeKind roomType;
         public DungeonRoomTemplateKind templateKind;
         public GameObject rootObject;
+        public Vector3 origin;
         public Bounds bounds;
         public bool hasFloor;
         public int wallCount;
         public int doorwayCount;
+        public float footprintArea;
+        public Vector2Int centerCell;
+        public readonly List<Vector2Int> floorCells = new List<Vector2Int>();
     }
 
     public sealed class DungeonCorridorBuildRecord
@@ -113,6 +151,9 @@ namespace FrontierDepths.World
         public Bounds bounds;
         public Bounds outerBounds;
         public bool horizontal;
+        public float length;
+        public float width;
+        public bool isSecretCorridor;
     }
 
     public sealed class DungeonDoorOpeningRecord
@@ -155,5 +196,26 @@ namespace FrontierDepths.World
         public bool isRequiredReturnRoute;
         public Vector3 position;
         public Bounds bounds;
+    }
+
+    public enum DungeonSpawnPointCategory
+    {
+        PlayerSpawn,
+        EnemyMelee,
+        EnemyRanged,
+        EliteEnemy,
+        Chest,
+        Shrine,
+        Reward,
+        Interactable
+    }
+
+    public sealed class DungeonSpawnPointRecord
+    {
+        public string nodeId;
+        public DungeonSpawnPointCategory category;
+        public Vector3 position;
+        public Bounds bounds;
+        public float score;
     }
 }

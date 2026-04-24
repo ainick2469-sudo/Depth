@@ -166,6 +166,50 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Validator_DetectsEnemySpawnPointInTransitRoom()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = build.transitUpNodeId,
+                category = DungeonSpawnPointCategory.EnemyMelee,
+                position = new Vector3(20f, 3.5f, -4f),
+                bounds = new Bounds(new Vector3(20f, 3.5f, -4f), new Vector3(2f, 6f, 2f)),
+                score = 50f
+            });
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsFalse(report.IsValid);
+            StringAssert.Contains("non-combat room", report.ToSummaryString(build, 10));
+        }
+
+        [Test]
+        public void Controller_BuildProducesMetricsAndSpawnCandidates()
+        {
+            GameObject root = new GameObject("DungeonSceneControllerMetricsTest");
+
+            try
+            {
+                DungeonBuildResult build = InvokeBuildFloorAttempt(root, useFallback: false, floorSeed: 1932105958);
+                DungeonValidationReport report = DungeonValidator.Validate(build);
+
+                Assert.IsTrue(report.IsValid, report.ToSummaryString(build, 10));
+                Assert.Greater(build.averageRoomFootprint, 0f);
+                Assert.Greater(build.largestRoomFootprint, build.averageRoomFootprint * 0.75f);
+                Assert.Greater(build.averageCorridorLength, 0f);
+                Assert.Greater(build.maxCorridorLength, 0f);
+                Assert.IsNotEmpty(build.GetSpawnPoints(build.playerSpawnNodeId, DungeonSpawnPointCategory.PlayerSpawn));
+                Assert.Greater(build.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee), 0);
+                Assert.Greater(build.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged), 0);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void Controller_FallbackBuild_PassesValidation()
         {
             GameObject root = new GameObject("DungeonSceneControllerValidationTest");
@@ -326,6 +370,71 @@ namespace FrontierDepths.Tests.EditMode
                 bounds = new Bounds(new Vector3(-20f, 1f, 20f), new Vector3(4f, 2f, 4f))
             });
 
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "entry_hub",
+                category = DungeonSpawnPointCategory.PlayerSpawn,
+                position = new Vector3(0f, 3.5f, 0f),
+                bounds = new Bounds(new Vector3(0f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                score = 100f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "ordinary_0",
+                category = DungeonSpawnPointCategory.EnemyMelee,
+                position = new Vector3(-20f, 3.5f, 0f),
+                bounds = new Bounds(new Vector3(-20f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                score = 90f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "landmark",
+                category = DungeonSpawnPointCategory.EnemyRanged,
+                position = new Vector3(-40f, 3.5f, 0f),
+                bounds = new Bounds(new Vector3(-40f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                score = 88f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "landmark",
+                category = DungeonSpawnPointCategory.EliteEnemy,
+                position = new Vector3(-40f, 3.5f, 2f),
+                bounds = new Bounds(new Vector3(-40f, 3.5f, 2f), new Vector3(2f, 6f, 2f)),
+                score = 86f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "secret_0",
+                category = DungeonSpawnPointCategory.Chest,
+                position = new Vector3(0f, 3.5f, -20f),
+                bounds = new Bounds(new Vector3(0f, 3.5f, -20f), new Vector3(2f, 6f, 2f)),
+                score = 70f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "ordinary_0",
+                category = DungeonSpawnPointCategory.Shrine,
+                position = new Vector3(-22f, 3.5f, 0f),
+                bounds = new Bounds(new Vector3(-22f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                score = 68f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "landmark",
+                category = DungeonSpawnPointCategory.Reward,
+                position = new Vector3(-42f, 3.5f, 0f),
+                bounds = new Bounds(new Vector3(-42f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                score = 66f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "entry_hub",
+                category = DungeonSpawnPointCategory.Interactable,
+                position = new Vector3(0f, 3.5f, 2f),
+                bounds = new Bounds(new Vector3(0f, 3.5f, 2f), new Vector3(2f, 6f, 2f)),
+                score = 64f
+            });
+
             return build;
         }
 
@@ -342,11 +451,15 @@ namespace FrontierDepths.Tests.EditMode
                 nodeId = nodeId,
                 roomType = kind,
                 templateKind = template,
+                origin = roomCenter,
                 bounds = new Bounds(roomCenter + new Vector3(0f, 6f, 0f), new Vector3(12f, 12f, 12f)),
                 hasFloor = true,
                 wallCount = 4,
-                doorwayCount = doorwayCount
+                doorwayCount = doorwayCount,
+                footprintArea = 144f,
+                centerCell = Vector2Int.zero
             });
+            build.rooms[build.rooms.Count - 1].floorCells.Add(Vector2Int.zero);
         }
 
         private static void AddEdge(DungeonBuildResult build, string from, string to, Vector3 fromCenter, Vector3 toCenter)
@@ -378,7 +491,10 @@ namespace FrontierDepths.Tests.EditMode
                 end = end,
                 bounds = new Bounds(midpoint, size),
                 outerBounds = new Bounds(midpoint + new Vector3(0f, 5.5f, 0f), outerSize),
-                horizontal = horizontal
+                horizontal = horizontal,
+                length = horizontal ? Mathf.Abs(end.x - start.x) : Mathf.Abs(end.z - start.z),
+                width = corridorWidth,
+                isSecretCorridor = build.graph.GetNode(from).nodeKind == DungeonNodeKind.Secret || build.graph.GetNode(to).nodeKind == DungeonNodeKind.Secret
             });
 
             Vector2Int fromDirection = ToDirection(toCenter - fromCenter);
@@ -482,7 +598,7 @@ namespace FrontierDepths.Tests.EditMode
         {
             DungeonSceneController controller = root.AddComponent<DungeonSceneController>();
             typeof(DungeonSceneController).GetField("runtimeRoot", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, root.transform);
-            typeof(DungeonSceneController).GetField("roomSpacing", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, 150f);
+            typeof(DungeonSceneController).GetField("roomSpacing", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(controller, DungeonSceneController.NormalizeRoomSpacing(0f));
 
             MethodInfo method = typeof(DungeonSceneController).GetMethod("BuildFloorAttempt", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(method, "Expected DungeonSceneController.BuildFloorAttempt to exist.");

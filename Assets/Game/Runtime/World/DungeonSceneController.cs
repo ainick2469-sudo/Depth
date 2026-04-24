@@ -24,10 +24,16 @@ namespace FrontierDepths.World
         private const float SpawnInteractableClearance = 3f;
         private const float SpawnDoorwayClearance = 4f;
         private const float SpawnCandidateRadius = 4f;
-        private const float DefaultRoomSpacing = 92f;
-        private const float MinimumRecommendedRoomSpacing = 88f;
-        private const float MaximumRecommendedRoomSpacing = 96f;
-        private const float MinimumRoomGap = 24f;
+        private const float SpawnCandidateHeight = 3.5f;
+        private const float SpawnCandidateClearanceRadius = 3f;
+        private const float EnemyMeleeSpawnMinimumDistance = 18f;
+        private const float EnemyRangedSpawnMinimumDistance = 30f;
+        private const float EliteEnemySpawnMinimumDistance = 24f;
+        private const int MaxCategorySpawnPointsPerRoom = 4;
+        private const float DefaultRoomSpacing = 84f;
+        private const float MinimumRecommendedRoomSpacing = 78f;
+        private const float MaximumRecommendedRoomSpacing = 86f;
+        private const float MinimumRoomGap = 18f;
 
         private sealed class BoundarySpan
         {
@@ -201,7 +207,10 @@ namespace FrontierDepths.World
                 CreateRoom(graph.nodes[nodeIndex], graph);
             }
 
+            SampleStaticSpawnCandidates();
             activeBuildResult.playerSpawn = GetSpawnPosition(graph);
+            SampleCombatSpawnCandidates(activeBuildResult.playerSpawn);
+            UpdateBuildMetrics(activeBuildResult);
             DungeonBuildResult completed = activeBuildResult;
             activeBuildResult = null;
             return completed;
@@ -352,6 +361,12 @@ namespace FrontierDepths.World
             DungeonRoomBuildRecord room = activeBuildResult != null ? activeBuildResult.FindRoom(nodeId) : null;
             if (room != null)
             {
+                List<DungeonSpawnPointRecord> sampledPlayerSpawns = activeBuildResult.GetSpawnPoints(nodeId, DungeonSpawnPointCategory.PlayerSpawn);
+                if (sampledPlayerSpawns.Count > 0)
+                {
+                    return sampledPlayerSpawns[0].position;
+                }
+
                 if (TryFindSafeSpawnPosition(room, nodeId, out Vector3 safeSpawn))
                 {
                     return safeSpawn;
@@ -369,6 +384,265 @@ namespace FrontierDepths.World
             return node != null
                 ? GridToWorld(node.gridPosition) + Vector3.up * PlayerSpawnHeight
                 : Vector3.up * PlayerSpawnHeight;
+        }
+
+        private void SampleStaticSpawnCandidates()
+        {
+            if (activeBuildResult == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < activeBuildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = activeBuildResult.rooms[i];
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.PlayerSpawn, MaxCategorySpawnPointsPerRoom, 0f, true, true, false);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.Interactable, 2, 0f, true, true, false);
+
+                if (room.roomType == DungeonNodeKind.EntryHub || room.roomType == DungeonNodeKind.TransitUp || room.roomType == DungeonNodeKind.TransitDown)
+                {
+                    continue;
+                }
+
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.Chest, 2, 0f, true, true, false);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.Shrine, 1, 0f, true, true, false);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.Reward, 1, 0f, true, true, false);
+            }
+        }
+
+        private void SampleCombatSpawnCandidates(Vector3 playerSpawn)
+        {
+            if (activeBuildResult == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < activeBuildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = activeBuildResult.rooms[i];
+                if (room.roomType != DungeonNodeKind.Ordinary && room.roomType != DungeonNodeKind.Landmark)
+                {
+                    continue;
+                }
+
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyMelee, 3, EnemyMeleeSpawnMinimumDistance, true, true, true, playerSpawn);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyRanged, 2, EnemyRangedSpawnMinimumDistance, true, true, true, playerSpawn);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.EliteEnemy, 1, EliteEnemySpawnMinimumDistance, true, true, true, playerSpawn);
+            }
+        }
+
+        private void AddSpawnCandidates(
+            DungeonRoomBuildRecord room,
+            DungeonSpawnPointCategory category,
+            int maxCount,
+            float minimumDistanceFromPlayer,
+            bool avoidDoorways,
+            bool avoidInteractables,
+            bool avoidPlayerSpawn,
+            Vector3? playerSpawn = null)
+        {
+            if (activeBuildResult == null || room == null || maxCount <= 0)
+            {
+                return;
+            }
+
+            List<DungeonSpawnPointRecord> candidates = new List<DungeonSpawnPointRecord>();
+            Vector3 roomCenter = new Vector3(room.bounds.center.x, SpawnCandidateHeight, room.bounds.center.z);
+
+            for (int cellIndex = 0; cellIndex < room.floorCells.Count; cellIndex++)
+            {
+                Vector3 candidatePosition = room.origin + CellToLocalPosition(room.floorCells[cellIndex]) + Vector3.up * SpawnCandidateHeight;
+                if (!IsSpawnCellConnectedToCenter(room, room.floorCells[cellIndex]))
+                {
+                    continue;
+                }
+
+                if (!IsSpawnPointValid(room, candidatePosition, minimumDistanceFromPlayer, avoidDoorways, avoidInteractables, avoidPlayerSpawn, playerSpawn))
+                {
+                    continue;
+                }
+
+                candidates.Add(new DungeonSpawnPointRecord
+                {
+                    nodeId = room.nodeId,
+                    category = category,
+                    position = candidatePosition,
+                    bounds = new Bounds(candidatePosition, new Vector3(SpawnCandidateClearanceRadius, 6f, SpawnCandidateClearanceRadius)),
+                    score = ScoreSpawnCandidate(category, candidatePosition, roomCenter, playerSpawn)
+                });
+            }
+
+            candidates.Sort((left, right) => right.score.CompareTo(left.score));
+            int count = Mathf.Min(maxCount, candidates.Count);
+            for (int i = 0; i < count; i++)
+            {
+                activeBuildResult.spawnPoints.Add(candidates[i]);
+            }
+        }
+
+        private static float ScoreSpawnCandidate(
+            DungeonSpawnPointCategory category,
+            Vector3 candidatePosition,
+            Vector3 roomCenter,
+            Vector3? playerSpawn)
+        {
+            float distanceFromCenter = Vector3.Distance(candidatePosition, roomCenter);
+            float playerDistance = playerSpawn.HasValue ? Vector3.Distance(candidatePosition, playerSpawn.Value) : 0f;
+
+            return category switch
+            {
+                DungeonSpawnPointCategory.PlayerSpawn => 100f - distanceFromCenter,
+                DungeonSpawnPointCategory.Interactable => 90f - distanceFromCenter,
+                DungeonSpawnPointCategory.Chest => 80f - distanceFromCenter,
+                DungeonSpawnPointCategory.Shrine => 78f - distanceFromCenter,
+                DungeonSpawnPointCategory.Reward => 76f - distanceFromCenter,
+                DungeonSpawnPointCategory.EnemyMelee => playerDistance - distanceFromCenter * 0.4f,
+                DungeonSpawnPointCategory.EnemyRanged => playerDistance * 1.2f - distanceFromCenter * 0.2f,
+                DungeonSpawnPointCategory.EliteEnemy => playerDistance * 1.1f - distanceFromCenter * 0.3f,
+                _ => 0f
+            };
+        }
+
+        private bool IsSpawnPointValid(
+            DungeonRoomBuildRecord room,
+            Vector3 candidatePosition,
+            float minimumDistanceFromPlayer,
+            bool avoidDoorways,
+            bool avoidInteractables,
+            bool avoidPlayerSpawn,
+            Vector3? playerSpawn)
+        {
+            if (!IsWithinRoomInterior(room.bounds, candidatePosition, SpawnWallMargin))
+            {
+                return false;
+            }
+
+            Bounds candidateBounds = new Bounds(candidatePosition, new Vector3(SpawnCandidateClearanceRadius, 6f, SpawnCandidateClearanceRadius));
+
+            if (avoidPlayerSpawn && playerSpawn.HasValue && Vector3.Distance(candidatePosition, playerSpawn.Value) < minimumDistanceFromPlayer)
+            {
+                return false;
+            }
+
+            if (avoidInteractables)
+            {
+                for (int interactableIndex = 0; interactableIndex < activeBuildResult.interactables.Count; interactableIndex++)
+                {
+                    DungeonInteractableBuildRecord interactable = activeBuildResult.interactables[interactableIndex];
+                    if (interactable.nodeId != room.nodeId)
+                    {
+                        continue;
+                    }
+
+                    Bounds interactableBounds = interactable.bounds;
+                    interactableBounds.Expand(new Vector3(SpawnInteractableClearance, 0f, SpawnInteractableClearance));
+                    if (interactableBounds.Intersects(candidateBounds))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            if (avoidDoorways)
+            {
+                for (int zoneIndex = 0; zoneIndex < activeBuildResult.reservedZones.Count; zoneIndex++)
+                {
+                    DungeonReservedZoneRecord zone = activeBuildResult.reservedZones[zoneIndex];
+                    if (zone.ownerId != room.nodeId || zone.kind != "Doorway")
+                    {
+                        continue;
+                    }
+
+                    Bounds zoneBounds = zone.bounds;
+                    zoneBounds.Expand(new Vector3(SpawnDoorwayClearance, 0f, SpawnDoorwayClearance));
+                    if (zoneBounds.Intersects(candidateBounds))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            for (int wallIndex = 0; wallIndex < activeBuildResult.wallSpans.Count; wallIndex++)
+            {
+                DungeonWallSpanRecord wall = activeBuildResult.wallSpans[wallIndex];
+                if (wall.ownerId != room.nodeId)
+                {
+                    continue;
+                }
+
+                Bounds wallBounds = wall.bounds;
+                wallBounds.Expand(new Vector3(0.25f, 0f, 0.25f));
+                if (wallBounds.Intersects(candidateBounds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsSpawnCellConnectedToCenter(DungeonRoomBuildRecord room, Vector2Int startCell)
+        {
+            HashSet<Vector2Int> floorCells = new HashSet<Vector2Int>(room.floorCells);
+            if (!floorCells.Contains(startCell) || !floorCells.Contains(room.centerCell))
+            {
+                return false;
+            }
+
+            Queue<Vector2Int> frontier = new Queue<Vector2Int>();
+            HashSet<Vector2Int> visited = new HashSet<Vector2Int> { startCell };
+            frontier.Enqueue(startCell);
+
+            while (frontier.Count > 0)
+            {
+                Vector2Int current = frontier.Dequeue();
+                if (current == room.centerCell)
+                {
+                    return true;
+                }
+
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector2Int next = current + CardinalDirection(i);
+                    if (!floorCells.Contains(next) || !visited.Add(next))
+                    {
+                        continue;
+                    }
+
+                    frontier.Enqueue(next);
+                }
+            }
+
+            return false;
+        }
+
+        private static void UpdateBuildMetrics(DungeonBuildResult buildResult)
+        {
+            if (buildResult == null)
+            {
+                return;
+            }
+
+            float roomFootprintTotal = 0f;
+            float largestRoomFootprint = 0f;
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                roomFootprintTotal += buildResult.rooms[i].footprintArea;
+                largestRoomFootprint = Mathf.Max(largestRoomFootprint, buildResult.rooms[i].footprintArea);
+            }
+
+            float corridorLengthTotal = 0f;
+            float maxCorridorLength = 0f;
+            for (int i = 0; i < buildResult.corridors.Count; i++)
+            {
+                corridorLengthTotal += buildResult.corridors[i].length;
+                maxCorridorLength = Mathf.Max(maxCorridorLength, buildResult.corridors[i].length);
+            }
+
+            buildResult.averageRoomFootprint = buildResult.rooms.Count > 0 ? roomFootprintTotal / buildResult.rooms.Count : 0f;
+            buildResult.largestRoomFootprint = largestRoomFootprint;
+            buildResult.averageCorridorLength = buildResult.corridors.Count > 0 ? corridorLengthTotal / buildResult.corridors.Count : 0f;
+            buildResult.maxCorridorLength = maxCorridorLength;
         }
 
         private bool TryFindSafeSpawnPosition(DungeonRoomBuildRecord room, string nodeId, out Vector3 spawnPosition)
@@ -474,8 +748,12 @@ namespace FrontierDepths.World
                 roomType = node.nodeKind,
                 templateKind = node.roomTemplate,
                 rootObject = roomRoot,
+                origin = roomRoot.transform.position,
+                centerCell = DungeonRoomTemplateLibrary.GetCenterCell(node.roomTemplate, node.rotationQuarterTurns),
                 bounds = GetRoomBounds(roomRoot.transform.position, floorCells)
             };
+            roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
+            roomRecord.floorCells.AddRange(floorCells);
             activeBuildResult?.rooms.Add(roomRecord);
 
             Dictionary<Vector2Int, float> doorwayWidths = GetDoorwayWidths(node, graph);
@@ -562,7 +840,10 @@ namespace FrontierDepths.World
                 end = end,
                 bounds = GetBounds(floor.transform.position, floorScale),
                 outerBounds = GetBounds(outerBoundsCenter, outerBoundsSize),
-                horizontal = horizontal
+                horizontal = horizontal,
+                length = corridorLength,
+                width = corridorWidth,
+                isSecretCorridor = Mathf.Abs(corridorWidth - SecretCorridorWidth) <= 0.01f
             });
             activeBuildResult?.reservedZones.Add(new DungeonReservedZoneRecord
             {
@@ -733,6 +1014,13 @@ namespace FrontierDepths.World
 
             Gizmos.color = Color.cyan;
             Gizmos.DrawSphere(visibleBuild.playerSpawn, 1.1f);
+
+            for (int i = 0; i < visibleBuild.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawnPoint = visibleBuild.spawnPoints[i];
+                Gizmos.color = GetSpawnPointGizmoColor(spawnPoint.category);
+                Gizmos.DrawSphere(spawnPoint.position, 0.6f);
+            }
         }
 
         private static FloorState CloneFloorState(FloorState source, int fallbackFloorIndex, int floorSeed)
@@ -813,7 +1101,7 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | Corridor Segments {buildResult.corridors.Count} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            return $"Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
         }
 
         private void SetVisibleInteractablesEnabled(bool enabled)
@@ -1080,6 +1368,21 @@ namespace FrontierDepths.World
                 DungeonNodeKind.Landmark => new Color(0.3f, 0.85f, 0.4f),
                 DungeonNodeKind.Secret => new Color(0.7f, 0.3f, 0.95f),
                 _ => Color.white
+            };
+        }
+
+        private static Color GetSpawnPointGizmoColor(DungeonSpawnPointCategory category)
+        {
+            return category switch
+            {
+                DungeonSpawnPointCategory.PlayerSpawn => new Color(0.2f, 1f, 1f),
+                DungeonSpawnPointCategory.EnemyMelee => new Color(1f, 0.35f, 0.35f),
+                DungeonSpawnPointCategory.EnemyRanged => new Color(1f, 0.8f, 0.25f),
+                DungeonSpawnPointCategory.EliteEnemy => new Color(1f, 0.2f, 0.85f),
+                DungeonSpawnPointCategory.Chest => new Color(0.95f, 0.65f, 0.15f),
+                DungeonSpawnPointCategory.Shrine => new Color(0.6f, 0.95f, 0.35f),
+                DungeonSpawnPointCategory.Reward => new Color(0.45f, 0.9f, 0.45f),
+                _ => new Color(0.8f, 0.8f, 0.8f)
             };
         }
 

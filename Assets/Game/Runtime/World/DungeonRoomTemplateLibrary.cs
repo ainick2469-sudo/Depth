@@ -14,6 +14,14 @@ namespace FrontierDepths.World
         West = 1 << 3
     }
 
+    internal enum DungeonRoomSizeTier
+    {
+        Small,
+        Medium,
+        Large,
+        Grand
+    }
+
     public static class DungeonRoomTemplateLibrary
     {
         private static readonly DungeonRoomTemplateKind[] GateOneSafeOrdinaryTemplates =
@@ -48,6 +56,7 @@ namespace FrontierDepths.World
             public Vector2Int southSocket;
             public Vector2Int eastSocket;
             public Vector2Int westSocket;
+            internal DungeonRoomSizeTier sizeTier;
             internal DungeonExitMask supportedExits;
         }
 
@@ -59,12 +68,13 @@ namespace FrontierDepths.World
                     new TemplateData
                     {
                         feature = DungeonTemplateFeature.Flat,
-                        cells = Rect(-2, 2, -2, 2),
+                        cells = Rect(-3, 3, -3, 3),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 2),
-                        southSocket = new Vector2Int(0, -2),
-                        eastSocket = new Vector2Int(2, 0),
-                        westSocket = new Vector2Int(-2, 0),
+                        northSocket = new Vector2Int(0, 3),
+                        southSocket = new Vector2Int(0, -3),
+                        eastSocket = new Vector2Int(3, 0),
+                        westSocket = new Vector2Int(-3, 0),
+                        sizeTier = DungeonRoomSizeTier.Medium,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.South | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -73,12 +83,13 @@ namespace FrontierDepths.World
                     new TemplateData
                     {
                         feature = DungeonTemplateFeature.Flat,
-                        cells = Rect(-3, 3, -2, 2),
+                        cells = Rect(-4, 4, -3, 3),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 2),
-                        southSocket = new Vector2Int(0, -2),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 3),
+                        southSocket = new Vector2Int(0, -3),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-4, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.South | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -87,12 +98,13 @@ namespace FrontierDepths.World
                     new TemplateData
                     {
                         feature = DungeonTemplateFeature.Flat,
-                        cells = Rect(-3, 3, -1, 1),
+                        cells = Rect(-5, 5, -2, 2),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 1),
-                        southSocket = new Vector2Int(0, -1),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 2),
+                        southSocket = new Vector2Int(0, -2),
+                        eastSocket = new Vector2Int(5, 0),
+                        westSocket = new Vector2Int(-5, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -102,13 +114,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-1, 3, -1, 1),
-                            Rect(-1, 1, -1, 3)),
+                            Rect(-2, 4, -2, 2),
+                            Rect(-2, 2, -2, 4)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -1),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-1, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -2),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-2, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.East
                     }
                 },
@@ -118,13 +131,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-3, 3, -1, 1),
-                            Rect(-1, 1, -1, 3)),
+                            Rect(-4, 4, -2, 2),
+                            Rect(-2, 2, -2, 4)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -1),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -2),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-4, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -134,13 +148,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-1, 1, -3, 3),
-                            Rect(-3, 3, -1, 1)),
+                            Rect(-2, 2, -4, 4),
+                            Rect(-4, 4, -2, 2)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -3),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -4),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-4, 0),
+                        sizeTier = DungeonRoomSizeTier.Grand,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.South | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -149,12 +164,13 @@ namespace FrontierDepths.World
                     new TemplateData
                     {
                         feature = DungeonTemplateFeature.Flat,
-                        cells = Filter(Rect(-3, 3, -3, 3), cell => Mathf.Abs(cell.x) + Mathf.Abs(cell.y) <= 5),
+                        cells = Filter(Rect(-4, 4, -4, 4), cell => Mathf.Abs(cell.x) + Mathf.Abs(cell.y) <= 7),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -3),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -4),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-4, 0),
+                        sizeTier = DungeonRoomSizeTier.Grand,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.South | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -164,13 +180,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-3, 3, -1, 1),
-                            Rect(-2, 2, -2, 2)),
+                            Rect(-5, 5, -2, 2),
+                            Rect(-3, 3, -3, 3)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 2),
-                        southSocket = new Vector2Int(0, -2),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 3),
+                        southSocket = new Vector2Int(0, -3),
+                        eastSocket = new Vector2Int(5, 0),
+                        westSocket = new Vector2Int(-5, 0),
+                        sizeTier = DungeonRoomSizeTier.Grand,
                         supportedExits = DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -180,13 +197,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-2, 2, -2, 1),
-                            Rect(-1, 1, 2, 3)),
+                            Rect(-3, 3, -3, 2),
+                            Rect(-2, 2, 3, 4)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -2),
-                        eastSocket = new Vector2Int(2, 0),
-                        westSocket = new Vector2Int(-2, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -3),
+                        eastSocket = new Vector2Int(3, 0),
+                        westSocket = new Vector2Int(-3, 0),
+                        sizeTier = DungeonRoomSizeTier.Small,
                         supportedExits = DungeonExitMask.North
                     }
                 },
@@ -196,13 +214,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-2, 3, -1, 1),
-                            Rect(-1, 1, -2, 3)),
+                            Rect(-3, 4, -2, 2),
+                            Rect(-2, 2, -3, 4)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -2),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-2, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -3),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-3, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.East
                     }
                 },
@@ -212,13 +231,14 @@ namespace FrontierDepths.World
                     {
                         feature = DungeonTemplateFeature.Flat,
                         cells = Union(
-                            Rect(-3, 3, -1, 1),
-                            Rect(-2, 2, 1, 3)),
+                            Rect(-4, 4, -2, 2),
+                            Rect(-3, 3, 2, 4)),
                         centerCell = Vector2Int.zero,
-                        northSocket = new Vector2Int(0, 3),
-                        southSocket = new Vector2Int(0, -1),
-                        eastSocket = new Vector2Int(3, 0),
-                        westSocket = new Vector2Int(-3, 0),
+                        northSocket = new Vector2Int(0, 4),
+                        southSocket = new Vector2Int(0, -2),
+                        eastSocket = new Vector2Int(4, 0),
+                        westSocket = new Vector2Int(-4, 0),
+                        sizeTier = DungeonRoomSizeTier.Large,
                         supportedExits = DungeonExitMask.North | DungeonExitMask.East | DungeonExitMask.West
                     }
                 },
@@ -362,6 +382,11 @@ namespace FrontierDepths.World
         public static DungeonTemplateFeature GetFeature(DungeonNode node)
         {
             return GetTemplate(node.roomTemplate).feature;
+        }
+
+        internal static DungeonRoomSizeTier GetSizeTier(DungeonRoomTemplateKind kind)
+        {
+            return GetTemplate(kind).sizeTier;
         }
 
         public static bool IsGateOneSafeOrdinaryTemplate(DungeonRoomTemplateKind kind)
