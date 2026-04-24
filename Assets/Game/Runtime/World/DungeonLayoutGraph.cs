@@ -161,7 +161,15 @@ namespace FrontierDepths.World
         SplitChamber,
         RaisedDaisChamber,
         SunkenPitChamber,
-        BalconyBridgeChamber
+        BalconyBridgeChamber,
+        LChamberSafe,
+        TChamberSafe,
+        CrossChamberSafe,
+        OctagonChamberSafe,
+        PillarHallSafe,
+        AlcoveRoomSafe,
+        WideBendSafe,
+        ForkRoomSafe
     }
 
     public enum DungeonTemplateFeature

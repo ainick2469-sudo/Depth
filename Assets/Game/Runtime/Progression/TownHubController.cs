@@ -21,6 +21,7 @@ namespace FrontierDepths.Progression
         private Transform portalReturnSpawnAnchor;
 
         public bool IsPanelOpen => activeShop != null;
+        public bool WasPanelOpenInputConsumedThisFrame => InputFrameGuard.WasTownServiceOpenConsumedThisFrame;
         public bool WasPanelCloseInputConsumedThisFrame => InputFrameGuard.WasTownServiceCloseConsumedThisFrame;
 
         public string BuildPanelText()
@@ -90,6 +91,10 @@ namespace FrontierDepths.Progression
             lastMessage = definition != null ? definition.greeting : string.Empty;
             playerController ??= FindAnyObjectByType<FirstPersonController>();
             playerController?.SetUiCaptured(definition != null);
+            if (definition != null)
+            {
+                InputFrameGuard.MarkTownServiceOpenConsumedThisFrame();
+            }
         }
 
         public void CloseService()
@@ -101,12 +106,9 @@ namespace FrontierDepths.Progression
 
         public bool HandlePanelInput()
         {
-            if (!IsPanelOpen)
-            {
-                return false;
-            }
-
-            if (!Input.GetKeyDown(KeyCode.E) && !Input.GetKeyDown(KeyCode.Escape))
+            bool eDown = Input.GetKeyDown(KeyCode.E);
+            bool escapeDown = Input.GetKeyDown(KeyCode.Escape);
+            if (!ShouldClosePanelFromInput(IsPanelOpen, eDown, escapeDown, InputFrameGuard.WasTownServiceOpenConsumedThisFrame))
             {
                 return false;
             }
@@ -120,6 +122,16 @@ namespace FrontierDepths.Progression
             InputFrameGuard.MarkTownServiceCloseConsumedThisFrame();
             CloseService();
             playerController?.ResumeGameplayCapture();
+        }
+
+        internal static bool ShouldClosePanelFromInput(bool isPanelOpen, bool eDown, bool escapeDown, bool openedThisFrame)
+        {
+            if (!isPanelOpen || openedThisFrame)
+            {
+                return false;
+            }
+
+            return eDown || escapeDown;
         }
 
         private void TrySelect(int index)

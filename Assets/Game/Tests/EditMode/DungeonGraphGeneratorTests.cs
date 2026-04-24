@@ -146,6 +146,97 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Generator_UsesExpandedSafeTemplateVarietyAcrossSeedSet()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            HashSet<DungeonRoomTemplateKind> templates = new HashSet<DungeonRoomTemplateKind>();
+
+            for (int seedIndex = 0; seedIndex < 12; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 8,
+                    floorSeed = 14000 + seedIndex * 977
+                });
+
+                if (generator.LastGenerationUsedFallback)
+                {
+                    continue;
+                }
+
+                for (int nodeIndex = 0; nodeIndex < graph.nodes.Count; nodeIndex++)
+                {
+                    if (graph.nodes[nodeIndex].nodeKind == DungeonNodeKind.Ordinary)
+                    {
+                        templates.Add(graph.nodes[nodeIndex].roomTemplate);
+                    }
+                }
+            }
+
+            Assert.GreaterOrEqual(templates.Count, 5);
+        }
+
+        [Test]
+        public void Generator_UsesRoleMatchedCornerJunctionAndCrossTemplatesAcrossSeedSet()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            bool foundCornerTemplate = false;
+            bool foundJunctionTemplate = false;
+            bool foundCrossTemplate = false;
+
+            for (int seedIndex = 0; seedIndex < 20; seedIndex++)
+            {
+                DungeonLayoutGraph graph = generator.Generate(new FloorState
+                {
+                    floorIndex = 10,
+                    floorSeed = 18000 + seedIndex * 977
+                });
+
+                if (generator.LastGenerationUsedFallback)
+                {
+                    continue;
+                }
+
+                for (int nodeIndex = 0; nodeIndex < graph.nodes.Count; nodeIndex++)
+                {
+                    DungeonNode node = graph.nodes[nodeIndex];
+                    if (node.nodeKind != DungeonNodeKind.Ordinary)
+                    {
+                        continue;
+                    }
+
+                    int degree = graph.GetDegree(node.nodeId);
+                    DungeonExitMask mask = GetRequiredExitMask(graph, node);
+                    if (degree == 2 && IsCornerMask(mask) &&
+                        (node.roomTemplate == DungeonRoomTemplateKind.LChamberSafe || node.roomTemplate == DungeonRoomTemplateKind.WideBendSafe))
+                    {
+                        foundCornerTemplate = true;
+                    }
+
+                    if (degree == 3 &&
+                        (node.roomTemplate == DungeonRoomTemplateKind.TChamberSafe || node.roomTemplate == DungeonRoomTemplateKind.ForkRoomSafe))
+                    {
+                        foundJunctionTemplate = true;
+                    }
+
+                    if (degree >= 4 && node.roomTemplate == DungeonRoomTemplateKind.CrossChamberSafe)
+                    {
+                        foundCrossTemplate = true;
+                    }
+                }
+
+                if (foundCornerTemplate && foundJunctionTemplate && foundCrossTemplate)
+                {
+                    break;
+                }
+            }
+
+            Assert.IsTrue(foundCornerTemplate, "Expected at least one corner ordinary room to use LChamberSafe or WideBendSafe.");
+            Assert.IsTrue(foundJunctionTemplate, "Expected at least one three-way ordinary room to use TChamberSafe or ForkRoomSafe.");
+            Assert.IsTrue(foundCrossTemplate, "Expected at least one four-way ordinary room to use CrossChamberSafe.");
+        }
+
+        [Test]
         public void Generator_AvoidsThreeRoomOrdinaryTemplateStreaks()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
@@ -230,6 +321,29 @@ namespace FrontierDepths.Tests.EditMode
         private static int GetNeighborCount(DungeonLayoutGraph graph, string nodeId)
         {
             return graph.GetDegree(nodeId);
+        }
+
+        private static DungeonExitMask GetRequiredExitMask(DungeonLayoutGraph graph, DungeonNode node)
+        {
+            DungeonExitMask mask = DungeonExitMask.None;
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                UnityEngine.Vector2Int delta = neighbors[i].gridPosition - node.gridPosition;
+                delta.x = UnityEngine.Mathf.Clamp(delta.x, -1, 1);
+                delta.y = UnityEngine.Mathf.Clamp(delta.y, -1, 1);
+                mask |= DungeonRoomTemplateLibrary.DirectionToMask(delta);
+            }
+
+            return mask;
+        }
+
+        private static bool IsCornerMask(DungeonExitMask mask)
+        {
+            return mask == (DungeonExitMask.North | DungeonExitMask.East) ||
+                   mask == (DungeonExitMask.North | DungeonExitMask.West) ||
+                   mask == (DungeonExitMask.South | DungeonExitMask.East) ||
+                   mask == (DungeonExitMask.South | DungeonExitMask.West);
         }
 
         private static int GetCoveredSectorCount(DungeonLayoutGraph graph)

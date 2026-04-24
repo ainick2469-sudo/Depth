@@ -112,6 +112,33 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Validator_DetectsRoomBoundsOverlap()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonRoomBuildRecord overlapRoom = build.FindRoom("ordinary_0");
+            overlapRoom.bounds = new Bounds(build.FindRoom("entry_hub").bounds.center, overlapRoom.bounds.size);
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsFalse(report.IsValid);
+            StringAssert.Contains("Room bounds overlap room ordinary_0.", report.ToSummaryString(build, 10));
+        }
+
+        [Test]
+        public void Validator_DetectsCorridorOverlapIntoUnrelatedRoom()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            DungeonCorridorBuildRecord corridor = build.corridors[0];
+            DungeonRoomBuildRecord landmarkRoom = build.FindRoom("landmark");
+            corridor.outerBounds = landmarkRoom.bounds;
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            Assert.IsFalse(report.IsValid);
+            StringAssert.Contains("overlaps room landmark", report.ToSummaryString(build, 10));
+        }
+
+        [Test]
         public void Validator_WarnsWhenVisualDoorwayExceedsCorridorOuterEnvelope()
         {
             DungeonBuildResult build = CreateValidBuildResult();

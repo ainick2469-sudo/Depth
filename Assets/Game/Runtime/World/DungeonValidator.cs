@@ -167,6 +167,7 @@ namespace FrontierDepths.World
         private const float IntersectionPadding = 0.1f;
         private const float OpeningWallTolerance = 0.02f;
         private const float SeamTolerance = 0.1f;
+        private const float RoomOverlapTolerance = 0.1f;
 
         public static DungeonValidationReport Validate(DungeonBuildResult buildResult)
         {
@@ -269,6 +270,38 @@ namespace FrontierDepths.World
                 if (buildResult.graph.GetDegree(node.nodeId) > 0 && room.doorwayCount <= 0)
                 {
                     report.AddFailure(buildResult, node.nodeId, node.nodeKind, node.roomTemplate, "Connected room has no valid doorway.");
+                }
+            }
+
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = buildResult.rooms[i];
+                for (int j = i + 1; j < buildResult.rooms.Count; j++)
+                {
+                    DungeonRoomBuildRecord otherRoom = buildResult.rooms[j];
+                    if (IntersectsXZWithTolerance(room.bounds, otherRoom.bounds, RoomOverlapTolerance))
+                    {
+                        report.AddFailure(buildResult, room.nodeId, room.roomType, room.templateKind, $"Room bounds overlap room {otherRoom.nodeId}.");
+                    }
+                }
+            }
+
+            for (int i = 0; i < buildResult.corridors.Count; i++)
+            {
+                DungeonCorridorBuildRecord corridor = buildResult.corridors[i];
+                Bounds corridorBounds = corridor.outerBounds.size == Vector3.zero ? corridor.bounds : corridor.outerBounds;
+                for (int roomIndex = 0; roomIndex < buildResult.rooms.Count; roomIndex++)
+                {
+                    DungeonRoomBuildRecord room = buildResult.rooms[roomIndex];
+                    if (room.nodeId == corridor.fromNodeId || room.nodeId == corridor.toNodeId)
+                    {
+                        continue;
+                    }
+
+                    if (IntersectsXZWithTolerance(corridorBounds, room.bounds, RoomOverlapTolerance))
+                    {
+                        report.AddFailure(buildResult, room.nodeId, room.roomType, room.templateKind, $"Corridor edge {corridor.edgeKey} overlaps room {room.nodeId}.");
+                    }
                 }
             }
         }
@@ -438,6 +471,14 @@ namespace FrontierDepths.World
         }
 
         private static bool IntersectsWithToleranceXZ(Bounds a, Bounds b, float tolerance)
+        {
+            return a.min.x < b.max.x - tolerance &&
+                   a.max.x > b.min.x + tolerance &&
+                   a.min.z < b.max.z - tolerance &&
+                   a.max.z > b.min.z + tolerance;
+        }
+
+        private static bool IntersectsXZWithTolerance(Bounds a, Bounds b, float tolerance)
         {
             return a.min.x < b.max.x - tolerance &&
                    a.max.x > b.min.x + tolerance &&

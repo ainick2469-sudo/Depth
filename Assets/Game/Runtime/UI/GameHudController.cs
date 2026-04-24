@@ -69,7 +69,7 @@ namespace FrontierDepths.UI
 
         private void HandleEscapeAndResume()
         {
-            if (InputFrameGuard.WasTownServiceCloseConsumedThisFrame)
+            if (InputFrameGuard.WasTownServiceInputConsumedThisFrame)
             {
                 return;
             }

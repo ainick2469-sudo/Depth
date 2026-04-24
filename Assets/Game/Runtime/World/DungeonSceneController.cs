@@ -7,12 +7,12 @@ namespace FrontierDepths.World
 {
     public sealed class DungeonSceneController : MonoBehaviour
     {
-        private const float CellSize = 8f;
+        private const float CellSize = 6f;
         private const float FloorThickness = 1f;
         private const float WallHeight = 12f;
         private const float WallThickness = 1f;
-        private const float PrimaryCorridorWidth = 16f;
-        private const float SecretCorridorWidth = 16f;
+        private const float PrimaryCorridorWidth = 12f;
+        private const float SecretCorridorWidth = 10f;
         private const int MaxBuildAttempts = 3;
         private const float RoomBoundsHeight = WallHeight + FloorThickness;
         private const float CorridorZoneHeight = 6f;
@@ -24,6 +24,10 @@ namespace FrontierDepths.World
         private const float SpawnInteractableClearance = 3f;
         private const float SpawnDoorwayClearance = 4f;
         private const float SpawnCandidateRadius = 4f;
+        private const float DefaultRoomSpacing = 92f;
+        private const float MinimumRecommendedRoomSpacing = 88f;
+        private const float MaximumRecommendedRoomSpacing = 96f;
+        private const float MinimumRoomGap = 24f;
 
         private sealed class BoundarySpan
         {
@@ -65,7 +69,7 @@ namespace FrontierDepths.World
         private static readonly Dictionary<int, Material> MaterialCache = new Dictionary<int, Material>();
 
         [SerializeField] private Transform runtimeRoot;
-        [SerializeField] private float roomSpacing = 56f;
+        [SerializeField] private float roomSpacing = DefaultRoomSpacing;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private DungeonBuildResult activeBuildResult;
@@ -82,7 +86,7 @@ namespace FrontierDepths.World
         private void Start()
         {
             runtimeRoot ??= transform;
-            roomSpacing = Mathf.Max(150f, roomSpacing);
+            roomSpacing = NormalizeRoomSpacing(roomSpacing);
             BuildFloor();
         }
 
@@ -1565,6 +1569,37 @@ namespace FrontierDepths.World
         internal static float GetCorridorOuterWidth(float corridorWidth)
         {
             return corridorWidth + WallThickness;
+        }
+
+        internal static float GetMinimumSafeRoomSpacing()
+        {
+            float maxFootprint = 0f;
+            DungeonRoomTemplateKind[] templates = DungeonRoomTemplateLibrary.GetGateOneSafeOrdinaryTemplates();
+            for (int i = 0; i < templates.Length; i++)
+            {
+                for (int rotation = 0; rotation < 4; rotation++)
+                {
+                    Vector2 footprint = DungeonRoomTemplateLibrary.GetFootprintSize(templates[i], rotation, CellSize);
+                    maxFootprint = Mathf.Max(maxFootprint, footprint.x, footprint.y);
+                }
+            }
+
+            return maxFootprint + MinimumRoomGap;
+        }
+
+        internal static float NormalizeRoomSpacing(float configuredSpacing)
+        {
+            float normalized = configuredSpacing <= 0f ? DefaultRoomSpacing : configuredSpacing;
+            if (normalized < MinimumRecommendedRoomSpacing)
+            {
+                normalized = DefaultRoomSpacing;
+            }
+            else if (normalized > MaximumRecommendedRoomSpacing)
+            {
+                normalized = MaximumRecommendedRoomSpacing;
+            }
+
+            return Mathf.Max(normalized, GetMinimumSafeRoomSpacing());
         }
 
         internal static float GetVisualDoorwayWidth(float corridorWidth)

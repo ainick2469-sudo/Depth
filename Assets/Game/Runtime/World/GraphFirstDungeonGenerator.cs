@@ -16,6 +16,12 @@ namespace FrontierDepths.World
             public float score;
         }
 
+        private struct LoopEdgeCandidate
+        {
+            public DungeonEdge edge;
+            public float score;
+        }
+
         private static readonly Vector2Int[] CardinalDirections =
         {
             new Vector2Int(1, 0),
@@ -433,32 +439,35 @@ namespace FrontierDepths.World
                 DungeonNode node = orderedNodes[i];
                 int degree = graph.GetDegree(node.nodeId);
                 int distance = distances.TryGetValue(node.nodeId, out int found) ? found : 0;
-                int horizontalLinks = 0;
-                int verticalLinks = 0;
-                List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
-                for (int neighborIndex = 0; neighborIndex < neighbors.Count; neighborIndex++)
+                DungeonExitMask requiredExits = GetRequiredExitMask(graph, node);
+                List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, requiredExits, degree, distance);
+                ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
+                FilterTemplatesByRotationFit(candidates, requiredExits);
+
+                if (candidates.Count == 0)
                 {
-                    Vector2Int delta = neighbors[neighborIndex].gridPosition - node.gridPosition;
-                    if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                    {
-                        horizontalLinks++;
-                    }
-                    else
-                    {
-                        verticalLinks++;
-                    }
+                    candidates = GetFallbackTemplateCandidates(node.nodeKind, requiredExits);
+                    FilterTemplatesByRotationFit(candidates, requiredExits);
                 }
 
-                List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, degree, distance);
-                ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
+                if (candidates.Count == 0)
+                {
+                    candidates = new List<DungeonRoomTemplateKind>
+                    {
+                        DungeonRoomTemplateKind.SquareChamber
+                    };
+                }
+
                 node.roomTemplate = candidates[random.Next(candidates.Count)];
-                node.rotationQuarterTurns = ChooseRotation(node.roomTemplate, horizontalLinks, verticalLinks, random);
+                List<int> validRotations = DungeonRoomTemplateLibrary.GetValidRotations(node.roomTemplate, requiredExits);
+                node.rotationQuarterTurns = ChooseRotation(node.roomTemplate, requiredExits, validRotations, random);
                 assignedTemplates[node.nodeId] = node.roomTemplate;
             }
         }
 
         private static List<DungeonRoomTemplateKind> GetTemplateCandidates(
             DungeonNodeKind kind,
+            DungeonExitMask requiredExits,
             int degree,
             int distance)
         {
@@ -468,7 +477,7 @@ namespace FrontierDepths.World
                 {
                     DungeonRoomTemplateKind.SquareChamber,
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
 
@@ -478,7 +487,7 @@ namespace FrontierDepths.World
                 {
                     DungeonRoomTemplateKind.BroadRectangle,
                     DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
 
@@ -488,7 +497,7 @@ namespace FrontierDepths.World
                 {
                     DungeonRoomTemplateKind.BroadRectangle,
                     DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
 
@@ -498,7 +507,7 @@ namespace FrontierDepths.World
                 {
                     DungeonRoomTemplateKind.BroadRectangle,
                     DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
 
@@ -506,19 +515,38 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
+                    DungeonRoomTemplateKind.AlcoveRoomSafe,
                     DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.OctagonChamberSafe
                 };
             }
 
-            if (degree >= 4)
+            if (degree <= 1)
             {
                 return new List<DungeonRoomTemplateKind>
                 {
-                    DungeonRoomTemplateKind.BroadRectangle,
                     DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.LongGallery
+                    DungeonRoomTemplateKind.AlcoveRoomSafe,
+                    DungeonRoomTemplateKind.OctagonChamberSafe
+                };
+            }
+
+            if (degree == 2 && IsCornerMask(requiredExits))
+            {
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.LChamberSafe,
+                    DungeonRoomTemplateKind.WideBendSafe
+                };
+            }
+
+            if (degree == 2)
+            {
+                return new List<DungeonRoomTemplateKind>
+                {
+                    DungeonRoomTemplateKind.LongGallery,
+                    DungeonRoomTemplateKind.PillarHallSafe,
+                    DungeonRoomTemplateKind.BroadRectangle,
                 };
             }
 
@@ -526,28 +554,39 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
-                    DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.SquareChamber,
-                    DungeonRoomTemplateKind.LongGallery
-                };
-            }
-
-            if (distance >= 5)
-            {
-                return new List<DungeonRoomTemplateKind>
-                {
-                    DungeonRoomTemplateKind.LongGallery,
-                    DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.SquareChamber
+                    DungeonRoomTemplateKind.TChamberSafe,
+                    DungeonRoomTemplateKind.ForkRoomSafe
                 };
             }
 
             return new List<DungeonRoomTemplateKind>
             {
+                DungeonRoomTemplateKind.CrossChamberSafe,
                 DungeonRoomTemplateKind.SquareChamber,
-                DungeonRoomTemplateKind.BroadRectangle,
-                DungeonRoomTemplateKind.LongGallery
+                DungeonRoomTemplateKind.BroadRectangle
             };
+        }
+
+        private static List<DungeonRoomTemplateKind> GetFallbackTemplateCandidates(
+            DungeonNodeKind kind,
+            DungeonExitMask requiredExits)
+        {
+            DungeonRoomTemplateKind[] safeTemplates = DungeonRoomTemplateLibrary.GetGateOneSafeOrdinaryTemplates();
+            List<DungeonRoomTemplateKind> fallback = new List<DungeonRoomTemplateKind>();
+            for (int i = 0; i < safeTemplates.Length; i++)
+            {
+                if (kind != DungeonNodeKind.Ordinary && safeTemplates[i] == DungeonRoomTemplateKind.CrossChamberSafe)
+                {
+                    continue;
+                }
+
+                if (DungeonRoomTemplateLibrary.GetValidRotations(safeTemplates[i], requiredExits).Count > 0)
+                {
+                    fallback.Add(safeTemplates[i]);
+                }
+            }
+
+            return fallback;
         }
 
         private static void ApplyAntiRepetitionRules(
@@ -655,23 +694,146 @@ namespace FrontierDepths.World
             return false;
         }
 
-        private static int ChooseRotation(DungeonRoomTemplateKind template, int horizontalLinks, int verticalLinks, System.Random random)
+        private static void FilterTemplatesByRotationFit(List<DungeonRoomTemplateKind> candidates, DungeonExitMask requiredExits)
         {
+            for (int i = candidates.Count - 1; i >= 0; i--)
+            {
+                if (DungeonRoomTemplateLibrary.GetValidRotations(candidates[i], requiredExits).Count == 0)
+                {
+                    candidates.RemoveAt(i);
+                }
+            }
+        }
+
+        private static int ChooseRotation(
+            DungeonRoomTemplateKind template,
+            DungeonExitMask requiredExits,
+            List<int> validRotations,
+            System.Random random)
+        {
+            if (validRotations == null || validRotations.Count == 0)
+            {
+                return 0;
+            }
+
             if (template == DungeonRoomTemplateKind.LongGallery ||
+                template == DungeonRoomTemplateKind.PillarHallSafe ||
                 template == DungeonRoomTemplateKind.BroadRectangle)
             {
-                if (horizontalLinks > verticalLinks)
-                {
-                    return 0;
-                }
-
-                if (verticalLinks > horizontalLinks)
+                if (IsVerticalMask(requiredExits) && validRotations.Contains(1))
                 {
                     return 1;
                 }
+
+                if (IsHorizontalMask(requiredExits) && validRotations.Contains(0))
+                {
+                    return 0;
+                }
             }
 
-            return random.Next(4);
+            return validRotations[random.Next(validRotations.Count)];
+        }
+
+        private static DungeonExitMask GetRequiredExitMask(DungeonLayoutGraph graph, DungeonNode node)
+        {
+            DungeonExitMask requiredExits = DungeonExitMask.None;
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                Vector2Int delta = ClampToCardinal(neighbors[i].gridPosition - node.gridPosition);
+                requiredExits |= DungeonRoomTemplateLibrary.DirectionToMask(delta);
+            }
+
+            return requiredExits;
+        }
+
+        private static bool IsCornerMask(DungeonExitMask mask)
+        {
+            return mask == (DungeonExitMask.North | DungeonExitMask.East) ||
+                   mask == (DungeonExitMask.North | DungeonExitMask.West) ||
+                   mask == (DungeonExitMask.South | DungeonExitMask.East) ||
+                   mask == (DungeonExitMask.South | DungeonExitMask.West);
+        }
+
+        private static bool IsHorizontalMask(DungeonExitMask mask)
+        {
+            return mask == (DungeonExitMask.East | DungeonExitMask.West);
+        }
+
+        private static bool IsVerticalMask(DungeonExitMask mask)
+        {
+            return mask == (DungeonExitMask.North | DungeonExitMask.South);
+        }
+
+        private static int CountCoveredSectors(int[] sectorCounts)
+        {
+            int covered = 0;
+            for (int i = 0; i < sectorCounts.Length; i++)
+            {
+                if (sectorCounts[i] > 0)
+                {
+                    covered++;
+                }
+            }
+
+            return covered;
+        }
+
+        private static Vector2 GetClusterCenter(DungeonLayoutGraph graph)
+        {
+            if (graph.nodes.Count == 0)
+            {
+                return Vector2.zero;
+            }
+
+            Vector2 sum = Vector2.zero;
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                sum += graph.nodes[i].gridPosition;
+            }
+
+            return sum / graph.nodes.Count;
+        }
+
+        private static void GetClusterBounds(DungeonLayoutGraph graph, out int minX, out int maxX, out int minY, out int maxY)
+        {
+            minX = int.MaxValue;
+            maxX = int.MinValue;
+            minY = int.MaxValue;
+            maxY = int.MinValue;
+
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                Vector2Int position = graph.nodes[i].gridPosition;
+                minX = Mathf.Min(minX, position.x);
+                maxX = Mathf.Max(maxX, position.x);
+                minY = Mathf.Min(minY, position.y);
+                maxY = Mathf.Max(maxY, position.y);
+            }
+        }
+
+        private static int GetBoundsExpansion(Vector2Int position, int minX, int maxX, int minY, int maxY)
+        {
+            int expansion = 0;
+            if (position.x < minX)
+            {
+                expansion += minX - position.x;
+            }
+            else if (position.x > maxX)
+            {
+                expansion += position.x - maxX;
+            }
+
+            if (position.y < minY)
+            {
+                expansion += minY - position.y;
+            }
+            else if (position.y > maxY)
+            {
+                expansion += position.y - maxY;
+            }
+
+            return expansion;
         }
 
         private static List<ExpansionCandidate> CollectExpansionCandidates(
@@ -684,6 +846,9 @@ namespace FrontierDepths.World
             Dictionary<Vector2Int, ExpansionCandidate> bestByPosition = new Dictionary<Vector2Int, ExpansionCandidate>();
             int[] sectorCounts = GetSectorCounts(graph);
             int targetPerSector = Mathf.CeilToInt((targetRoomCount - 1) / 4f);
+            int coveredSectors = CountCoveredSectors(sectorCounts);
+            Vector2 clusterCenter = GetClusterCenter(graph);
+            GetClusterBounds(graph, out int minX, out int maxX, out int minY, out int maxY);
 
             for (int i = 0; i < graph.nodes.Count; i++)
             {
@@ -721,13 +886,23 @@ namespace FrontierDepths.World
 
                     int openCount = CountFreeAdjacentPositions(candidatePosition, occupied);
                     int sector = GetSector(candidatePosition);
+                    float centerDistance = Vector2.Distance(clusterCenter, candidatePosition);
+                    int boundsExpansion = GetBoundsExpansion(candidatePosition, minX, maxX, minY, maxY);
                     float score = 0f;
-                    score += Mathf.Max(0, targetPerSector - sectorCounts[sector]) * 2.4f;
-                    score += Mathf.Min(2, adjacentOccupied - 1) * 3.2f;
-                    score += radius <= 2 ? 2.1f : 0f;
-                    score += radius >= 3 ? 1.2f : 0f;
-                    score += degree <= 2 ? 0.7f : -0.4f;
-                    score += openCount * 0.25f;
+                    if (coveredSectors < Mathf.Min(4, targetPerSector))
+                    {
+                        score += Mathf.Max(0, targetPerSector - sectorCounts[sector]) * 1.8f;
+                    }
+
+                    score += adjacentOccupied == 2 ? 6f : 0f;
+                    score += adjacentOccupied >= 3 ? 4.25f : 0f;
+                    score += adjacentOccupied == 1 ? -1.5f : 0f;
+                    score += radius <= 2 ? 2.2f : 0f;
+                    score -= centerDistance * 1.1f;
+                    score -= boundsExpansion * 1.45f;
+                    score += degree <= 2 ? 0.9f : -0.5f;
+                    score -= Mathf.Max(0, openCount - 2) * 0.18f;
+                    score -= radius >= 4 && adjacentOccupied <= 1 ? 1.8f : 0f;
                     score += (float)random.NextDouble();
 
                     ExpansionCandidate candidate = new ExpansionCandidate
@@ -844,7 +1019,7 @@ namespace FrontierDepths.World
             System.Random random,
             int floorIndex)
         {
-            List<DungeonEdge> candidates = new List<DungeonEdge>();
+            List<LoopEdgeCandidate> candidates = new List<LoopEdgeCandidate>();
 
             for (int i = 0; i < graph.nodes.Count; i++)
             {
@@ -879,15 +1054,32 @@ namespace FrontierDepths.World
                         continue;
                     }
 
-                    candidates.Add(new DungeonEdge { a = node.nodeId, b = neighbor.nodeId });
+                    int graphDistance = graph.GetGraphDistance(node.nodeId, neighbor.nodeId);
+                    int combinedDegree = graph.GetDegree(node.nodeId) + graph.GetDegree(neighbor.nodeId);
+                    float score = graphDistance * 2.6f;
+                    score += combinedDegree <= 5 ? 1.8f : -1.6f;
+                    score += node.nodeKind == DungeonNodeKind.EntryHub || neighbor.nodeKind == DungeonNodeKind.EntryHub ? -2.5f : 0f;
+                    score += (float)random.NextDouble();
+
+                    candidates.Add(new LoopEdgeCandidate
+                    {
+                        edge = new DungeonEdge { a = node.nodeId, b = neighbor.nodeId },
+                        score = score
+                    });
                 }
             }
 
-            Shuffle(candidates, random);
-            int loopCount = Mathf.Min(candidates.Count, Mathf.Clamp(3 + floorIndex / 3, 3, 10));
+            candidates.Sort((left, right) => right.score.CompareTo(left.score));
+            int loopCount = Mathf.Min(candidates.Count, Mathf.Clamp(2 + floorIndex / 5, 2, 5));
             for (int i = 0; i < loopCount; i++)
             {
-                AddEdge(graph, candidates[i].a, candidates[i].b);
+                DungeonEdge edge = candidates[i].edge;
+                if (graph.GetDegree(edge.a) >= 4 && graph.GetDegree(edge.b) >= 4)
+                {
+                    continue;
+                }
+
+                AddEdge(graph, edge.a, edge.b);
             }
         }
 
@@ -1124,6 +1316,13 @@ namespace FrontierDepths.World
             }
 
             return position.y >= 0 ? 2 : 3;
+        }
+
+        private static Vector2Int ClampToCardinal(Vector2Int delta)
+        {
+            delta.x = Mathf.Clamp(delta.x, -1, 1);
+            delta.y = Mathf.Clamp(delta.y, -1, 1);
+            return delta;
         }
 
         private static int Manhattan(Vector2Int position)
