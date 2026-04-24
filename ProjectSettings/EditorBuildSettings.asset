@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Bootstrap.unity
+    guid: 624dcaf6ebf207548939899034ae9556
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: 1fd4dbcd416698c4ea67008551565e93
+  - enabled: 1
+    path: Assets/Scenes/TownHub.unity
+    guid: 59d57c537755f7143a9fd419cb4b9977
+  - enabled: 1
+    path: Assets/Scenes/DungeonRuntime.unity
+    guid: a955c1288691f0d49a648c81b1de0b84
+  - enabled: 1
+    path: Assets/Scenes/Sandbox_ArtImport.unity
+    guid: 5549a4e99587eb648a0859847560d4a4
+  - enabled: 1
+    path: Assets/Scenes/Net_Playtest.unity
+    guid: c1005196bf12dcc4f8138116c8d19498
+  m_configObjects: {}

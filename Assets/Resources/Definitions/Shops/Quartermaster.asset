@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d6558707ce16ca4f981ab6390d86d4f, type: 3}
+  m_Name: Quartermaster
+  m_EditorClassIdentifier: DungeonCrawler.Progression::FrontierDepths.Progression.ShopDefinition
+  shopId: shop.quartermaster
+  serviceType: 0
+  displayName: Quartermaster
+  greeting: Stock up before the dark starts biting back.
+  offers:
+  - offerId: offer.town_sigil
+    displayName: Town Sigil
+    description: 'One emergency return to town. Carry cap: 1.'
+    cost: 125
+    purchaseLimit: 1
+    action: 0
+    rewardId: item.town_sigil

@@ -1,0 +1,23 @@
+{
+  "name": "DungeonCrawler.Tests.PlayMode",
+  "rootNamespace": "FrontierDepths",
+  "references": [
+    "DungeonCrawler.Core",
+    "DungeonCrawler.World",
+    "DungeonCrawler.Progression",
+    "DungeonCrawler.Combat",
+    "DungeonCrawler.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

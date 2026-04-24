@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f14ca8a935c47549a6a3e2514058e1a, type: 3}
+  m_Name: Theme_BuriedTemple
+  m_EditorClassIdentifier: DungeonCrawler.World::FrontierDepths.World.ThemeKitDefinition
+  themeId: theme.buried_temple
+  displayName: Buried Temple
+  keyColor: {r: 0.35, g: 0.33, b: 0.18, a: 1}
+  accentColor: {r: 0.36, g: 0.72, b: 0.68, a: 1}

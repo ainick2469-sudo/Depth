@@ -1,0 +1,20 @@
+{
+  "name": "DungeonCrawler.Networking",
+  "rootNamespace": "FrontierDepths",
+  "references": [
+    "DungeonCrawler.Core",
+    "DungeonCrawler.World",
+    "DungeonCrawler.Combat",
+    "DungeonCrawler.Progression",
+    "DungeonCrawler.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

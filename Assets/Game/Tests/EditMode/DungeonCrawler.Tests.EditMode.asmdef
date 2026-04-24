@@ -1,0 +1,25 @@
+{
+  "name": "DungeonCrawler.Tests.EditMode",
+  "rootNamespace": "FrontierDepths",
+  "references": [
+    "DungeonCrawler.Core",
+    "DungeonCrawler.World",
+    "DungeonCrawler.Progression",
+    "DungeonCrawler.Combat",
+    "DungeonCrawler.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

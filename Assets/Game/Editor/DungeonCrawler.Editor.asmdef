@@ -1,0 +1,22 @@
+{
+  "name": "DungeonCrawler.Editor",
+  "rootNamespace": "FrontierDepths",
+  "references": [
+    "DungeonCrawler.Core",
+    "DungeonCrawler.World",
+    "DungeonCrawler.Combat",
+    "DungeonCrawler.Progression",
+    "DungeonCrawler.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
