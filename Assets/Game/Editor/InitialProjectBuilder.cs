@@ -410,17 +410,36 @@ namespace FrontierDepths.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
 
-            Image crosshair = CreateImage("Crosshair", canvasObject.transform, new Vector2(6f, 6f), new Color(1f, 1f, 1f, 0.95f));
+            Image crosshair = CreateImage("Crosshair", canvasObject.transform, new Vector2(14f, 14f), new Color(0f, 0f, 0f, 0.45f));
             RectTransform crosshairRect = crosshair.rectTransform;
             crosshairRect.anchorMin = crosshairRect.anchorMax = new Vector2(0.5f, 0.5f);
             crosshairRect.anchoredPosition = Vector2.zero;
+            crosshair.raycastTarget = false;
+
+            Image crosshairCore = CreateImage("CrosshairCore", crosshair.transform, new Vector2(4f, 4f), new Color(0.98f, 0.98f, 0.96f, 0.95f));
+            RectTransform crosshairCoreRect = crosshairCore.rectTransform;
+            crosshairCoreRect.anchorMin = crosshairCoreRect.anchorMax = new Vector2(0.5f, 0.5f);
+            crosshairCoreRect.anchoredPosition = Vector2.zero;
+            crosshairCore.raycastTarget = false;
+
+            Image promptBackground = CreateImage("PromptBackground", canvasObject.transform, new Vector2(620f, 64f), new Color(0.02f, 0.02f, 0.03f, 0.68f));
+            RectTransform promptBackgroundRect = promptBackground.rectTransform;
+            promptBackgroundRect.anchorMin = new Vector2(0.5f, 0f);
+            promptBackgroundRect.anchorMax = new Vector2(0.5f, 0f);
+            promptBackgroundRect.pivot = new Vector2(0.5f, 0.5f);
+            promptBackgroundRect.anchoredPosition = new Vector2(0f, 96f);
+            promptBackground.enabled = false;
+            promptBackground.raycastTarget = false;
 
             Text prompt = CreateText("Prompt", canvasObject.transform, font, 22, TextAnchor.MiddleCenter);
             RectTransform promptRect = prompt.rectTransform;
             promptRect.anchorMin = new Vector2(0.5f, 0f);
             promptRect.anchorMax = new Vector2(0.5f, 0f);
-            promptRect.sizeDelta = new Vector2(900f, 80f);
+            promptRect.pivot = new Vector2(0.5f, 0.5f);
+            promptRect.sizeDelta = new Vector2(560f, 56f);
             promptRect.anchoredPosition = new Vector2(0f, 96f);
+            prompt.supportRichText = true;
+            prompt.raycastTarget = false;
 
             Text status = CreateText("Status", canvasObject.transform, font, 20, TextAnchor.UpperLeft);
             RectTransform statusRect = status.rectTransform;
@@ -428,6 +447,7 @@ namespace FrontierDepths.Editor
             statusRect.anchorMax = new Vector2(0f, 1f);
             statusRect.sizeDelta = new Vector2(520f, 220f);
             statusRect.anchoredPosition = new Vector2(24f, -24f);
+            status.raycastTarget = false;
 
             Image panelBackground = CreateImage("PanelBackground", canvasObject.transform, new Vector2(520f, 420f), new Color(0f, 0f, 0f, 0.72f));
             RectTransform panelRect = panelBackground.rectTransform;
@@ -436,6 +456,7 @@ namespace FrontierDepths.Editor
             panelRect.pivot = new Vector2(1f, 1f);
             panelRect.anchoredPosition = new Vector2(-24f, -24f);
             panelBackground.enabled = false;
+            panelBackground.raycastTarget = false;
 
             Text panelText = CreateText("PanelText", panelBackground.transform, font, 18, TextAnchor.UpperLeft);
             RectTransform panelTextRect = panelText.rectTransform;
@@ -444,6 +465,7 @@ namespace FrontierDepths.Editor
             panelTextRect.offsetMin = new Vector2(18f, 18f);
             panelTextRect.offsetMax = new Vector2(-18f, -18f);
             panelText.enabled = false;
+            panelText.raycastTarget = false;
 
             GameHudController hud = canvasObject.AddComponent<GameHudController>();
             SerializedObject hudSo = new SerializedObject(hud);
@@ -451,6 +473,9 @@ namespace FrontierDepths.Editor
             hudSo.FindProperty("statusText").objectReferenceValue = status;
             hudSo.FindProperty("panelText").objectReferenceValue = panelText;
             hudSo.FindProperty("panelBackground").objectReferenceValue = panelBackground;
+            hudSo.FindProperty("promptBackground").objectReferenceValue = promptBackground;
+            hudSo.FindProperty("crosshairImage").objectReferenceValue = crosshair;
+            hudSo.FindProperty("crosshairCoreImage").objectReferenceValue = crosshairCore;
             hudSo.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -507,7 +532,7 @@ namespace FrontierDepths.Editor
 
         private static void CreateEventSystem()
         {
-            if (Object.FindFirstObjectByType<EventSystem>() != null)
+            if (Object.FindAnyObjectByType<EventSystem>() != null)
             {
                 return;
             }

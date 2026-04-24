@@ -104,8 +104,8 @@ namespace FrontierDepths.Core
     [Serializable]
     public class FloorState
     {
-        public int floorIndex = 1;
-        public int floorSeed = 1001;
+        public int floorIndex;
+        public int floorSeed;
         public string floorBandId = "floorband.frontier_mine";
         public string chapterId = "chapter.frontier_descent";
         public string themeKitId = "theme.frontier_town";

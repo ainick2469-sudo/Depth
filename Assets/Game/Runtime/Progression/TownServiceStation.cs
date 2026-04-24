@@ -19,7 +19,7 @@ namespace FrontierDepths.Progression
 
         public void Interact(PlayerInteractor interactor)
         {
-            TownHubController townHub = FindFirstObjectByType<TownHubController>();
+            TownHubController townHub = FindAnyObjectByType<TownHubController>();
             ShopDefinition[] shops = Resources.LoadAll<ShopDefinition>("Definitions/Shops");
             for (int i = 0; i < shops.Length; i++)
             {

@@ -178,7 +178,7 @@ namespace FrontierDepths.World
             run.currentFloor.floorSeed = buildResult.seed;
             GameBootstrap.Instance.RunService.Save();
 
-            FirstPersonController player = FindFirstObjectByType<FirstPersonController>();
+            FirstPersonController player = FindAnyObjectByType<FirstPersonController>();
             if (player != null)
             {
                 player.WarpTo(buildResult.playerSpawn);
@@ -407,7 +407,7 @@ namespace FrontierDepths.World
             }
 
             DungeonRoomBuildRecord room = visibleBuild.FindRoom(nodeId);
-            FirstPersonController player = FindFirstObjectByType<FirstPersonController>();
+            FirstPersonController player = FindAnyObjectByType<FirstPersonController>();
             if (room == null || player == null)
             {
                 return;

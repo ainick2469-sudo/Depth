@@ -15,16 +15,19 @@ namespace FrontierDepths.Core
 
         public void LoadScene(GameSceneId sceneId)
         {
+            Time.timeScale = 1f;
             host.StartManagedCoroutine(LoadSceneRoutine(GameSceneCatalog.GetName(sceneId)));
         }
 
         public void ReloadCurrentScene()
         {
+            Time.timeScale = 1f;
             host.StartManagedCoroutine(LoadSceneRoutine(SceneManager.GetActiveScene().name));
         }
 
         private static IEnumerator LoadSceneRoutine(string sceneName)
         {
+            Time.timeScale = 1f;
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
             while (!operation.isDone)
             {

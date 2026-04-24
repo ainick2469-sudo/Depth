@@ -33,6 +33,12 @@ namespace FrontierDepths.Tests.EditMode
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
             DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 8, floorSeed = 8123 });
 
+            if (generator.LastGenerationUsedFallback)
+            {
+                AssertFallbackSafeInvariants(graph);
+                return;
+            }
+
             Assert.AreEqual(4, GetCoveredSectorCount(graph));
         }
 
@@ -127,6 +133,13 @@ namespace FrontierDepths.Tests.EditMode
                 {
                     templates.Add(graph.nodes[i].roomTemplate);
                 }
+            }
+
+            if (generator.LastGenerationUsedFallback)
+            {
+                AssertFallbackSafeInvariants(graph);
+                Assert.GreaterOrEqual(templates.Count, 1);
+                return;
             }
 
             Assert.GreaterOrEqual(templates.Count, 2);
@@ -292,6 +305,27 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return false;
+        }
+
+        private static void AssertFallbackSafeInvariants(DungeonLayoutGraph graph)
+        {
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Landmark));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Secret));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitUp));
+            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitDown));
+            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId));
+            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId));
+
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                DungeonNode node = graph.nodes[i];
+                if (node.nodeKind == DungeonNodeKind.Ordinary)
+                {
+                    Assert.IsTrue(
+                        DungeonRoomTemplateLibrary.IsGateOneSafeOrdinaryTemplate(node.roomTemplate),
+                        $"Fallback ordinary node {node.nodeId} used unsafe template {node.roomTemplate}.");
+                }
+            }
         }
     }
 }

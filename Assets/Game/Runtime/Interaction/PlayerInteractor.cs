@@ -8,8 +8,13 @@ namespace FrontierDepths.Core
         [SerializeField] private float maxDistance = 4f;
         [SerializeField] private LayerMask interactionMask = ~0;
 
+        private FirstPersonController playerController;
+
         public IInteractable FocusedInteractable { get; private set; }
-        public string PromptText { get; private set; }
+        public bool HasFocusedInteractable => FocusedInteractable != null;
+        public bool FocusedCanInteract { get; private set; }
+        public string FocusedPrompt { get; private set; }
+        public string BlockedReason { get; private set; }
 
         private void Awake()
         {
@@ -17,6 +22,8 @@ namespace FrontierDepths.Core
             {
                 interactionCamera = GetComponentInChildren<Camera>();
             }
+
+            playerController = GetComponent<FirstPersonController>();
         }
 
         private void Update()
@@ -26,12 +33,12 @@ namespace FrontierDepths.Core
 
         public bool TryInteract()
         {
-            if (FocusedInteractable == null)
+            if (playerController != null && playerController.IsUiCaptured)
             {
                 return false;
             }
 
-            if (!FocusedInteractable.CanInteract(this, out _))
+            if (!HasFocusedInteractable || !FocusedCanInteract)
             {
                 return false;
             }
@@ -43,7 +50,14 @@ namespace FrontierDepths.Core
         private void RefreshFocus()
         {
             FocusedInteractable = null;
-            PromptText = string.Empty;
+            FocusedCanInteract = false;
+            FocusedPrompt = string.Empty;
+            BlockedReason = string.Empty;
+
+            if (playerController != null && playerController.IsUiCaptured)
+            {
+                return;
+            }
 
             if (interactionCamera == null)
             {
@@ -62,13 +76,14 @@ namespace FrontierDepths.Core
                 return;
             }
 
+            FocusedPrompt = FocusedInteractable.Prompt;
             if (FocusedInteractable.CanInteract(this, out string reason))
             {
-                PromptText = $"[E] {FocusedInteractable.Prompt}";
+                FocusedCanInteract = true;
             }
             else
             {
-                PromptText = string.IsNullOrWhiteSpace(reason) ? string.Empty : reason;
+                BlockedReason = string.IsNullOrWhiteSpace(reason) ? string.Empty : reason;
             }
         }
     }

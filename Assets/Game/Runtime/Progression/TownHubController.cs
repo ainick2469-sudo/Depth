@@ -45,7 +45,7 @@ namespace FrontierDepths.Progression
         private void Start()
         {
             shopService = new TownShopService(GameBootstrap.Instance.ProfileService);
-            playerController = FindFirstObjectByType<FirstPersonController>();
+            playerController = FindAnyObjectByType<FirstPersonController>();
         }
 
         private void Update()
@@ -70,14 +70,14 @@ namespace FrontierDepths.Progression
         {
             activeShop = definition;
             lastMessage = definition != null ? definition.greeting : string.Empty;
-            playerController ??= FindFirstObjectByType<FirstPersonController>();
+            playerController ??= FindAnyObjectByType<FirstPersonController>();
             playerController?.SetUiCaptured(definition != null);
         }
 
         public void CloseService()
         {
             activeShop = null;
-            playerController ??= FindFirstObjectByType<FirstPersonController>();
+            playerController ??= FindAnyObjectByType<FirstPersonController>();
             playerController?.SetUiCaptured(false);
         }
 
