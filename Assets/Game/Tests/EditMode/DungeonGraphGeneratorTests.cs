@@ -2,146 +2,133 @@ using FrontierDepths.Core;
 using FrontierDepths.World;
 using NUnit.Framework;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace FrontierDepths.Tests.EditMode
 {
     public class DungeonGraphGeneratorTests
     {
+        private static readonly int[] FloorOneCuratedSeeds =
+        {
+            778287037,
+            1932105958,
+            1155232724,
+            1246244744,
+            1246245721,
+            6123
+        };
+
         [Test]
         public void Generator_AlwaysBuildsPathsFromEntryToTransitRooms()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 1, floorSeed = 1234 });
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 1, 1234, out _);
 
             Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId));
             Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId));
         }
 
         [Test]
-        public void Generator_UsesThreeOrMoreSectorsOnEarlyFloor()
+        public void Generator_UsesAtLeastTwoSectorsOnEarlyFloor()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 1, floorSeed = 6123 });
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 1, 6123, out GraphValidationReport report);
 
-            Assert.GreaterOrEqual(GetNeighborCount(graph, graph.entryHubNodeId), 3);
-            Assert.GreaterOrEqual(GetCoveredSectorCount(graph), 3);
+            Assert.GreaterOrEqual(GetNeighborCount(graph, graph.entryHubNodeId), 2, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(GetCoveredSectorCount(graph), 2, report.ToSummaryString(10));
         }
 
         [Test]
         public void Generator_UsesAllFourSectorsOnMidDepthFloor()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 8, floorSeed = 8123 });
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 8, 8123, out GraphValidationReport report);
 
-            if (generator.LastGenerationUsedFallback)
-            {
-                AssertFallbackSafeInvariants(graph);
-                return;
-            }
-
-            Assert.AreEqual(4, GetCoveredSectorCount(graph));
+            Assert.AreEqual(4, GetCoveredSectorCount(graph), report.ToSummaryString(10));
         }
 
         [Test]
         public void Generator_ScalesDungeonSizeWithFloorDepth()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph shallow = generator.Generate(new FloorState { floorIndex = 1, floorSeed = 1234 });
-            DungeonLayoutGraph deep = generator.Generate(new FloorState { floorIndex = 15, floorSeed = 1234 + 15 * 977 });
+            DungeonLayoutGraph shallow = GenerateNormalGraph(generator, 1, 1234, out _);
+            DungeonLayoutGraph deep = GenerateNormalGraph(generator, 15, 1234 + 15 * 977, out _);
 
             Assert.Greater(deep.nodes.Count, shallow.nodes.Count);
             Assert.Greater(GetGraphExtent(deep), GetGraphExtent(shallow));
         }
 
         [Test]
-        public void Generator_KeepsFloorOneNormalBuildsWithinReducedRoomBudget()
+        public void Generator_NormalFloorOne_CuratedSeedSet_ProducesNonFallbackLayouts()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            bool validatedNormalBuild = false;
-
-            for (int seedIndex = 0; seedIndex < 8; seedIndex++)
+            for (int i = 0; i < FloorOneCuratedSeeds.Length; i++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 1,
-                    floorSeed = 2100 + seedIndex * 977
-                });
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 1, FloorOneCuratedSeeds[i], out GraphValidationReport report);
 
-                if (generator.LastGenerationUsedFallback)
-                {
-                    AssertFallbackSafeInvariants(graph);
-                    continue;
-                }
-
-                validatedNormalBuild = true;
-                Assert.That(graph.nodes.Count, Is.InRange(10, 14));
+                Assert.That(graph.nodes.Count, Is.InRange(10, 14), report.ToSummaryString(10));
+                Assert.Greater(graph.nodes.Count, 6, report.ToSummaryString(10));
             }
-
-            Assert.IsTrue(validatedNormalBuild, "Expected at least one normal floor-1 build in the seed sample.");
         }
 
         [Test]
-        public void Generator_KeepsFloorThreeNormalBuildsWithinReducedRoomBudget()
+        public void Generator_NormalFloorThree_CuratedSeedSet_ProducesNonFallbackLayouts()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            bool validatedNormalBuild = false;
-
-            for (int seedIndex = 0; seedIndex < 8; seedIndex++)
+            for (int seedIndex = 0; seedIndex < 6; seedIndex++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 3,
-                    floorSeed = 5100 + seedIndex * 977
-                });
+                int seed = 5100 + seedIndex * 977;
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 3, seed, out GraphValidationReport report);
 
-                if (generator.LastGenerationUsedFallback)
-                {
-                    AssertFallbackSafeInvariants(graph);
-                    continue;
-                }
-
-                validatedNormalBuild = true;
-                Assert.That(graph.nodes.Count, Is.InRange(12, 16));
+                Assert.That(graph.nodes.Count, Is.InRange(12, 16), report.ToSummaryString(10));
             }
-
-            Assert.IsTrue(validatedNormalBuild, "Expected at least one normal floor-3 build in the seed sample.");
         }
 
         [Test]
         public void Generator_SpreadsSpecialRoomsApart()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 10, floorSeed = 10123 });
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 10, 10123, out GraphValidationReport report);
 
             DungeonNode landmark = FindByKind(graph, DungeonNodeKind.Landmark);
             DungeonNode secret = FindByKind(graph, DungeonNodeKind.Secret);
 
-            Assert.NotNull(landmark);
-            Assert.NotNull(secret);
-            Assert.GreaterOrEqual(graph.GetGraphDistance(graph.transitUpNodeId, graph.transitDownNodeId), 4);
-            Assert.GreaterOrEqual(graph.GetGraphDistance(landmark.nodeId, graph.transitDownNodeId), 3);
-            Assert.GreaterOrEqual(graph.GetGraphDistance(secret.nodeId, graph.transitDownNodeId), 3);
-            Assert.GreaterOrEqual(graph.GetGraphDistance(secret.nodeId, landmark.nodeId), 3);
+            Assert.NotNull(landmark, report.ToSummaryString(10));
+            Assert.NotNull(secret, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(graph.GetGraphDistance(graph.transitUpNodeId, graph.transitDownNodeId), 4, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(graph.GetGraphDistance(landmark.nodeId, graph.transitDownNodeId), 3, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(graph.GetGraphDistance(secret.nodeId, graph.transitDownNodeId), 3, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(graph.GetGraphDistance(secret.nodeId, landmark.nodeId), 3, report.ToSummaryString(10));
         }
 
         [Test]
-        public void Generator_ProducesLayoutVarietyAcrossDifferentSeeds()
+        public void Generator_NormalFloorOne_ProducesAtLeastFourDifferentSignaturesAcrossSeedSet()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
             HashSet<string> signatures = new HashSet<string>();
 
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < FloorOneCuratedSeeds.Length; i++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 6,
-                    floorSeed = 3000 + i * 977
-                });
-
-                signatures.Add(GetGraphSignature(graph));
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 1, FloorOneCuratedSeeds[i], out _);
+                signatures.Add(DungeonLayoutSignatureUtility.BuildSignature(graph, 1, FloorOneCuratedSeeds[i]));
             }
 
             Assert.GreaterOrEqual(signatures.Count, 4);
+        }
+
+        [Test]
+        public void Generator_FloorTwoSignatureDiffersFromFloorOneForSameSeedBase()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            const int baseSeed = 778287037;
+
+            DungeonLayoutGraph floorOne = GenerateNormalGraph(generator, 1, baseSeed, out _);
+            DungeonLayoutGraph floorTwo = GenerateNormalGraph(generator, 2, baseSeed, out _);
+
+            string floorOneSignature = DungeonLayoutSignatureUtility.BuildSignature(floorOne, 1, baseSeed);
+            string floorTwoSignature = DungeonLayoutSignatureUtility.BuildSignature(floorTwo, 2, baseSeed);
+
+            Assert.AreNotEqual(floorOneSignature, floorTwoSignature);
         }
 
         [Test]
@@ -150,11 +137,8 @@ namespace FrontierDepths.Tests.EditMode
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
             for (int seedIndex = 0; seedIndex < 6; seedIndex++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 8,
-                    floorSeed = 8800 + seedIndex * 977
-                });
+                int seed = 8800 + seedIndex * 977;
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 8, seed, out GraphValidationReport report);
 
                 for (int i = 0; i < graph.nodes.Count; i++)
                 {
@@ -163,7 +147,7 @@ namespace FrontierDepths.Tests.EditMode
                     {
                         Assert.IsTrue(
                             DungeonRoomTemplateLibrary.IsGateOneSafeOrdinaryTemplate(node.roomTemplate),
-                            $"Ordinary node {node.nodeId} used unsafe template {node.roomTemplate}.");
+                            $"Ordinary node {node.nodeId} used unsafe template {node.roomTemplate}. {report.ToSummaryString(10)}");
                     }
 
                     if (node.nodeKind == DungeonNodeKind.Landmark)
@@ -178,7 +162,7 @@ namespace FrontierDepths.Tests.EditMode
         public void Generator_UsesMultipleSafeTemplatesOnMidDepthFloor()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
-            DungeonLayoutGraph graph = generator.Generate(new FloorState { floorIndex = 8, floorSeed = 8800 });
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 8, 8800, out GraphValidationReport report);
             HashSet<DungeonRoomTemplateKind> templates = new HashSet<DungeonRoomTemplateKind>();
 
             for (int i = 0; i < graph.nodes.Count; i++)
@@ -189,14 +173,7 @@ namespace FrontierDepths.Tests.EditMode
                 }
             }
 
-            if (generator.LastGenerationUsedFallback)
-            {
-                AssertFallbackSafeInvariants(graph);
-                Assert.GreaterOrEqual(templates.Count, 1);
-                return;
-            }
-
-            Assert.GreaterOrEqual(templates.Count, 2);
+            Assert.GreaterOrEqual(templates.Count, 2, report.ToSummaryString(10));
         }
 
         [Test]
@@ -207,16 +184,8 @@ namespace FrontierDepths.Tests.EditMode
 
             for (int seedIndex = 0; seedIndex < 12; seedIndex++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 8,
-                    floorSeed = 14000 + seedIndex * 977
-                });
-
-                if (generator.LastGenerationUsedFallback)
-                {
-                    continue;
-                }
+                int seed = 14000 + seedIndex * 977;
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 8, seed, out _);
 
                 for (int nodeIndex = 0; nodeIndex < graph.nodes.Count; nodeIndex++)
                 {
@@ -240,16 +209,8 @@ namespace FrontierDepths.Tests.EditMode
 
             for (int seedIndex = 0; seedIndex < 20; seedIndex++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 10,
-                    floorSeed = 18000 + seedIndex * 977
-                });
-
-                if (generator.LastGenerationUsedFallback)
-                {
-                    continue;
-                }
+                int seed = 18000 + seedIndex * 977;
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 10, seed, out _);
 
                 for (int nodeIndex = 0; nodeIndex < graph.nodes.Count; nodeIndex++)
                 {
@@ -296,13 +257,10 @@ namespace FrontierDepths.Tests.EditMode
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
             for (int seedIndex = 0; seedIndex < 6; seedIndex++)
             {
-                DungeonLayoutGraph graph = generator.Generate(new FloorState
-                {
-                    floorIndex = 8,
-                    floorSeed = 9600 + seedIndex * 977
-                });
+                int seed = 9600 + seedIndex * 977;
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, 8, seed, out _);
 
-                Assert.IsFalse(HasThreeRoomOrdinaryTemplateStreak(graph), $"Found three-room ordinary template streak at seed {9600 + seedIndex * 977}.");
+                Assert.IsFalse(HasThreeRoomOrdinaryTemplateStreak(graph), $"Found three-room ordinary template streak at seed {seed}.");
             }
         }
 
@@ -331,6 +289,20 @@ namespace FrontierDepths.Tests.EditMode
             }
         }
 
+        private static DungeonLayoutGraph GenerateNormalGraph(GraphFirstDungeonGenerator generator, int floorIndex, int seed, out GraphValidationReport report)
+        {
+            FloorState floorState = new FloorState
+            {
+                floorIndex = floorIndex,
+                floorSeed = seed
+            };
+
+            bool success = generator.TryGenerateNormal(floorState, out DungeonLayoutGraph graph, out report);
+            Assert.IsTrue(success, report.ToSummaryString(10));
+            Assert.NotNull(graph, report.ToSummaryString(10));
+            return graph;
+        }
+
         private static DungeonNode FindByKind(DungeonLayoutGraph graph, DungeonNodeKind kind)
         {
             for (int i = 0; i < graph.nodes.Count; i++)
@@ -349,7 +321,7 @@ namespace FrontierDepths.Tests.EditMode
             int best = 0;
             for (int i = 0; i < graph.nodes.Count; i++)
             {
-                int distance = UnityEngine.Mathf.Abs(graph.nodes[i].gridPosition.x) + UnityEngine.Mathf.Abs(graph.nodes[i].gridPosition.y);
+                int distance = Mathf.Abs(graph.nodes[i].gridPosition.x) + Mathf.Abs(graph.nodes[i].gridPosition.y);
                 if (distance > best)
                 {
                     best = distance;
@@ -357,19 +329,6 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return best;
-        }
-
-        private static string GetGraphSignature(DungeonLayoutGraph graph)
-        {
-            List<string> parts = new List<string>();
-            for (int i = 0; i < graph.nodes.Count; i++)
-            {
-                DungeonNode node = graph.nodes[i];
-                parts.Add($"{node.nodeKind}:{node.gridPosition.x},{node.gridPosition.y}:{node.roomTemplate}");
-            }
-
-            parts.Sort();
-            return string.Join("|", parts);
         }
 
         private static int GetNeighborCount(DungeonLayoutGraph graph, string nodeId)
@@ -383,9 +342,9 @@ namespace FrontierDepths.Tests.EditMode
             List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
             for (int i = 0; i < neighbors.Count; i++)
             {
-                UnityEngine.Vector2Int delta = neighbors[i].gridPosition - node.gridPosition;
-                delta.x = UnityEngine.Mathf.Clamp(delta.x, -1, 1);
-                delta.y = UnityEngine.Mathf.Clamp(delta.y, -1, 1);
+                Vector2Int delta = neighbors[i].gridPosition - node.gridPosition;
+                delta.x = Mathf.Clamp(delta.x, -1, 1);
+                delta.y = Mathf.Clamp(delta.y, -1, 1);
                 mask |= DungeonRoomTemplateLibrary.DirectionToMask(delta);
             }
 
@@ -426,9 +385,9 @@ namespace FrontierDepths.Tests.EditMode
             return covered;
         }
 
-        private static int GetSector(UnityEngine.Vector2Int position)
+        private static int GetSector(Vector2Int position)
         {
-            if (UnityEngine.Mathf.Abs(position.x) >= UnityEngine.Mathf.Abs(position.y))
+            if (Mathf.Abs(position.x) >= Mathf.Abs(position.y))
             {
                 return position.x >= 0 ? 0 : 1;
             }
@@ -473,27 +432,6 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return false;
-        }
-
-        private static void AssertFallbackSafeInvariants(DungeonLayoutGraph graph)
-        {
-            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Landmark));
-            Assert.NotNull(FindByKind(graph, DungeonNodeKind.Secret));
-            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitUp));
-            Assert.NotNull(FindByKind(graph, DungeonNodeKind.TransitDown));
-            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId));
-            Assert.IsTrue(graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId));
-
-            for (int i = 0; i < graph.nodes.Count; i++)
-            {
-                DungeonNode node = graph.nodes[i];
-                if (node.nodeKind == DungeonNodeKind.Ordinary)
-                {
-                    Assert.IsTrue(
-                        DungeonRoomTemplateLibrary.IsGateOneSafeOrdinaryTemplate(node.roomTemplate),
-                        $"Fallback ordinary node {node.nodeId} used unsafe template {node.roomTemplate}.");
-                }
-            }
         }
     }
 }

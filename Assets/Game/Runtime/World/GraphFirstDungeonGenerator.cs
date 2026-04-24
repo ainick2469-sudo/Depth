@@ -7,7 +7,8 @@ namespace FrontierDepths.World
 {
     public sealed class GraphFirstDungeonGenerator : IDungeonGenerator
     {
-        public bool LastGenerationUsedFallback { get; private set; }
+        internal const int NormalGenerationAttemptsPerCall = 16;
+        internal const int NormalGenerationSeedStep = 1543;
 
         private struct ExpansionCandidate
         {
@@ -68,31 +69,64 @@ namespace FrontierDepths.World
             "Buried Survey Vault"
         };
 
-        public DungeonLayoutGraph Generate(FloorState floorState)
+        public bool TryGenerateNormal(FloorState floorState, out DungeonLayoutGraph graph, out GraphValidationReport report)
         {
             int floorIndex = Mathf.Max(1, floorState.floorIndex);
             int baseSeed = floorState.floorSeed == 0 ? 1000 + floorIndex * 977 : floorState.floorSeed;
-            LastGenerationUsedFallback = false;
-
-            for (int attempt = 0; attempt < 16; attempt++)
+            report = new GraphValidationReport
             {
-                DungeonLayoutGraph graph = BuildGraph(baseSeed + attempt * 1543, floorIndex);
-                if (IsValidGraph(graph, floorIndex))
+                floorIndex = floorIndex,
+                seed = baseSeed
+            };
+
+            GraphValidationAttemptResult bestAttempt = null;
+
+            for (int attempt = 0; attempt < NormalGenerationAttemptsPerCall; attempt++)
+            {
+                int attemptSeed = GetNormalAttemptSeed(baseSeed, attempt);
+                DungeonLayoutGraph candidate = BuildGraph(attemptSeed, floorIndex);
+                GraphValidationAttemptResult attemptResult = ValidateGraph(candidate, floorIndex, attemptSeed, attempt + 1);
+                report.attempts.Add(attemptResult);
+                report.attemptCount = attempt + 1;
+
+                if (attemptResult.IsValid)
                 {
-                    return graph;
+                    report.AdoptAttempt(attemptResult);
+                    graph = candidate;
+                    return true;
+                }
+
+                if (IsBetterAttempt(attemptResult, bestAttempt))
+                {
+                    bestAttempt = attemptResult;
                 }
             }
 
-            LastGenerationUsedFallback = true;
-            return BuildFallbackGraph(baseSeed, floorIndex);
+            report.AdoptAttempt(bestAttempt);
+            if (bestAttempt == null)
+            {
+                report.failures.Add("No normal generation attempts were evaluated.");
+            }
+
+            graph = bestAttempt != null ? bestAttempt.graph : null;
+            return false;
         }
 
         public DungeonLayoutGraph GenerateFallback(FloorState floorState)
         {
             int floorIndex = Mathf.Max(1, floorState.floorIndex);
             int baseSeed = floorState.floorSeed == 0 ? 1000 + floorIndex * 977 : floorState.floorSeed;
-            LastGenerationUsedFallback = true;
             return BuildFallbackGraph(baseSeed, floorIndex);
+        }
+
+        internal static int GetNormalAttemptBaseSeed(int baseSeed, int outerAttemptIndex)
+        {
+            return baseSeed + outerAttemptIndex * NormalGenerationSeedStep * NormalGenerationAttemptsPerCall;
+        }
+
+        internal static int GetNormalAttemptSeed(int baseSeed, int attemptIndex)
+        {
+            return baseSeed + attemptIndex * NormalGenerationSeedStep;
         }
 
         private static DungeonLayoutGraph BuildGraph(int seed, int floorIndex)
@@ -1174,25 +1208,49 @@ namespace FrontierDepths.World
             }
         }
 
-        private static bool IsValidGraph(DungeonLayoutGraph graph, int floorIndex)
+        private static GraphValidationAttemptResult ValidateGraph(DungeonLayoutGraph graph, int floorIndex, int attemptSeed, int attemptNumber)
         {
+            GraphValidationAttemptResult result = new GraphValidationAttemptResult
+            {
+                attemptNumber = attemptNumber,
+                attemptSeed = attemptSeed,
+                graph = graph,
+                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, attemptSeed)
+            };
+
             if (graph == null)
             {
-                return false;
+                result.failures.Add("Graph was null.");
+                return result;
             }
 
             DungeonNode entryHub = graph.GetNode(graph.entryHubNodeId);
             DungeonNode transitUp = graph.GetNode(graph.transitUpNodeId);
             DungeonNode transitDown = graph.GetNode(graph.transitDownNodeId);
 
-            if (entryHub == null || transitUp == null || transitDown == null)
+            if (entryHub == null)
             {
-                return false;
+                result.failures.Add("Missing entry hub node.");
             }
 
-            if (!graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId) || !graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId))
+            if (transitUp == null)
             {
-                return false;
+                result.failures.Add("Missing transit up node.");
+            }
+
+            if (transitDown == null)
+            {
+                result.failures.Add("Missing transit down node.");
+            }
+
+            if (entryHub != null && transitUp != null && !graph.HasPath(graph.entryHubNodeId, graph.transitUpNodeId))
+            {
+                result.failures.Add("No path from entry hub to transit up.");
+            }
+
+            if (entryHub != null && transitDown != null && !graph.HasPath(graph.entryHubNodeId, graph.transitDownNodeId))
+            {
+                result.failures.Add("No path from entry hub to transit down.");
             }
 
             HashSet<Vector2Int> seenPositions = new HashSet<Vector2Int>();
@@ -1207,7 +1265,7 @@ namespace FrontierDepths.World
                 DungeonNode node = graph.nodes[i];
                 if (!seenPositions.Add(node.gridPosition))
                 {
-                    return false;
+                    result.failures.Add($"Duplicate room position at {node.gridPosition.x},{node.gridPosition.y}.");
                 }
 
                 minX = Mathf.Min(minX, node.gridPosition.x);
@@ -1221,58 +1279,134 @@ namespace FrontierDepths.World
                 }
             }
 
-            if (graph.nodes.Count < GetMinimumRoomCount(floorIndex) || graph.GetDegree(graph.entryHubNodeId) < 3)
+            int minimumRoomCount = GetMinimumRoomCount(floorIndex);
+            if (graph.nodes.Count < minimumRoomCount)
             {
-                return false;
+                result.failures.Add($"Too few rooms for floor {floorIndex} ({graph.nodes.Count} < {minimumRoomCount}).");
             }
 
-            int coveredSectors = 0;
-            for (int i = 0; i < sectorCounts.Length; i++)
+            int entryDegree = entryHub != null ? graph.GetDegree(graph.entryHubNodeId) : 0;
+            int requiredEntryDegree = GetRequiredEntryDegree(floorIndex);
+            if (entryDegree < requiredEntryDegree)
             {
-                if (sectorCounts[i] > 0)
-                {
-                    coveredSectors++;
-                }
+                result.failures.Add($"Entry hub degree {entryDegree} below required {requiredEntryDegree}.");
             }
 
-            if (coveredSectors < (floorIndex >= 4 ? 4 : 3))
+            int preferredEntryDegree = GetPreferredEntryDegree(floorIndex);
+            if (preferredEntryDegree > requiredEntryDegree && entryDegree < preferredEntryDegree)
             {
-                return false;
+                result.warnings.Add($"Entry hub degree {entryDegree} below preferred {preferredEntryDegree}.");
             }
 
-            if (Mathf.Min(maxX - minX, maxY - minY) < 4 || graph.edges.Count < graph.nodes.Count)
+            int coveredSectors = CountCoveredSectors(sectorCounts);
+            int requiredCoveredSectors = GetRequiredCoveredSectors(floorIndex);
+            if (coveredSectors < requiredCoveredSectors)
             {
-                return false;
+                result.failures.Add($"Covered sectors {coveredSectors} below required {requiredCoveredSectors}.");
+            }
+
+            int preferredCoveredSectors = GetPreferredCoveredSectors(floorIndex);
+            if (preferredCoveredSectors > requiredCoveredSectors && coveredSectors < preferredCoveredSectors)
+            {
+                result.warnings.Add($"Covered sectors {coveredSectors} below preferred {preferredCoveredSectors}.");
+            }
+
+            int minorAxisExtent = graph.nodes.Count > 0 ? Mathf.Min(maxX - minX, maxY - minY) : 0;
+            int requiredMinorAxisExtent = GetRequiredMinorAxisExtent(floorIndex);
+            if (minorAxisExtent < requiredMinorAxisExtent)
+            {
+                result.failures.Add($"Graph extents too narrow on minor axis ({minorAxisExtent} < {requiredMinorAxisExtent}).");
+            }
+
+            int requiredEdgeCount = GetRequiredEdgeCount(floorIndex, graph.nodes.Count);
+            if (graph.edges.Count < requiredEdgeCount)
+            {
+                result.failures.Add($"Edge count {graph.edges.Count} below required {requiredEdgeCount}.");
+            }
+            else if (floorIndex <= 3 && graph.edges.Count < graph.nodes.Count)
+            {
+                result.warnings.Add("Layout has no loop edges; loops are preferred on early floors.");
             }
 
             DungeonNode landmark = FindFirstNodeByKind(graph, DungeonNodeKind.Landmark);
             DungeonNode secret = FindFirstNodeByKind(graph, DungeonNodeKind.Secret);
             int entryToDown = graph.GetGraphDistance(graph.entryHubNodeId, graph.transitDownNodeId);
             int upToDown = graph.GetGraphDistance(graph.transitUpNodeId, graph.transitDownNodeId);
-            if (entryToDown < Mathf.Clamp(5 + floorIndex / 4, 5, 12) || upToDown < 4)
+
+            int requiredEntryToDownDistance = GetRequiredEntryToDownDistance(floorIndex);
+            if (entryToDown < requiredEntryToDownDistance)
             {
-                return false;
+                result.failures.Add($"Transit down is too close to entry ({entryToDown} < {requiredEntryToDownDistance}).");
             }
 
-            if (landmark != null && graph.GetGraphDistance(landmark.nodeId, graph.transitDownNodeId) < 3)
+            int requiredUpToDownDistance = GetRequiredUpToDownDistance(floorIndex);
+            if (upToDown < requiredUpToDownDistance)
             {
-                return false;
+                result.failures.Add($"Transit up is too close to transit down ({upToDown} < {requiredUpToDownDistance}).");
+            }
+
+            if (landmark != null && graph.GetGraphDistance(landmark.nodeId, graph.transitDownNodeId) < GetRequiredLandmarkToDownDistance(floorIndex))
+            {
+                result.failures.Add($"Landmark room {landmark.nodeId} is too close to stairs down.");
             }
 
             if (secret != null)
             {
-                if (graph.GetGraphDistance(secret.nodeId, graph.transitDownNodeId) < 3)
+                if (graph.GetGraphDistance(secret.nodeId, graph.transitDownNodeId) < GetRequiredSecretToDownDistance(floorIndex))
                 {
-                    return false;
+                    result.failures.Add($"Secret room {secret.nodeId} is too close to stairs down.");
                 }
 
-                if (landmark != null && graph.GetGraphDistance(secret.nodeId, landmark.nodeId) < 3)
+                if (landmark != null && graph.GetGraphDistance(secret.nodeId, landmark.nodeId) < GetRequiredSecretToLandmarkDistance(floorIndex))
                 {
-                    return false;
+                    result.failures.Add($"Secret room {secret.nodeId} is too close to landmark room {landmark.nodeId}.");
                 }
             }
 
-            return true;
+            return result;
+        }
+
+        private static bool IsBetterAttempt(GraphValidationAttemptResult candidate, GraphValidationAttemptResult currentBest)
+        {
+            if (candidate == null)
+            {
+                return false;
+            }
+
+            if (currentBest == null)
+            {
+                return true;
+            }
+
+            int failureCompare = candidate.failures.Count.CompareTo(currentBest.failures.Count);
+            if (failureCompare != 0)
+            {
+                return failureCompare < 0;
+            }
+
+            int warningCompare = candidate.warnings.Count.CompareTo(currentBest.warnings.Count);
+            if (warningCompare != 0)
+            {
+                return warningCompare < 0;
+            }
+
+            int candidateNodeCount = candidate.graph != null ? candidate.graph.nodes.Count : 0;
+            int currentNodeCount = currentBest.graph != null ? currentBest.graph.nodes.Count : 0;
+            int nodeCompare = candidateNodeCount.CompareTo(currentNodeCount);
+            if (nodeCompare != 0)
+            {
+                return nodeCompare > 0;
+            }
+
+            int candidateEdgeCount = candidate.graph != null ? candidate.graph.edges.Count : 0;
+            int currentEdgeCount = currentBest.graph != null ? currentBest.graph.edges.Count : 0;
+            int edgeCompare = candidateEdgeCount.CompareTo(currentEdgeCount);
+            if (edgeCompare != 0)
+            {
+                return edgeCompare > 0;
+            }
+
+            return candidate.attemptSeed < currentBest.attemptSeed;
         }
 
         private static DungeonNode FindFirstNodeByKind(DungeonLayoutGraph graph, DungeonNodeKind kind)
@@ -1344,6 +1478,71 @@ namespace FrontierDepths.World
             }
 
             return 38;
+        }
+
+        private static int GetRequiredEntryDegree(int floorIndex)
+        {
+            return floorIndex >= 4 ? 3 : 2;
+        }
+
+        private static int GetPreferredEntryDegree(int floorIndex)
+        {
+            return floorIndex <= 3 ? 3 : GetRequiredEntryDegree(floorIndex);
+        }
+
+        private static int GetRequiredCoveredSectors(int floorIndex)
+        {
+            if (floorIndex <= 1)
+            {
+                return 2;
+            }
+
+            return floorIndex <= 3 ? 3 : 4;
+        }
+
+        private static int GetPreferredCoveredSectors(int floorIndex)
+        {
+            if (floorIndex <= 1)
+            {
+                return 3;
+            }
+
+            return GetRequiredCoveredSectors(floorIndex);
+        }
+
+        private static int GetRequiredMinorAxisExtent(int floorIndex)
+        {
+            return floorIndex >= 4 ? 4 : 3;
+        }
+
+        private static int GetRequiredEdgeCount(int floorIndex, int nodeCount)
+        {
+            return floorIndex >= 4 ? nodeCount : Mathf.Max(0, nodeCount - 1);
+        }
+
+        private static int GetRequiredEntryToDownDistance(int floorIndex)
+        {
+            return floorIndex <= 3 ? 4 : Mathf.Clamp(5 + floorIndex / 4, 5, 12);
+        }
+
+        private static int GetRequiredUpToDownDistance(int floorIndex)
+        {
+            return floorIndex <= 3 ? 3 : 4;
+        }
+
+        private static int GetRequiredLandmarkToDownDistance(int floorIndex)
+        {
+            return floorIndex <= 1 ? 2 : 3;
+        }
+
+        private static int GetRequiredSecretToDownDistance(int floorIndex)
+        {
+            return floorIndex <= 1 ? 2 : 3;
+        }
+
+        private static int GetRequiredSecretToLandmarkDistance(int floorIndex)
+        {
+            return floorIndex <= 3 ? 2 : 3;
         }
 
         private static int GetMaxRadius(int floorIndex, int targetRoomCount)

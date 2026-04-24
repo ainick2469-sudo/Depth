@@ -41,6 +41,8 @@ namespace FrontierDepths.World
             }
 
             StringBuilder builder = new StringBuilder();
+            builder.Append(buildResult.GetBuildModeLabel());
+            builder.Append(" | ");
             builder.Append("Dungeon build ");
             builder.Append(state);
             builder.Append(" | Floor ");

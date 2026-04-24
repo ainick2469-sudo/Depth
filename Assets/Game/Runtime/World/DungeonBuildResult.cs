@@ -17,6 +17,7 @@ namespace FrontierDepths.World
         public int validationWarningCount;
         public int attemptNumber;
         public int attemptCount;
+        public string graphLayoutSignature;
         public string validationSummary;
         public Vector3 playerSpawn;
         public string playerSpawnNodeId;
@@ -113,6 +114,26 @@ namespace FrontierDepths.World
             }
 
             return count;
+        }
+
+        public string GetBuildModeLabel()
+        {
+            if (isEmergencyDebugBuild)
+            {
+                return "EMERGENCY FALLBACK";
+            }
+
+            if (requestedFallback)
+            {
+                return "REQUESTED FALLBACK";
+            }
+
+            if (generatorReturnedFallbackGraph || usedFallback)
+            {
+                return "GENERATOR FALLBACK";
+            }
+
+            return "NORMAL BUILD";
         }
     }
 

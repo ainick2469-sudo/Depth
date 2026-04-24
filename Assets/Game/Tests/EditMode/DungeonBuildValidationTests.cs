@@ -222,6 +222,8 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(report.IsValid, report.ToSummaryString(build));
                 Assert.IsTrue(build.usedFallback);
                 Assert.IsTrue(build.requestedFallback);
+                Assert.IsTrue(build.generatorReturnedFallbackGraph);
+                StringAssert.Contains("REQUESTED FALLBACK", report.ToSummaryString(build));
             }
             finally
             {
@@ -267,29 +269,59 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void Seed_778287037_NormalOrFallbackBuild_PassesValidation()
+        public void Controller_NormalBuild_DoesNotUseGeneratorFallback_WhenNormalGraphValid()
         {
-            GameObject root = new GameObject("DungeonSceneControllerSeedRegression");
+            GameObject root = new GameObject("DungeonSceneControllerNormalBuildFlags");
 
             try
             {
-                DungeonBuildResult normalBuild = InvokeBuildFloorAttempt(root, useFallback: false, floorSeed: 778287037);
-                DungeonValidationReport normalReport = DungeonValidator.Validate(normalBuild);
-                if (normalReport.IsValid)
-                {
-                    Assert.Pass();
-                }
+                DungeonBuildResult build = InvokeBuildFloorAttempt(root, useFallback: false, floorSeed: 778287037);
+                DungeonValidationReport report = DungeonValidator.Validate(build);
 
-                DungeonBuildResult fallbackBuild = InvokeBuildFloorAttempt(root, useFallback: true, floorSeed: 778287037);
-                DungeonValidationReport fallbackReport = DungeonValidator.Validate(fallbackBuild);
-
-                Assert.IsTrue(fallbackReport.IsValid, fallbackReport.ToSummaryString(fallbackBuild, 10));
-                Assert.IsFalse(HasSpawnRoomMismatchFailure(fallbackReport), fallbackReport.ToSummaryString(fallbackBuild, 10));
+                Assert.IsTrue(report.IsValid, report.ToSummaryString(build, 10));
+                Assert.IsFalse(build.usedFallback);
+                Assert.IsFalse(build.requestedFallback);
+                Assert.IsFalse(build.generatorReturnedFallbackGraph);
+                StringAssert.Contains("NORMAL BUILD", report.ToSummaryString(build, 10));
             }
             finally
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        [Test]
+        public void Seed_778287037_NormalBuild_PassesValidation()
+        {
+            GameObject root = new GameObject("DungeonSceneControllerSeedRegression");
+
+            try
+            {
+                DungeonBuildResult build = InvokeBuildFloorAttempt(root, useFallback: false, floorSeed: 778287037);
+                DungeonValidationReport report = DungeonValidator.Validate(build);
+
+                Assert.IsTrue(report.IsValid, report.ToSummaryString(build, 10));
+                Assert.IsFalse(HasSpawnRoomMismatchFailure(report), report.ToSummaryString(build, 10));
+                Assert.Greater(build.rooms.Count, 6);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Validator_Summary_DistinguishesEmergencyFallback()
+        {
+            DungeonBuildResult build = CreateValidBuildResult();
+            build.usedFallback = true;
+            build.requestedFallback = true;
+            build.generatorReturnedFallbackGraph = true;
+            build.isEmergencyDebugBuild = true;
+
+            DungeonValidationReport report = DungeonValidator.Validate(build);
+
+            StringAssert.Contains("EMERGENCY FALLBACK", report.ToSummaryString(build, 10));
         }
 
         private static DungeonBuildResult CreateValidBuildResult()
@@ -605,7 +637,26 @@ namespace FrontierDepths.Tests.EditMode
 
             FloorState state = new FloorState { floorIndex = 1, floorSeed = floorSeed };
             state.Normalize(state.floorIndex, state.floorSeed);
-            return (DungeonBuildResult)method.Invoke(controller, new object[] { state, useFallback, 1, 1 });
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            DungeonLayoutGraph graph;
+            GraphValidationReport graphReport;
+            if (useFallback)
+            {
+                graph = generator.GenerateFallback(state);
+                graphReport = new GraphValidationReport
+                {
+                    floorIndex = state.floorIndex,
+                    seed = state.floorSeed,
+                    attemptCount = 1,
+                    layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, state)
+                };
+            }
+            else
+            {
+                Assert.IsTrue(generator.TryGenerateNormal(state, out graph, out graphReport), graphReport.ToSummaryString(10));
+            }
+
+            return (DungeonBuildResult)method.Invoke(controller, new object[] { state, graph, graphReport, useFallback, 1, 1 });
         }
     }
 }

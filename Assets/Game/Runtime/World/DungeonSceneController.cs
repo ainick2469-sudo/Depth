@@ -131,8 +131,16 @@ namespace FrontierDepths.World
             DungeonValidationReport latestReport = null;
             for (int attempt = 0; attempt < MaxBuildAttempts; attempt++)
             {
-                int attemptSeed = baseSeed + attempt * 1543;
-                DungeonBuildResult attemptBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, attemptSeed), false, attempt + 1, MaxBuildAttempts);
+                int attemptSeed = GraphFirstDungeonGenerator.GetNormalAttemptBaseSeed(baseSeed, attempt);
+                FloorState attemptFloorState = CloneFloorState(currentFloor, run.floorIndex, attemptSeed);
+                if (!generator.TryGenerateNormal(attemptFloorState, out DungeonLayoutGraph graph, out GraphValidationReport graphReport))
+                {
+                    graphReport.Log("Normal dungeon graph generation failed.");
+                    continue;
+                }
+
+                graphReport.Log("Normal dungeon graph generation succeeded.");
+                DungeonBuildResult attemptBuild = BuildFloorAttempt(attemptFloorState, graph, graphReport, false, attempt + 1, MaxBuildAttempts);
                 latestReport = DungeonValidator.Validate(attemptBuild);
                 FinalizeValidation(attemptBuild, latestReport, false);
                 Debug.Log(attemptBuild.validationSummary);
@@ -146,7 +154,11 @@ namespace FrontierDepths.World
                 ClearRuntimeRoot(true);
             }
 
-            DungeonBuildResult fallbackBuild = BuildFloorAttempt(CloneFloorState(currentFloor, run.floorIndex, baseSeed), true, 1, 1);
+            FloorState fallbackFloorState = CloneFloorState(currentFloor, run.floorIndex, baseSeed);
+            DungeonLayoutGraph fallbackGraph = generator.GenerateFallback(fallbackFloorState);
+            GraphValidationReport fallbackGraphReport = CreateFallbackGraphReport(fallbackFloorState, fallbackGraph);
+            Debug.Log($"Explicit dungeon fallback requested. {fallbackGraphReport.ToSummaryString()}");
+            DungeonBuildResult fallbackBuild = BuildFloorAttempt(fallbackFloorState, fallbackGraph, fallbackGraphReport, true, 1, 1);
             latestReport = DungeonValidator.Validate(fallbackBuild);
             FinalizeValidation(fallbackBuild, latestReport, !latestReport.IsValid);
             Debug.Log(fallbackBuild.validationSummary);
@@ -164,24 +176,29 @@ namespace FrontierDepths.World
             statusMessage = $"{fallbackBuild.validationSummary} | Emergency debug layout left visible.";
         }
 
-        private DungeonBuildResult BuildFloorAttempt(FloorState floorState, bool useFallback, int attemptNumber, int attemptCount)
+        private DungeonBuildResult BuildFloorAttempt(
+            FloorState floorState,
+            DungeonLayoutGraph graph,
+            GraphValidationReport graphValidationReport,
+            bool useFallback,
+            int attemptNumber,
+            int attemptCount)
         {
             ClearRuntimeRoot(true);
-
-            DungeonLayoutGraph graph = useFallback
-                ? generator.GenerateFallback(floorState)
-                : generator.Generate(floorState);
 
             activeBuildResult = new DungeonBuildResult
             {
                 graph = graph,
                 floorIndex = Mathf.Max(1, floorState.floorIndex),
                 seed = floorState.floorSeed,
-                usedFallback = useFallback || generator.LastGenerationUsedFallback,
+                usedFallback = useFallback,
                 requestedFallback = useFallback,
-                generatorReturnedFallbackGraph = generator.LastGenerationUsedFallback,
+                generatorReturnedFallbackGraph = useFallback,
                 attemptNumber = Mathf.Max(1, attemptNumber),
                 attemptCount = Mathf.Max(1, attemptCount),
+                graphLayoutSignature = graphValidationReport != null
+                    ? graphValidationReport.layoutSignature
+                    : DungeonLayoutSignatureUtility.BuildSignature(graph, floorState),
                 entryNodeId = graph.entryHubNodeId,
                 transitUpNodeId = graph.transitUpNodeId,
                 transitDownNodeId = graph.transitDownNodeId,
@@ -1093,6 +1110,19 @@ namespace FrontierDepths.World
                 : ComposeBuildSummary(buildResult);
         }
 
+        private static GraphValidationReport CreateFallbackGraphReport(FloorState floorState, DungeonLayoutGraph graph)
+        {
+            int floorIndex = floorState != null ? Mathf.Max(1, floorState.floorIndex) : 1;
+            int seed = floorState != null ? floorState.floorSeed : 0;
+            return new GraphValidationReport
+            {
+                floorIndex = floorIndex,
+                seed = seed,
+                attemptCount = 1,
+                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, seed)
+            };
+        }
+
         private static string ComposeBuildSummary(DungeonBuildResult buildResult)
         {
             if (buildResult == null)
@@ -1101,7 +1131,7 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
         }
 
         private void SetVisibleInteractablesEnabled(bool enabled)
