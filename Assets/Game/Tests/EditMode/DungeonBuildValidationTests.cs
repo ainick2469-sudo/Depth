@@ -79,8 +79,8 @@ namespace FrontierDepths.Tests.EditMode
                 requiresTownSigil = false,
                 returnsToTown = true,
                 isRequiredReturnRoute = true,
-                position = new Vector3(20f, 1f, 1f),
-                bounds = new Bounds(new Vector3(20f, 1f, 1f), new Vector3(2f, 2f, 2f))
+                position = new Vector3(44f, 1f, 13f),
+                bounds = new Bounds(new Vector3(44f, 1f, 13f), new Vector3(2f, 2f, 2f))
             });
 
             DungeonValidationReport report = DungeonValidator.Validate(build);
@@ -173,8 +173,8 @@ namespace FrontierDepths.Tests.EditMode
             {
                 nodeId = build.transitUpNodeId,
                 category = DungeonSpawnPointCategory.EnemyMelee,
-                position = new Vector3(20f, 3.5f, -4f),
-                bounds = new Bounds(new Vector3(20f, 3.5f, -4f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(52f, 3.5f, -12f),
+                bounds = new Bounds(new Vector3(52f, 3.5f, -12f), new Vector3(2f, 6f, 2f)),
                 score = 50f
             });
 
@@ -248,7 +248,7 @@ namespace FrontierDepths.Tests.EditMode
             DungeonBuildResult build = CreateValidBuildResult();
             build.playerSpawnNodeId = build.transitUpNodeId;
             build.playerSpawnNodeKind = DungeonNodeKind.TransitUp.ToString();
-            build.playerSpawn = new Vector3(20f, 3.5f, 0f);
+            build.playerSpawn = new Vector3(52f, 3.5f, -12f);
 
             DungeonValidationReport report = DungeonValidator.Validate(build);
 
@@ -369,17 +369,17 @@ namespace FrontierDepths.Tests.EditMode
             };
 
             AddRoom(build, "entry_hub", DungeonNodeKind.EntryHub, DungeonRoomTemplateKind.SquareChamber, Vector3.zero, 2);
-            AddRoom(build, "transit_up", DungeonNodeKind.TransitUp, DungeonRoomTemplateKind.BroadRectangle, new Vector3(20f, 0f, 0f), 1);
-            AddRoom(build, "ordinary_0", DungeonNodeKind.Ordinary, DungeonRoomTemplateKind.SquareChamber, new Vector3(-20f, 0f, 0f), 3);
-            AddRoom(build, "landmark", DungeonNodeKind.Landmark, DungeonRoomTemplateKind.BroadRectangle, new Vector3(-40f, 0f, 0f), 1);
-            AddRoom(build, "secret_0", DungeonNodeKind.Secret, DungeonRoomTemplateKind.SquareChamber, new Vector3(0f, 0f, -20f), 1);
-            AddRoom(build, "transit_down", DungeonNodeKind.TransitDown, DungeonRoomTemplateKind.BroadRectangle, new Vector3(-20f, 0f, 20f), 1);
+            AddRoom(build, "transit_up", DungeonNodeKind.TransitUp, DungeonRoomTemplateKind.BroadRectangle, new Vector3(44f, 0f, 0f), 1);
+            AddRoom(build, "ordinary_0", DungeonNodeKind.Ordinary, DungeonRoomTemplateKind.SquareChamber, new Vector3(-44f, 0f, 0f), 3);
+            AddRoom(build, "landmark", DungeonNodeKind.Landmark, DungeonRoomTemplateKind.BroadRectangle, new Vector3(-88f, 0f, 0f), 1);
+            AddRoom(build, "secret_0", DungeonNodeKind.Secret, DungeonRoomTemplateKind.SquareChamber, new Vector3(0f, 0f, -44f), 1);
+            AddRoom(build, "transit_down", DungeonNodeKind.TransitDown, DungeonRoomTemplateKind.BroadRectangle, new Vector3(-44f, 0f, 44f), 1);
 
-            AddEdge(build, "entry_hub", "transit_up", Vector3.zero, new Vector3(20f, 0f, 0f));
-            AddEdge(build, "entry_hub", "ordinary_0", Vector3.zero, new Vector3(-20f, 0f, 0f));
-            AddEdge(build, "entry_hub", "secret_0", Vector3.zero, new Vector3(0f, 0f, -20f));
-            AddEdge(build, "ordinary_0", "landmark", new Vector3(-20f, 0f, 0f), new Vector3(-40f, 0f, 0f));
-            AddEdge(build, "ordinary_0", "transit_down", new Vector3(-20f, 0f, 0f), new Vector3(-20f, 0f, 20f));
+            AddEdge(build, "entry_hub", "transit_up", Vector3.zero, new Vector3(44f, 0f, 0f));
+            AddEdge(build, "entry_hub", "ordinary_0", Vector3.zero, new Vector3(-44f, 0f, 0f));
+            AddEdge(build, "entry_hub", "secret_0", Vector3.zero, new Vector3(0f, 0f, -44f));
+            AddEdge(build, "ordinary_0", "landmark", new Vector3(-44f, 0f, 0f), new Vector3(-88f, 0f, 0f));
+            AddEdge(build, "ordinary_0", "transit_down", new Vector3(-44f, 0f, 0f), new Vector3(-44f, 0f, 44f));
 
             build.interactables.Add(new DungeonInteractableBuildRecord
             {
@@ -388,8 +388,8 @@ namespace FrontierDepths.Tests.EditMode
                 requiresTownSigil = false,
                 returnsToTown = true,
                 isRequiredReturnRoute = true,
-                position = new Vector3(20f, 1f, 0f),
-                bounds = new Bounds(new Vector3(20f, 1f, 0f), new Vector3(4f, 2f, 4f))
+                position = new Vector3(44f, 1f, 12f),
+                bounds = new Bounds(new Vector3(44f, 1f, 12f), new Vector3(4f, 2f, 4f))
             });
             build.interactables.Add(new DungeonInteractableBuildRecord
             {
@@ -398,72 +398,80 @@ namespace FrontierDepths.Tests.EditMode
                 requiresTownSigil = false,
                 returnsToTown = false,
                 isRequiredReturnRoute = false,
-                position = new Vector3(-20f, 1f, 20f),
-                bounds = new Bounds(new Vector3(-20f, 1f, 20f), new Vector3(4f, 2f, 4f))
+                position = new Vector3(-44f, 1f, 56f),
+                bounds = new Bounds(new Vector3(-44f, 1f, 56f), new Vector3(4f, 2f, 4f))
             });
 
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "entry_hub",
                 category = DungeonSpawnPointCategory.PlayerSpawn,
-                position = new Vector3(0f, 3.5f, 0f),
-                bounds = new Bounds(new Vector3(0f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(0f, 3.5f, 12f),
+                bounds = new Bounds(new Vector3(0f, 3.5f, 12f), new Vector3(2f, 6f, 2f)),
                 score = 100f
+            });
+            build.spawnPoints.Add(new DungeonSpawnPointRecord
+            {
+                nodeId = "transit_up",
+                category = DungeonSpawnPointCategory.PlayerSpawn,
+                position = new Vector3(52f, 3.5f, -12f),
+                bounds = new Bounds(new Vector3(52f, 3.5f, -12f), new Vector3(2f, 6f, 2f)),
+                score = 95f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "ordinary_0",
                 category = DungeonSpawnPointCategory.EnemyMelee,
-                position = new Vector3(-20f, 3.5f, 0f),
-                bounds = new Bounds(new Vector3(-20f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(-44f, 3.5f, -12f),
+                bounds = new Bounds(new Vector3(-44f, 3.5f, -12f), new Vector3(2f, 6f, 2f)),
                 score = 90f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "landmark",
                 category = DungeonSpawnPointCategory.EnemyRanged,
-                position = new Vector3(-40f, 3.5f, 0f),
-                bounds = new Bounds(new Vector3(-40f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(-88f, 3.5f, 12f),
+                bounds = new Bounds(new Vector3(-88f, 3.5f, 12f), new Vector3(2f, 6f, 2f)),
                 score = 88f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "landmark",
                 category = DungeonSpawnPointCategory.EliteEnemy,
-                position = new Vector3(-40f, 3.5f, 2f),
-                bounds = new Bounds(new Vector3(-40f, 3.5f, 2f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(-92f, 3.5f, 12f),
+                bounds = new Bounds(new Vector3(-92f, 3.5f, 12f), new Vector3(2f, 6f, 2f)),
                 score = 86f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "secret_0",
                 category = DungeonSpawnPointCategory.Chest,
-                position = new Vector3(0f, 3.5f, -20f),
-                bounds = new Bounds(new Vector3(0f, 3.5f, -20f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(12f, 3.5f, -44f),
+                bounds = new Bounds(new Vector3(12f, 3.5f, -44f), new Vector3(2f, 6f, 2f)),
                 score = 70f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "ordinary_0",
                 category = DungeonSpawnPointCategory.Shrine,
-                position = new Vector3(-22f, 3.5f, 0f),
-                bounds = new Bounds(new Vector3(-22f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(-48f, 3.5f, -12f),
+                bounds = new Bounds(new Vector3(-48f, 3.5f, -12f), new Vector3(2f, 6f, 2f)),
                 score = 68f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "landmark",
                 category = DungeonSpawnPointCategory.Reward,
-                position = new Vector3(-42f, 3.5f, 0f),
-                bounds = new Bounds(new Vector3(-42f, 3.5f, 0f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(-84f, 3.5f, 12f),
+                bounds = new Bounds(new Vector3(-84f, 3.5f, 12f), new Vector3(2f, 6f, 2f)),
                 score = 66f
             });
             build.spawnPoints.Add(new DungeonSpawnPointRecord
             {
                 nodeId = "entry_hub",
                 category = DungeonSpawnPointCategory.Interactable,
-                position = new Vector3(0f, 3.5f, 2f),
-                bounds = new Bounds(new Vector3(0f, 3.5f, 2f), new Vector3(2f, 6f, 2f)),
+                position = new Vector3(0f, 3.5f, 16f),
+                bounds = new Bounds(new Vector3(0f, 3.5f, 16f), new Vector3(2f, 6f, 2f)),
                 score = 64f
             });
 
@@ -484,14 +492,21 @@ namespace FrontierDepths.Tests.EditMode
                 roomType = kind,
                 templateKind = template,
                 origin = roomCenter,
-                bounds = new Bounds(roomCenter + new Vector3(0f, 6f, 0f), new Vector3(12f, 12f, 12f)),
+                bounds = new Bounds(roomCenter + new Vector3(0f, 6f, 0f), new Vector3(36f, 12f, 36f)),
                 hasFloor = true,
                 wallCount = 4,
                 doorwayCount = doorwayCount,
-                footprintArea = 144f,
+                footprintArea = 1296f,
                 centerCell = Vector2Int.zero
             });
-            build.rooms[build.rooms.Count - 1].floorCells.Add(Vector2Int.zero);
+            DungeonRoomBuildRecord room = build.rooms[build.rooms.Count - 1];
+            for (int x = -3; x <= 3; x++)
+            {
+                for (int y = -3; y <= 3; y++)
+                {
+                    room.floorCells.Add(new Vector2Int(x, y));
+                }
+            }
         }
 
         private static void AddEdge(DungeonBuildResult build, string from, string to, Vector3 fromCenter, Vector3 toCenter)

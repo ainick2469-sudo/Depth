@@ -4,7 +4,8 @@
   "references": [
     "DungeonCrawler.Core",
     "DungeonCrawler.World",
-    "DungeonCrawler.Progression"
+    "DungeonCrawler.Progression",
+    "DungeonCrawler.Combat"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

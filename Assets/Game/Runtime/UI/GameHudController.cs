@@ -204,6 +204,15 @@ namespace FrontierDepths.UI
 
             EnsurePromptBackground();
             EnsureCrosshairVisuals();
+            EnsureWeaponHudView();
+        }
+
+        private void EnsureWeaponHudView()
+        {
+            if (GetComponent<WeaponHudView>() == null)
+            {
+                gameObject.AddComponent<WeaponHudView>();
+            }
         }
 
         private void EnsurePromptBackground()

@@ -2,7 +2,8 @@
   "name": "DungeonCrawler.World",
   "rootNamespace": "FrontierDepths",
   "references": [
-    "DungeonCrawler.Core"
+    "DungeonCrawler.Core",
+    "DungeonCrawler.Combat"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

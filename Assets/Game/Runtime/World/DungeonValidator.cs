@@ -80,6 +80,8 @@ namespace FrontierDepths.World
             builder.Append(buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged));
             builder.Append(" E");
             builder.Append(buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy));
+            builder.Append(" T");
+            builder.Append(buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy));
             builder.Append(" C");
             builder.Append(buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest));
             builder.Append(" S");
@@ -542,6 +544,19 @@ namespace FrontierDepths.World
                         foundCombatSpawn = true;
                     }
                 }
+
+                if (spawnPoint.category == DungeonSpawnPointCategory.TargetDummy)
+                {
+                    if (room.roomType != DungeonNodeKind.Ordinary && room.roomType != DungeonNodeKind.Landmark)
+                    {
+                        report.AddFailure(buildResult, spawnPoint.nodeId, room.roomType, room.templateKind, $"Target dummy spawn point exists in non-combat room {room.roomType}.");
+                    }
+
+                    if (Vector3.Distance(buildResult.playerSpawn, spawnPoint.position) < GetMinimumSpawnDistance(spawnPoint.category))
+                    {
+                        report.AddFailure(buildResult, spawnPoint.nodeId, room.roomType, room.templateKind, "Target dummy spawn point is too close to player spawn.");
+                    }
+                }
             }
 
             if (!foundCombatSpawn)
@@ -699,6 +714,7 @@ namespace FrontierDepths.World
                 DungeonSpawnPointCategory.EnemyMelee => 18f,
                 DungeonSpawnPointCategory.EnemyRanged => 30f,
                 DungeonSpawnPointCategory.EliteEnemy => 24f,
+                DungeonSpawnPointCategory.TargetDummy => 12f,
                 _ => 0f
             };
         }

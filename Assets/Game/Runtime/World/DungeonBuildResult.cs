@@ -225,6 +225,7 @@ namespace FrontierDepths.World
         EnemyMelee,
         EnemyRanged,
         EliteEnemy,
+        TargetDummy,
         Chest,
         Shrine,
         Reward,

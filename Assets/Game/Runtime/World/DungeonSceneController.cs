@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FrontierDepths.Combat;
 using FrontierDepths.Core;
 using UnityEngine;
 
@@ -29,11 +30,13 @@ namespace FrontierDepths.World
         private const float EnemyMeleeSpawnMinimumDistance = 18f;
         private const float EnemyRangedSpawnMinimumDistance = 30f;
         private const float EliteEnemySpawnMinimumDistance = 24f;
+        private const float TargetDummySpawnMinimumDistance = 12f;
         private const int MaxCategorySpawnPointsPerRoom = 4;
         private const float DefaultRoomSpacing = 84f;
         private const float MinimumRecommendedRoomSpacing = 78f;
         private const float MaximumRecommendedRoomSpacing = 86f;
         private const float MinimumRoomGap = 18f;
+        private const string CombatTestStationName = "CombatTestStation";
 
         private sealed class BoundarySpan
         {
@@ -76,6 +79,7 @@ namespace FrontierDepths.World
 
         [SerializeField] private Transform runtimeRoot;
         [SerializeField] private float roomSpacing = DefaultRoomSpacing;
+        [SerializeField] private bool enableCombatTestStation = true;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private DungeonBuildResult activeBuildResult;
@@ -245,9 +249,11 @@ namespace FrontierDepths.World
             FirstPersonController player = FindAnyObjectByType<FirstPersonController>();
             if (player != null)
             {
+                EnsurePlayerWeaponController(player);
                 player.WarpTo(buildResult.playerSpawn);
             }
 
+            SpawnCombatTestStation(buildResult);
             RefreshStatusMessage();
         }
 
@@ -445,6 +451,7 @@ namespace FrontierDepths.World
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyMelee, 3, EnemyMeleeSpawnMinimumDistance, true, true, true, playerSpawn);
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyRanged, 2, EnemyRangedSpawnMinimumDistance, true, true, true, playerSpawn);
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.EliteEnemy, 1, EliteEnemySpawnMinimumDistance, true, true, true, playerSpawn);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.TargetDummy, 4, TargetDummySpawnMinimumDistance, true, true, true, playerSpawn);
             }
         }
 
@@ -516,8 +523,170 @@ namespace FrontierDepths.World
                 DungeonSpawnPointCategory.EnemyMelee => playerDistance - distanceFromCenter * 0.4f,
                 DungeonSpawnPointCategory.EnemyRanged => playerDistance * 1.2f - distanceFromCenter * 0.2f,
                 DungeonSpawnPointCategory.EliteEnemy => playerDistance * 1.1f - distanceFromCenter * 0.3f,
+                DungeonSpawnPointCategory.TargetDummy => playerDistance - distanceFromCenter * 0.1f,
                 _ => 0f
             };
+        }
+
+        private void SpawnCombatTestStation(DungeonBuildResult buildResult)
+        {
+            if (!enableCombatTestStation ||
+                buildResult == null ||
+                buildResult.floorIndex != 1 ||
+                buildResult.isEmergencyDebugBuild ||
+                runtimeRoot == null)
+            {
+                return;
+            }
+
+            if (runtimeRoot.Find(CombatTestStationName) != null)
+            {
+                return;
+            }
+
+            List<DungeonSpawnPointRecord> stationSpawns = SelectCombatTestStationSpawns(buildResult, 3);
+            if (stationSpawns.Count < 3)
+            {
+                Debug.LogWarning($"Combat test station skipped on floor {buildResult.floorIndex}: only {stationSpawns.Count} valid target dummy spawn points were available.");
+                return;
+            }
+
+            GameObject stationRoot = new GameObject(CombatTestStationName);
+            stationRoot.transform.SetParent(runtimeRoot, false);
+            CreateTargetDummy(stationRoot.transform, stationSpawns[0].position, TargetDummyKind.Standard);
+            CreateTargetDummy(stationRoot.transform, stationSpawns[1].position, TargetDummyKind.Armored);
+            CreateTargetDummy(stationRoot.transform, stationSpawns[2].position, TargetDummyKind.StatusTest);
+        }
+
+        internal static List<DungeonSpawnPointRecord> SelectCombatTestStationSpawns(DungeonBuildResult buildResult, int requestedCount)
+        {
+            List<DungeonSpawnPointRecord> selected = new List<DungeonSpawnPointRecord>();
+            if (buildResult == null || buildResult.floorIndex != 1 || requestedCount <= 0)
+            {
+                return selected;
+            }
+
+            if (TryCollectStationSpawnsForRoom(buildResult, buildResult.playerSpawnNodeId, requestedCount, selected))
+            {
+                return selected;
+            }
+
+            List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = buildResult.rooms[i];
+                if (room.roomType == DungeonNodeKind.Ordinary || room.roomType == DungeonNodeKind.Landmark)
+                {
+                    rooms.Add(room);
+                }
+            }
+
+            rooms.Sort((left, right) =>
+                Vector3.Distance(left.bounds.center, buildResult.playerSpawn)
+                    .CompareTo(Vector3.Distance(right.bounds.center, buildResult.playerSpawn)));
+
+            for (int i = 0; i < rooms.Count; i++)
+            {
+                selected.Clear();
+                if (TryCollectStationSpawnsForRoom(buildResult, rooms[i].nodeId, requestedCount, selected))
+                {
+                    return selected;
+                }
+            }
+
+            selected.Clear();
+            List<DungeonSpawnPointRecord> fallbackSpawns = new List<DungeonSpawnPointRecord>();
+            for (int i = 0; i < buildResult.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawnPoint = buildResult.spawnPoints[i];
+                if (spawnPoint.category != DungeonSpawnPointCategory.TargetDummy ||
+                    Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < TargetDummySpawnMinimumDistance)
+                {
+                    continue;
+                }
+
+                fallbackSpawns.Add(spawnPoint);
+            }
+
+            fallbackSpawns.Sort((left, right) =>
+            {
+                int distanceCompare = Vector3.Distance(left.position, buildResult.playerSpawn)
+                    .CompareTo(Vector3.Distance(right.position, buildResult.playerSpawn));
+                return distanceCompare != 0 ? distanceCompare : right.score.CompareTo(left.score);
+            });
+
+            int count = Mathf.Min(requestedCount, fallbackSpawns.Count);
+            for (int i = 0; i < count; i++)
+            {
+                selected.Add(fallbackSpawns[i]);
+            }
+
+            return selected;
+        }
+
+        private static bool TryCollectStationSpawnsForRoom(
+            DungeonBuildResult buildResult,
+            string roomId,
+            int requestedCount,
+            List<DungeonSpawnPointRecord> selected)
+        {
+            if (buildResult == null || selected == null || string.IsNullOrWhiteSpace(roomId))
+            {
+                return false;
+            }
+
+            selected.Clear();
+            List<DungeonSpawnPointRecord> roomSpawns = buildResult.GetSpawnPoints(roomId, DungeonSpawnPointCategory.TargetDummy);
+            for (int i = 0; i < roomSpawns.Count; i++)
+            {
+                DungeonSpawnPointRecord spawnPoint = roomSpawns[i];
+                if (Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < TargetDummySpawnMinimumDistance)
+                {
+                    continue;
+                }
+
+                selected.Add(spawnPoint);
+                if (selected.Count >= requestedCount)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void CreateTargetDummy(Transform parent, Vector3 position, TargetDummyKind kind)
+        {
+            GameObject dummy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            dummy.name = $"{kind}Dummy";
+            dummy.transform.SetParent(parent, true);
+            dummy.transform.position = position;
+            dummy.transform.localScale = new Vector3(1.4f, 1.7f, 1.4f);
+
+            TargetDummyHealth health = dummy.AddComponent<TargetDummyHealth>();
+            health.Configure(kind);
+
+            GameObject labelObject = new GameObject("Label", typeof(TextMesh));
+            labelObject.transform.SetParent(dummy.transform, false);
+            labelObject.transform.localPosition = new Vector3(0f, 1.75f, 0f);
+            labelObject.transform.localRotation = Quaternion.Euler(65f, 0f, 0f);
+            TextMesh label = labelObject.GetComponent<TextMesh>();
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.characterSize = 0.22f;
+            label.fontSize = 42;
+            label.color = Color.white;
+            health.SetStatusText(label);
+        }
+
+        private static void EnsurePlayerWeaponController(FirstPersonController player)
+        {
+            if (player == null || player.GetComponent<PlayerWeaponController>() != null)
+            {
+                return;
+            }
+
+            player.gameObject.AddComponent<PlayerWeaponController>();
         }
 
         private bool IsSpawnPointValid(
@@ -1131,7 +1300,7 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
         }
 
         private void SetVisibleInteractablesEnabled(bool enabled)
@@ -1409,6 +1578,7 @@ namespace FrontierDepths.World
                 DungeonSpawnPointCategory.EnemyMelee => new Color(1f, 0.35f, 0.35f),
                 DungeonSpawnPointCategory.EnemyRanged => new Color(1f, 0.8f, 0.25f),
                 DungeonSpawnPointCategory.EliteEnemy => new Color(1f, 0.2f, 0.85f),
+                DungeonSpawnPointCategory.TargetDummy => new Color(0.4f, 1f, 0.75f),
                 DungeonSpawnPointCategory.Chest => new Color(0.95f, 0.65f, 0.15f),
                 DungeonSpawnPointCategory.Shrine => new Color(0.6f, 0.95f, 0.35f),
                 DungeonSpawnPointCategory.Reward => new Color(0.45f, 0.9f, 0.45f),

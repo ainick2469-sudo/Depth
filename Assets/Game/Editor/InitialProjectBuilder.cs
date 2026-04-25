@@ -178,6 +178,19 @@ namespace FrontierDepths.Editor
                     asset.weaponId = "weapon.frontier_revolver";
                     asset.displayName = "Frontier Revolver";
                     asset.description = "Starter sidearm for the first descent.";
+                    asset.weaponArchetype = WeaponArchetype.Revolver;
+                    asset.baseDamage = 25f;
+                    asset.fireRate = 2.857f;
+                    asset.magazineSize = 6;
+                    asset.reloadDuration = 1.4f;
+                    asset.maxRange = 100f;
+                    asset.damageType = DamageType.Physical;
+                    asset.deliveryType = DamageDeliveryType.Raycast;
+                    asset.critChance = 0f;
+                    asset.critMultiplier = 2f;
+                    asset.knockbackForce = 0f;
+                    asset.statusEffectId = string.Empty;
+                    asset.statusChance = 0f;
                     return asset;
                 });
 
@@ -400,6 +413,8 @@ namespace FrontierDepths.Editor
             SerializedObject controllerSo = new SerializedObject(controller);
             controllerSo.FindProperty("playerCamera").objectReferenceValue = camera;
             controllerSo.ApplyModifiedPropertiesWithoutUndo();
+
+            player.AddComponent<PlayerWeaponController>();
         }
 
         private static void CreateHudCanvas()
@@ -470,6 +485,41 @@ namespace FrontierDepths.Editor
             panelText.enabled = false;
             panelText.raycastTarget = false;
 
+            Text weaponName = CreateText("WeaponName", canvasObject.transform, font, 18, TextAnchor.LowerRight);
+            RectTransform weaponNameRect = weaponName.rectTransform;
+            weaponNameRect.anchorMin = weaponNameRect.anchorMax = new Vector2(1f, 0f);
+            weaponNameRect.pivot = new Vector2(1f, 0f);
+            weaponNameRect.sizeDelta = new Vector2(280f, 30f);
+            weaponNameRect.anchoredPosition = new Vector2(-32f, 88f);
+            weaponName.enabled = false;
+            weaponName.raycastTarget = false;
+
+            Text weaponAmmo = CreateText("WeaponAmmo", canvasObject.transform, font, 34, TextAnchor.LowerRight);
+            RectTransform weaponAmmoRect = weaponAmmo.rectTransform;
+            weaponAmmoRect.anchorMin = weaponAmmoRect.anchorMax = new Vector2(1f, 0f);
+            weaponAmmoRect.pivot = new Vector2(1f, 0f);
+            weaponAmmoRect.sizeDelta = new Vector2(220f, 48f);
+            weaponAmmoRect.anchoredPosition = new Vector2(-32f, 36f);
+            weaponAmmo.enabled = false;
+            weaponAmmo.raycastTarget = false;
+
+            Text weaponReload = CreateText("WeaponReload", canvasObject.transform, font, 22, TextAnchor.LowerRight);
+            RectTransform weaponReloadRect = weaponReload.rectTransform;
+            weaponReloadRect.anchorMin = weaponReloadRect.anchorMax = new Vector2(1f, 0f);
+            weaponReloadRect.pivot = new Vector2(1f, 0f);
+            weaponReloadRect.sizeDelta = new Vector2(220f, 36f);
+            weaponReloadRect.anchoredPosition = new Vector2(-32f, 124f);
+            weaponReload.enabled = false;
+            weaponReload.raycastTarget = false;
+
+            Image hitMarker = CreateImage("WeaponHitMarker", canvasObject.transform, new Vector2(22f, 22f), new Color(1f, 0.95f, 0.62f, 0.95f));
+            RectTransform hitMarkerRect = hitMarker.rectTransform;
+            hitMarkerRect.anchorMin = hitMarkerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            hitMarkerRect.pivot = new Vector2(0.5f, 0.5f);
+            hitMarkerRect.anchoredPosition = Vector2.zero;
+            hitMarker.enabled = false;
+            hitMarker.raycastTarget = false;
+
             GameHudController hud = canvasObject.AddComponent<GameHudController>();
             SerializedObject hudSo = new SerializedObject(hud);
             hudSo.FindProperty("promptText").objectReferenceValue = prompt;
@@ -480,6 +530,14 @@ namespace FrontierDepths.Editor
             hudSo.FindProperty("crosshairImage").objectReferenceValue = crosshair;
             hudSo.FindProperty("crosshairCoreImage").objectReferenceValue = crosshairCore;
             hudSo.ApplyModifiedPropertiesWithoutUndo();
+
+            WeaponHudView weaponHud = canvasObject.AddComponent<WeaponHudView>();
+            SerializedObject weaponHudSo = new SerializedObject(weaponHud);
+            weaponHudSo.FindProperty("weaponNameText").objectReferenceValue = weaponName;
+            weaponHudSo.FindProperty("ammoText").objectReferenceValue = weaponAmmo;
+            weaponHudSo.FindProperty("reloadText").objectReferenceValue = weaponReload;
+            weaponHudSo.FindProperty("hitMarkerImage").objectReferenceValue = hitMarker;
+            weaponHudSo.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void CreateInteractableStation(string name, Vector3 position, string shopId)
