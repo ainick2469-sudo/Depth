@@ -90,12 +90,7 @@ namespace FrontierDepths.Combat
         private void Update()
         {
             float currentTime = Time.time;
-            if (weaponState != null && weaponState.Tick(currentTime))
-            {
-                PlayReloadFeedback(false);
-                ReloadFinished?.Invoke(this);
-                PublishWeaponEvent(GameplayEventType.ReloadFinished);
-            }
+            TickReloadCompletion(currentTime);
 
             UpdateMuzzleFlash(currentTime);
             UpdateImpactMarkers(currentTime);
@@ -106,20 +101,100 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            if (weaponState != null && weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
+            HandleWeaponInputFrame(
+                currentTime,
+                Input.GetMouseButton(0),
+                Input.GetMouseButtonDown(0),
+                Input.GetKeyDown(KeyCode.R));
+        }
+
+        internal WeaponInputFrameResult HandleWeaponInputFrame(
+            float currentTime,
+            bool wantsToFire,
+            bool firePressedThisFrame,
+            bool reloadPressedThisFrame)
+        {
+            EnsureRuntimeReady();
+
+            WeaponInputFrameResult result = new WeaponInputFrameResult();
+            if (IsGameplayInputBlocked())
+            {
+                result.inputBlocked = true;
+                return result;
+            }
+
+            if (weaponState == null)
+            {
+                weaponState = new WeaponRuntimeState(GetMagazineSize());
+            }
+
+            if (weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
             {
                 BeginReloadFeedback();
+                result.reloadStarted = true;
+                result.autoReloadStarted = true;
             }
 
-            if (Input.GetKeyDown(KeyCode.R))
+            if (reloadPressedThisFrame)
             {
-                TryStartReload(currentTime);
+                result.reloadRequested = true;
+                result.reloadStarted |= TryStartReload(currentTime);
+                return result;
             }
 
-            if (Input.GetMouseButtonDown(0))
+            if (!ShouldAttemptFireInput(wantsToFire, firePressedThisFrame))
             {
-                TryFire(currentTime);
+                return result;
             }
+
+            result.fireAttempted = true;
+            result.fired = TryFire(currentTime);
+            return result;
+        }
+
+        internal bool ShouldAttemptFireInput(bool wantsToFire, bool firePressedThisFrame)
+        {
+            EnsureRuntimeReady();
+            if (!wantsToFire)
+            {
+                return false;
+            }
+
+            if (weaponState == null)
+            {
+                return true;
+            }
+
+            if (weaponState.IsReloading)
+            {
+                return false;
+            }
+
+            if (weaponState.CurrentAmmo > 0)
+            {
+                return true;
+            }
+
+            if (weaponState.IsAutoReloadQueued)
+            {
+                return false;
+            }
+
+            return firePressedThisFrame;
+        }
+
+        internal bool TickReloadCompletion(float currentTime)
+        {
+            EnsureRuntimeReady();
+            if (weaponState == null || !weaponState.Tick(currentTime))
+            {
+                return false;
+            }
+
+            PlayReloadFeedback(false);
+            ReloadFinished?.Invoke(this);
+            PublishWeaponEvent(GameplayEventType.ReloadFinished);
+            return true;
         }
 
         public bool TryFire(float currentTime)

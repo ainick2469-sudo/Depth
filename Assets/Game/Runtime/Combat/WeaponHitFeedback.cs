@@ -47,6 +47,16 @@ namespace FrontierDepths.Combat
         public bool HasHit => kind != WeaponShotHitKind.None && hitCollider != null;
     }
 
+    internal struct WeaponInputFrameResult
+    {
+        public bool inputBlocked;
+        public bool reloadRequested;
+        public bool reloadStarted;
+        public bool autoReloadStarted;
+        public bool fireAttempted;
+        public bool fired;
+    }
+
     [Serializable]
     public struct WeaponHitFeedback
     {

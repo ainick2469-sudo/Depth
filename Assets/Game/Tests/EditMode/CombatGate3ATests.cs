@@ -567,6 +567,191 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void HeldFire_FiresRepeatedlyOnlyAfterCooldown()
+        {
+            PlayerWeaponController weapon = CreateWeaponController(out GameObject player);
+            try
+            {
+                int firedCount = 0;
+                weapon.WeaponFired += _ => firedCount++;
+
+                WeaponInputFrameResult first = weapon.HandleWeaponInputFrame(0f, true, true, false);
+                WeaponInputFrameResult tooSoon = weapon.HandleWeaponInputFrame(0.1f, true, false, false);
+                WeaponInputFrameResult afterCooldown = weapon.HandleWeaponInputFrame(0.36f, true, false, false);
+
+                Assert.IsTrue(first.fireAttempted);
+                Assert.IsTrue(first.fired);
+                Assert.IsTrue(tooSoon.fireAttempted);
+                Assert.IsFalse(tooSoon.fired);
+                Assert.IsTrue(afterCooldown.fired);
+                Assert.AreEqual(2, firedCount);
+                Assert.AreEqual(4, weapon.CurrentAmmo);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void HeldFire_StopsDuringReloadAndResumesAfterReloadCompletes()
+        {
+            PlayerWeaponController weapon = CreateWeaponController(out GameObject player);
+            try
+            {
+                int firedCount = 0;
+                weapon.WeaponFired += _ => firedCount++;
+
+                Assert.IsTrue(weapon.HandleWeaponInputFrame(0f, true, true, false).fired);
+                WeaponInputFrameResult reload = weapon.HandleWeaponInputFrame(0.1f, true, false, true);
+                WeaponInputFrameResult duringReload = weapon.HandleWeaponInputFrame(0.5f, true, false, false);
+                bool reloadFinished = weapon.TickReloadCompletion(1.51f);
+                WeaponInputFrameResult afterReload = weapon.HandleWeaponInputFrame(1.51f, true, false, false);
+
+                Assert.IsTrue(reload.reloadRequested);
+                Assert.IsTrue(reload.reloadStarted);
+                Assert.IsFalse(reload.fired);
+                Assert.IsFalse(duringReload.fireAttempted);
+                Assert.IsTrue(reloadFinished);
+                Assert.IsTrue(afterReload.fired);
+                Assert.AreEqual(2, firedCount);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void HeldFire_ReleasedDuringReloadDoesNotResumeUntilHeldAgain()
+        {
+            PlayerWeaponController weapon = CreateWeaponController(out GameObject player);
+            try
+            {
+                int firedCount = 0;
+                weapon.WeaponFired += _ => firedCount++;
+
+                Assert.IsTrue(weapon.HandleWeaponInputFrame(0f, true, true, false).fired);
+                Assert.IsTrue(weapon.HandleWeaponInputFrame(0.1f, false, false, true).reloadStarted);
+                Assert.IsTrue(weapon.TickReloadCompletion(1.51f));
+                WeaponInputFrameResult releasedFrame = weapon.HandleWeaponInputFrame(1.51f, false, false, false);
+                WeaponInputFrameResult heldAgain = weapon.HandleWeaponInputFrame(1.86f, true, true, false);
+
+                Assert.IsFalse(releasedFrame.fireAttempted);
+                Assert.IsFalse(releasedFrame.fired);
+                Assert.IsTrue(heldAgain.fired);
+                Assert.AreEqual(2, firedCount);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void HeldFire_AutoReloadsAtEmptyAndResumesWhenHeld()
+        {
+            PlayerWeaponController weapon = CreateWeaponController(out GameObject player);
+            try
+            {
+                int firedCount = 0;
+                int reloadStarted = 0;
+                int dryFired = 0;
+                weapon.WeaponFired += _ => firedCount++;
+                weapon.ReloadStarted += _ => reloadStarted++;
+                weapon.DryFired += _ => dryFired++;
+
+                for (int i = 0; i < 6; i++)
+                {
+                    Assert.IsTrue(weapon.HandleWeaponInputFrame(i * 0.36f, true, i == 0, false).fired);
+                }
+
+                Assert.AreEqual(0, weapon.CurrentAmmo);
+                WeaponInputFrameResult pendingFrame = weapon.HandleWeaponInputFrame(1.85f, true, false, false);
+                WeaponInputFrameResult reloadFrame = weapon.HandleWeaponInputFrame(1.93f, true, false, false);
+                WeaponInputFrameResult duringReload = weapon.HandleWeaponInputFrame(2.1f, true, false, false);
+                Assert.IsTrue(weapon.TickReloadCompletion(3.34f));
+                WeaponInputFrameResult afterReload = weapon.HandleWeaponInputFrame(3.34f, true, false, false);
+
+                Assert.IsFalse(pendingFrame.fireAttempted);
+                Assert.IsFalse(pendingFrame.reloadStarted);
+                Assert.IsTrue(reloadFrame.autoReloadStarted);
+                Assert.IsTrue(reloadFrame.reloadStarted);
+                Assert.IsFalse(duringReload.fireAttempted);
+                Assert.IsTrue(afterReload.fired);
+                Assert.AreEqual(7, firedCount);
+                Assert.AreEqual(1, reloadStarted);
+                Assert.AreEqual(0, dryFired);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void ManualReloadWhileAutoReloadPendingStartsImmediately()
+        {
+            PlayerWeaponController weapon = CreateWeaponController(out GameObject player);
+            try
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    Assert.IsTrue(weapon.HandleWeaponInputFrame(i * 0.36f, true, i == 0, false).fired);
+                }
+
+                WeaponInputFrameResult manualReload = weapon.HandleWeaponInputFrame(1.85f, true, false, true);
+
+                Assert.IsTrue(manualReload.reloadRequested);
+                Assert.IsTrue(manualReload.reloadStarted);
+                Assert.IsFalse(manualReload.autoReloadStarted);
+                Assert.IsFalse(manualReload.fired);
+                Assert.IsTrue(weapon.IsReloading);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void HeldFire_BlockedByUiCaptureDoesNotConsumeAmmoOrFire()
+        {
+            GameObject player = new GameObject("BlockedHeldWeaponPlayer");
+            GameObject cameraObject = new GameObject("BlockedHeldWeaponCamera", typeof(Camera));
+            try
+            {
+                player.AddComponent<CharacterController>();
+                player.AddComponent<PlayerInteractor>();
+                cameraObject.transform.SetParent(player.transform, false);
+                FirstPersonController controller = player.AddComponent<FirstPersonController>();
+                PlayerWeaponController weapon = player.AddComponent<PlayerWeaponController>();
+                controller.SetUiCaptured(true);
+                int initialAmmo = weapon.CurrentAmmo;
+                int fireEvents = 0;
+                weapon.WeaponFired += _ => fireEvents++;
+
+                WeaponInputFrameResult result = weapon.HandleWeaponInputFrame(0f, true, true, false);
+
+                Assert.IsTrue(result.inputBlocked);
+                Assert.IsFalse(result.fireAttempted);
+                Assert.IsFalse(result.fired);
+                Assert.AreEqual(initialAmmo, weapon.CurrentAmmo);
+                Assert.AreEqual(0, fireEvents);
+            }
+            finally
+            {
+                DestroyRuntimeFeedbackRoot();
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void CombatTestStation_RejectsBlockedLineOfSightCandidate()
         {
             DungeonBuildResult build = CreateLineOfSightBuildResult();
@@ -590,6 +775,16 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Object.DestroyImmediate(blocker);
             }
+        }
+
+        private static PlayerWeaponController CreateWeaponController(out GameObject player)
+        {
+            player = new GameObject("TestWeaponPlayer");
+            GameObject cameraObject = new GameObject("TestWeaponCamera", typeof(Camera));
+            cameraObject.transform.SetParent(player.transform, false);
+            cameraObject.transform.localPosition = Vector3.zero;
+            cameraObject.transform.localRotation = Quaternion.identity;
+            return player.AddComponent<PlayerWeaponController>();
         }
 
         private static DamageInfo CreateDamageInfo(float amount, DamageType damageType)
