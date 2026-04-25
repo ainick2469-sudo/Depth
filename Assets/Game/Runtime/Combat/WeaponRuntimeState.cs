@@ -5,6 +5,8 @@ namespace FrontierDepths.Combat
         private float nextFireTime;
         private float reloadStartTime;
         private float reloadCompleteTime;
+        private bool autoReloadQueued;
+        private float autoReloadReadyTime;
 
         public WeaponRuntimeState(int magazineSize)
         {
@@ -17,6 +19,8 @@ namespace FrontierDepths.Combat
         public bool IsReloading { get; private set; }
         public float ReloadStartTime => reloadStartTime;
         public float ReloadCompleteTime => reloadCompleteTime;
+        public bool IsAutoReloadQueued => autoReloadQueued;
+        public float AutoReloadReadyTime => autoReloadReadyTime;
 
         public bool CanFire(float currentTime)
         {
@@ -42,10 +46,40 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            ClearPendingAutoReload();
             IsReloading = true;
             reloadStartTime = currentTime;
             reloadCompleteTime = currentTime + reloadDuration;
             return true;
+        }
+
+        public bool TryQueueAutoReload(float currentTime, float delay)
+        {
+            if (IsReloading || CurrentAmmo >= MagazineSize || autoReloadQueued)
+            {
+                return false;
+            }
+
+            autoReloadQueued = true;
+            autoReloadReadyTime = currentTime + UnityEngine.Mathf.Max(0f, delay);
+            return true;
+        }
+
+        public bool TryStartQueuedAutoReload(float currentTime, float reloadDuration)
+        {
+            if (!autoReloadQueued || currentTime < autoReloadReadyTime)
+            {
+                return false;
+            }
+
+            ClearPendingAutoReload();
+            return TryStartReload(currentTime, reloadDuration);
+        }
+
+        public void ClearPendingAutoReload()
+        {
+            autoReloadQueued = false;
+            autoReloadReadyTime = 0f;
         }
 
         public bool Tick(float currentTime)
@@ -59,6 +93,7 @@ namespace FrontierDepths.Combat
             CurrentAmmo = MagazineSize;
             reloadStartTime = 0f;
             reloadCompleteTime = 0f;
+            ClearPendingAutoReload();
             return true;
         }
 
@@ -86,6 +121,7 @@ namespace FrontierDepths.Combat
             nextFireTime = 0f;
             reloadStartTime = 0f;
             reloadCompleteTime = 0f;
+            ClearPendingAutoReload();
         }
     }
 }

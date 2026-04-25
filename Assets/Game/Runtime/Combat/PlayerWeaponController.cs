@@ -18,6 +18,7 @@ namespace FrontierDepths.Combat
         private const int DamageNumberPoolSize = 12;
         private const int TracerPoolSize = 8;
         private const float ShotDebugDrawDuration = 0.5f;
+        private const string RuntimeFeedbackRootName = "RuntimeFeedbackRoot";
 
         [SerializeField] private Camera weaponCamera;
         [SerializeField] private WeaponDefinition weaponDefinition;
@@ -25,11 +26,13 @@ namespace FrontierDepths.Combat
         [SerializeField] private float muzzleFlashDuration = 0.045f;
         [SerializeField] private float impactMarkerDuration = 1.25f;
         [SerializeField] private float damageNumberDuration = 0.75f;
-        [SerializeField] private float tracerDuration = 0.08f;
+        [SerializeField] private float tracerDuration = 0.05f;
         [SerializeField] private float weaponVolume = 0.28f;
         [SerializeField] private float recoilPitchKick = 1.2f;
         [SerializeField] private float recoilYawKick = 0.35f;
         [SerializeField] private float recoilRecoverySeconds = 0.15f;
+        [SerializeField] private bool autoReloadOnEmpty = true;
+        [SerializeField] private float autoReloadDelay = 0.12f;
         [SerializeField] private bool enableShotDebugLogging = true;
         [SerializeField] private bool enableShotDebugDraw = true;
 
@@ -49,6 +52,7 @@ namespace FrontierDepths.Combat
         private int nextImpactMarker;
         private int nextDamageNumber;
         private int nextTracer;
+        private bool runtimeReady;
 
         public static int DefaultWeaponRaycastMask => ~(1 << 2);
 
@@ -69,16 +73,7 @@ namespace FrontierDepths.Combat
 
         private void Awake()
         {
-            playerController = GetComponent<FirstPersonController>();
-            ResolveWeaponCamera();
-            ResolveWeaponDefinition();
-            weaponState = new WeaponRuntimeState(GetMagazineSize());
-            EnsureAudio();
-            EnsureWeaponBlockout();
-            EnsureMuzzleFlash();
-            EnsureImpactPool();
-            EnsureDamageNumberPool();
-            EnsureTracerPool();
+            EnsureRuntimeReady();
         }
 
         private void OnEnable()
@@ -89,6 +84,7 @@ namespace FrontierDepths.Combat
         private void OnDisable()
         {
             SceneManager.sceneLoaded -= HandleSceneLoaded;
+            HideAllTracers();
         }
 
         private void Update()
@@ -106,7 +102,13 @@ namespace FrontierDepths.Combat
 
             if (!IsInDungeonRuntime() || playerController == null || playerController.IsUiCaptured)
             {
+                HideAllTracers();
                 return;
+            }
+
+            if (weaponState != null && weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
+            {
+                BeginReloadFeedback();
             }
 
             if (Input.GetKeyDown(KeyCode.R))
@@ -122,6 +124,12 @@ namespace FrontierDepths.Combat
 
         public bool TryFire(float currentTime)
         {
+            EnsureRuntimeReady();
+            if (IsGameplayInputBlocked())
+            {
+                return false;
+            }
+
             if (weaponState == null)
             {
                 weaponState = new WeaponRuntimeState(GetMagazineSize());
@@ -131,24 +139,53 @@ namespace FrontierDepths.Combat
             {
                 if (!weaponState.IsReloading && weaponState.CurrentAmmo <= 0)
                 {
-                    PlayDryFireFeedback();
-                    DryFired?.Invoke(this);
-                    PublishWeaponEvent(GameplayEventType.DryFire);
+                    bool alreadyQueued = weaponState.IsAutoReloadQueued;
+                    if (!alreadyQueued)
+                    {
+                        PlayDryFireFeedback();
+                        DryFired?.Invoke(this);
+                        PublishWeaponEvent(GameplayEventType.DryFire);
+                        QueueAutoReload(currentTime, 0f);
+                    }
+
+                    if (alreadyQueued)
+                    {
+                        weaponState.ClearPendingAutoReload();
+                        if (weaponState.TryStartReload(currentTime, GetReloadDuration()))
+                        {
+                            BeginReloadFeedback();
+                        }
+                    }
+                    else if (weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
+                    {
+                        BeginReloadFeedback();
+                    }
                 }
 
                 return false;
             }
 
-            PlayFireFeedback(currentTime);
+            WeaponShotResolution resolution = ResolveShot();
+            ApplyShotResolution(resolution);
             WeaponFired?.Invoke(this);
             PublishWeaponEvent(GameplayEventType.WeaponFired, amount: GetBaseDamage());
-            FireRaycast();
+            PlayFireFeedback(currentTime);
+            if (weaponState.CurrentAmmo <= 0)
+            {
+                QueueAutoReload(currentTime, autoReloadDelay);
+            }
 
             return true;
         }
 
         public bool TryStartReload(float currentTime)
         {
+            EnsureRuntimeReady();
+            if (IsGameplayInputBlocked())
+            {
+                return false;
+            }
+
             if (weaponState == null)
             {
                 weaponState = new WeaponRuntimeState(GetMagazineSize());
@@ -159,9 +196,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            PlayReloadFeedback(true);
-            ReloadStarted?.Invoke(this);
-            PublishWeaponEvent(GameplayEventType.ReloadStarted);
+            BeginReloadFeedback();
             return true;
         }
 
@@ -225,34 +260,87 @@ namespace FrontierDepths.Combat
             return false;
         }
 
-        private void FireRaycast()
+        internal WeaponShotResolution ResolveShot()
         {
             ResolveWeaponCamera();
             if (weaponCamera == null)
             {
                 LogShotDebug("camera=null; no raycast fired.");
-                return;
+                return default;
             }
 
             Ray ray = weaponCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
             float range = GetRange();
             RaycastHit[] hits = Physics.RaycastAll(ray, range, weaponRaycastMask, QueryTriggerInteraction.Ignore);
+            Vector3 muzzleStart = GetMuzzleWorldPosition(ray.origin);
+            WeaponShotResolution resolution = ResolveShot(ray, range, hits, transform, muzzleStart, weaponRaycastMask);
+            LogShotDebug(
+                $"camera={weaponCamera.name}; aimOrigin={ray.origin}; aimDirection={ray.direction}; muzzle={muzzleStart}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={resolution.raycastHitCount}; ignored={resolution.ignoredHitCount}; target={resolution.cameraTargetPoint}; tracerStart={resolution.muzzleStart}; tracerEnd={resolution.finalTracerEnd}; kind={resolution.kind}; hit={(resolution.hitCollider != null ? resolution.hitCollider.name : "none")}; muzzleObstructed={resolution.muzzleObstructed}");
+            return resolution;
+        }
 
-            if (!TryResolveShotHit(hits, transform, out WeaponShotHit shotHit, out int ignoredHitCount))
+        internal static WeaponShotResolution ResolveShot(Ray aimRay, float range, RaycastHit[] hits, Transform playerRoot, Vector3 muzzleStart, int raycastMask)
+        {
+            WeaponShotResolution resolution = new WeaponShotResolution
             {
-                Vector3 endPoint = ray.origin + ray.direction * range;
-                DrawShotRay(ray.origin, endPoint, Color.red);
-                ShowTracer(ray.origin, endPoint, Color.red);
-                LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; no raycast hit");
+                aimRay = aimRay,
+                cameraTargetPoint = aimRay.origin + aimRay.direction * range,
+                muzzleStart = muzzleStart,
+                finalTracerEnd = aimRay.origin + aimRay.direction * range,
+                hitPoint = aimRay.origin + aimRay.direction * range,
+                hitNormal = -aimRay.direction,
+                maxRange = range,
+                raycastHitCount = hits != null ? hits.Length : 0
+            };
+
+            if (TryResolveShotHit(hits, playerRoot, out WeaponShotHit shotHit, out int ignoredHitCount))
+            {
+                RaycastHit hit = shotHit.hit;
+                resolution.kind = shotHit.kind;
+                resolution.hitCollider = hit.collider;
+                resolution.damageable = shotHit.damageable;
+                resolution.cameraTargetPoint = hit.point;
+                resolution.finalTracerEnd = hit.point;
+                resolution.hitPoint = hit.point;
+                resolution.hitNormal = hit.normal;
+            }
+
+            resolution.ignoredHitCount = ignoredHitCount;
+            if (TryResolveMuzzleObstruction(muzzleStart, resolution.cameraTargetPoint, resolution.hitCollider, resolution.damageable, raycastMask, out RaycastHit obstruction))
+            {
+                resolution.kind = WeaponShotHitKind.Environment;
+                resolution.hitCollider = obstruction.collider;
+                resolution.damageable = null;
+                resolution.muzzleObstructed = true;
+                resolution.muzzleObstructionCollider = obstruction.collider;
+                resolution.finalTracerEnd = obstruction.point;
+                resolution.hitPoint = obstruction.point;
+                resolution.hitNormal = obstruction.normal;
+            }
+
+            return resolution;
+        }
+
+        private void ApplyShotResolution(WeaponShotResolution resolution)
+        {
+            if (resolution.aimRay.direction == Vector3.zero)
+            {
                 return;
             }
 
-            RaycastHit hit = shotHit.hit;
-            if (shotHit.damageable != null)
+            if (resolution.kind == WeaponShotHitKind.None)
             {
-                DamageInfo damageInfo = CreateDamageInfo(hit.point, hit.normal);
-                DamageResult result = shotHit.damageable.ApplyDamage(damageInfo);
-                LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; accepted={hit.collider.name}; layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}({hit.collider.gameObject.layer}); distance={hit.distance:0.##}; damageable=yes; applied={result.applied}; damage={result.damageApplied:0.##}");
+                DrawShotRay(resolution.aimRay.origin, resolution.cameraTargetPoint, Color.red);
+                DrawShotRay(resolution.muzzleStart, resolution.finalTracerEnd, Color.red);
+                ShowTracer(resolution.muzzleStart, resolution.finalTracerEnd, Color.red);
+                return;
+            }
+
+            if (resolution.damageable != null)
+            {
+                DamageInfo damageInfo = CreateDamageInfo(resolution.hitPoint, resolution.hitNormal);
+                DamageResult result = resolution.damageable.ApplyDamage(damageInfo);
+                LogShotDebug($"damageable={resolution.hitCollider.name}; applied={result.applied}; damage={result.damageApplied:0.##}; recoilAppliedAfterResolution=true");
 
                 if (result.applied)
                 {
@@ -264,19 +352,20 @@ namespace FrontierDepths.Combat
                     {
                         kind = kind,
                         damageResult = result,
-                        targetObject = hit.collider.gameObject,
-                        hitPoint = hit.point,
-                        hitNormal = hit.normal,
+                        targetObject = resolution.hitCollider.gameObject,
+                        hitPoint = resolution.hitPoint,
+                        hitNormal = resolution.hitNormal,
                         requestedDamage = damageInfo.amount,
                         finalDamage = result.damageApplied
                     };
                     DamageHitConfirmed?.Invoke(result);
                     HitFeedbackReceived?.Invoke(feedback);
-                    ShowImpactMarker(hit.point, hit.normal, impactColor);
-                    ShowDamageNumber(hit.point, result.damageApplied, impactColor, result.killedTarget);
-                    ShowTracer(ray.origin, hit.point, impactColor);
-                    DrawShotRay(ray.origin, hit.point, Color.green);
-                    PublishWeaponHitEvents(damageInfo, result, hit.collider.gameObject);
+                    ShowImpactMarker(resolution.hitPoint, resolution.hitNormal, impactColor);
+                    ShowDamageNumber(resolution.hitPoint, result.damageApplied, impactColor, result.killedTarget);
+                    ShowTracer(resolution.muzzleStart, resolution.finalTracerEnd, impactColor);
+                    DrawShotRay(resolution.aimRay.origin, resolution.cameraTargetPoint, Color.green);
+                    DrawShotRay(resolution.muzzleStart, resolution.finalTracerEnd, impactColor);
+                    PublishWeaponHitEvents(damageInfo, result, resolution.hitCollider.gameObject);
                 }
 
                 return;
@@ -285,16 +374,48 @@ namespace FrontierDepths.Combat
             WeaponHitFeedback environmentFeedback = new WeaponHitFeedback
             {
                 kind = WeaponHitFeedbackKind.Environment,
-                targetObject = hit.collider.gameObject,
-                hitPoint = hit.point,
-                hitNormal = hit.normal
+                targetObject = resolution.hitCollider != null ? resolution.hitCollider.gameObject : null,
+                hitPoint = resolution.hitPoint,
+                hitNormal = resolution.hitNormal
             };
             HitFeedbackReceived?.Invoke(environmentFeedback);
             Color environmentColor = new Color(0.85f, 0.88f, 0.78f, 1f);
-            ShowImpactMarker(hit.point, hit.normal, environmentColor);
-            ShowTracer(ray.origin, hit.point, environmentColor);
-            DrawShotRay(ray.origin, hit.point, environmentColor);
-            LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; accepted={hit.collider.name}; layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}({hit.collider.gameObject.layer}); distance={hit.distance:0.##}; damageable=no; environment block");
+            ShowImpactMarker(resolution.hitPoint, resolution.hitNormal, environmentColor);
+            ShowTracer(resolution.muzzleStart, resolution.finalTracerEnd, environmentColor);
+            DrawShotRay(resolution.aimRay.origin, resolution.cameraTargetPoint, environmentColor);
+            DrawShotRay(resolution.muzzleStart, resolution.finalTracerEnd, environmentColor);
+        }
+
+        private static bool TryResolveMuzzleObstruction(Vector3 muzzleStart, Vector3 targetPoint, Collider targetCollider, IDamageable targetDamageable, int raycastMask, out RaycastHit obstruction)
+        {
+            obstruction = default;
+            Vector3 toTarget = targetPoint - muzzleStart;
+            if (toTarget.sqrMagnitude <= 0.0001f)
+            {
+                return false;
+            }
+
+            RaycastHit[] hits = Physics.RaycastAll(new Ray(muzzleStart, toTarget.normalized), toTarget.magnitude, raycastMask, QueryTriggerInteraction.Ignore);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit hit = hits[i];
+                if (!IsWeaponHitAllowed(hit.collider, null))
+                {
+                    continue;
+                }
+
+                IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
+                if (hit.collider == targetCollider || (damageable != null && damageable == targetDamageable))
+                {
+                    return false;
+                }
+
+                obstruction = hit;
+                return true;
+            }
+
+            return false;
         }
 
         private DamageInfo CreateDamageInfo(Vector3 hitPoint, Vector3 hitNormal)
@@ -369,13 +490,61 @@ namespace FrontierDepths.Combat
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            HideAllTracers();
             ResolveWeaponCamera();
             ResolveWeaponDefinition();
+        }
+
+        private void EnsureRuntimeReady()
+        {
+            if (runtimeReady)
+            {
+                return;
+            }
+
+            playerController = GetComponent<FirstPersonController>();
+            ResolveWeaponCamera();
+            ResolveWeaponDefinition();
+            weaponState ??= new WeaponRuntimeState(GetMagazineSize());
+            EnsureAudio();
+            EnsureWeaponBlockout();
+            EnsureMuzzleFlash();
+            EnsureImpactPool();
+            EnsureDamageNumberPool();
+            EnsureTracerPool();
+            runtimeReady = true;
         }
 
         private bool IsInDungeonRuntime()
         {
             return SceneManager.GetActiveScene().name == GameSceneCatalog.DungeonRuntime;
+        }
+
+        private bool IsGameplayInputBlocked()
+        {
+            return playerController != null && playerController.IsUiCaptured;
+        }
+
+        private void BeginReloadFeedback()
+        {
+            HideAllTracers();
+            PlayReloadFeedback(true);
+            ReloadStarted?.Invoke(this);
+            PublishWeaponEvent(GameplayEventType.ReloadStarted);
+        }
+
+        private void QueueAutoReload(float currentTime, float delay)
+        {
+            if (!autoReloadOnEmpty || weaponState == null)
+            {
+                return;
+            }
+
+            bool queued = weaponState.TryQueueAutoReload(currentTime, delay);
+            if (queued)
+            {
+                LogShotDebug($"autoReloadQueued=true; readyTime={weaponState.AutoReloadReadyTime:0.###}; delay={delay:0.###}");
+            }
         }
 
         private void EnsureAudio()
@@ -439,7 +608,7 @@ namespace FrontierDepths.Combat
             Collider collider = part.GetComponent<Collider>();
             if (collider != null)
             {
-                Destroy(collider);
+                DestroyRuntimeObject(collider);
             }
 
             Renderer renderer = part.GetComponent<Renderer>();
@@ -474,7 +643,7 @@ namespace FrontierDepths.Combat
             Collider collider = muzzleFlash.GetComponent<Collider>();
             if (collider != null)
             {
-                Destroy(collider);
+                DestroyRuntimeObject(collider);
             }
 
             Renderer renderer = muzzleFlash.GetComponent<Renderer>();
@@ -491,15 +660,62 @@ namespace FrontierDepths.Combat
             return weaponCamera != null ? weaponCamera.transform.Find("WeaponBlockout/MuzzlePoint") : null;
         }
 
+        private Vector3 GetMuzzleWorldPosition(Vector3 fallback)
+        {
+            Transform muzzlePoint = GetMuzzlePoint();
+            return muzzlePoint != null ? muzzlePoint.position : fallback;
+        }
+
+        internal static Transform GetOrCreateRuntimeFeedbackRoot()
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            GameObject[] roots = activeScene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                if (roots[i] != null && roots[i].name == RuntimeFeedbackRootName)
+                {
+                    return roots[i].transform;
+                }
+            }
+
+            GameObject rootObject = new GameObject(RuntimeFeedbackRootName);
+            if (activeScene.IsValid())
+            {
+                SceneManager.MoveGameObjectToScene(rootObject, activeScene);
+            }
+
+            return rootObject.transform;
+        }
+
+        internal static Transform GetOrCreateFeedbackPool(string poolName)
+        {
+            Transform root = GetOrCreateRuntimeFeedbackRoot();
+            Transform pool = root.Find(poolName);
+            if (pool != null)
+            {
+                return pool;
+            }
+
+            GameObject poolObject = new GameObject(poolName);
+            poolObject.transform.SetParent(root, false);
+            return poolObject.transform;
+        }
+
+        internal static void ApplyImpactMarkerColor(Renderer renderer, MaterialPropertyBlock propertyBlock, Color color)
+        {
+            if (renderer == null || propertyBlock == null)
+            {
+                return;
+            }
+
+            renderer.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetColor("_Color", color);
+            renderer.SetPropertyBlock(propertyBlock);
+        }
+
         private void EnsureImpactPool()
         {
-            Transform poolTransform = transform.Find("WeaponImpactPool");
-            if (poolTransform == null)
-            {
-                GameObject poolObject = new GameObject("WeaponImpactPool");
-                poolObject.transform.SetParent(transform, false);
-                poolTransform = poolObject.transform;
-            }
+            Transform poolTransform = GetOrCreateFeedbackPool("WeaponImpactPool");
 
             for (int i = 0; i < impactMarkers.Length; i++)
             {
@@ -518,7 +734,7 @@ namespace FrontierDepths.Combat
                     Collider collider = markerObject.GetComponent<Collider>();
                     if (collider != null)
                     {
-                        Destroy(collider);
+                        DestroyRuntimeObject(collider);
                     }
                 }
 
@@ -535,13 +751,7 @@ namespace FrontierDepths.Combat
 
         private void EnsureDamageNumberPool()
         {
-            Transform poolTransform = transform.Find("WeaponDamageNumberPool");
-            if (poolTransform == null)
-            {
-                GameObject poolObject = new GameObject("WeaponDamageNumberPool");
-                poolObject.transform.SetParent(transform, false);
-                poolTransform = poolObject.transform;
-            }
+            Transform poolTransform = GetOrCreateFeedbackPool("WeaponDamageNumberPool");
 
             for (int i = 0; i < damageNumbers.Length; i++)
             {
@@ -569,13 +779,7 @@ namespace FrontierDepths.Combat
 
         private void EnsureTracerPool()
         {
-            Transform poolTransform = transform.Find("WeaponTracerPool");
-            if (poolTransform == null)
-            {
-                GameObject poolObject = new GameObject("WeaponTracerPool");
-                poolObject.transform.SetParent(transform, false);
-                poolTransform = poolObject.transform;
-            }
+            Transform poolTransform = GetOrCreateFeedbackPool("WeaponTracerPool");
 
             for (int i = 0; i < tracers.Length; i++)
             {
@@ -684,7 +888,16 @@ namespace FrontierDepths.Combat
 
             TracerMarker tracer = tracers[nextTracer];
             nextTracer = (nextTracer + 1) % tracers.Length;
-            tracer.Show(start, end, Time.time + tracerDuration, color);
+            float lifetime = Mathf.Clamp(tracerDuration, 0.035f, 0.07f);
+            tracer.Show(start, end, Time.time + lifetime, color);
+        }
+
+        private void HideAllTracers()
+        {
+            for (int i = 0; i < tracers.Length; i++)
+            {
+                tracers[i]?.Hide();
+            }
         }
 
         private void DrawShotRay(Vector3 start, Vector3 end, Color color)
@@ -889,16 +1102,35 @@ namespace FrontierDepths.Combat
             };
         }
 
+        private static void DestroyRuntimeObject(UnityEngine.Object target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(target);
+            }
+            else
+            {
+                DestroyImmediate(target);
+            }
+        }
+
         private sealed class ImpactMarker
         {
             private readonly GameObject markerObject;
             private Renderer renderer;
+            private MaterialPropertyBlock propertyBlock;
             private float hideTime;
 
             public ImpactMarker(GameObject markerObject)
             {
                 this.markerObject = markerObject;
                 renderer = markerObject != null ? markerObject.GetComponent<Renderer>() : null;
+                propertyBlock = new MaterialPropertyBlock();
             }
 
             public void Show(Vector3 position, float hideTime, Color color)
@@ -912,7 +1144,7 @@ namespace FrontierDepths.Combat
                 markerObject.transform.position = position;
                 if (renderer != null)
                 {
-                    renderer.sharedMaterial.color = color;
+                    ApplyImpactMarkerColor(renderer, propertyBlock, color);
                 }
 
                 markerObject.SetActive(true);
@@ -927,7 +1159,7 @@ namespace FrontierDepths.Combat
             }
         }
 
-        private sealed class TracerMarker
+        internal sealed class TracerMarker
         {
             private readonly GameObject tracerObject;
             private readonly LineRenderer lineRenderer;
@@ -946,7 +1178,9 @@ namespace FrontierDepths.Combat
                     return;
                 }
 
+                tracerObject.SetActive(false);
                 this.hideTime = hideTime;
+                lineRenderer.enabled = true;
                 lineRenderer.SetPosition(0, start);
                 lineRenderer.SetPosition(1, end);
                 lineRenderer.startColor = color;
@@ -960,8 +1194,27 @@ namespace FrontierDepths.Combat
             {
                 if (tracerObject != null && tracerObject.activeSelf && currentTime >= hideTime)
                 {
+                    Hide();
+                }
+            }
+
+            public void Hide()
+            {
+                if (lineRenderer != null)
+                {
+                    lineRenderer.SetPosition(0, Vector3.zero);
+                    lineRenderer.SetPosition(1, Vector3.zero);
+                    lineRenderer.startColor = Color.clear;
+                    lineRenderer.endColor = Color.clear;
+                    lineRenderer.enabled = false;
+                }
+
+                if (tracerObject != null)
+                {
                     tracerObject.SetActive(false);
                 }
+
+                hideTime = 0f;
             }
         }
 
