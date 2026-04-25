@@ -11,6 +11,22 @@ namespace FrontierDepths.Combat
         Environment
     }
 
+    internal enum WeaponShotHitKind
+    {
+        None,
+        Damageable,
+        Environment
+    }
+
+    internal struct WeaponShotHit
+    {
+        public WeaponShotHitKind kind;
+        public RaycastHit hit;
+        public IDamageable damageable;
+
+        public bool HasHit => kind != WeaponShotHitKind.None && hit.collider != null;
+    }
+
     [Serializable]
     public struct WeaponHitFeedback
     {

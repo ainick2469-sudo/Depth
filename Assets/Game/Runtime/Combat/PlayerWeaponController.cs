@@ -16,20 +16,26 @@ namespace FrontierDepths.Combat
         private const float DefaultRange = 100f;
         private const int ImpactPoolSize = 12;
         private const int DamageNumberPoolSize = 12;
+        private const int TracerPoolSize = 8;
+        private const float ShotDebugDrawDuration = 0.5f;
 
         [SerializeField] private Camera weaponCamera;
         [SerializeField] private WeaponDefinition weaponDefinition;
-        [SerializeField] private LayerMask weaponRaycastMask = ~(1 << 2);
+        [SerializeField] private LayerMask weaponRaycastMask = DefaultWeaponRaycastMask;
         [SerializeField] private float muzzleFlashDuration = 0.045f;
         [SerializeField] private float impactMarkerDuration = 1.25f;
         [SerializeField] private float damageNumberDuration = 0.75f;
+        [SerializeField] private float tracerDuration = 0.08f;
         [SerializeField] private float weaponVolume = 0.28f;
         [SerializeField] private float recoilPitchKick = 1.2f;
         [SerializeField] private float recoilYawKick = 0.35f;
         [SerializeField] private float recoilRecoverySeconds = 0.15f;
+        [SerializeField] private bool enableShotDebugLogging = true;
+        [SerializeField] private bool enableShotDebugDraw = true;
 
         private readonly ImpactMarker[] impactMarkers = new ImpactMarker[ImpactPoolSize];
         private readonly DamageNumberMarker[] damageNumbers = new DamageNumberMarker[DamageNumberPoolSize];
+        private readonly TracerMarker[] tracers = new TracerMarker[TracerPoolSize];
 
         private FirstPersonController playerController;
         private WeaponRuntimeState weaponState;
@@ -42,6 +48,9 @@ namespace FrontierDepths.Combat
         private float muzzleFlashHideTime;
         private int nextImpactMarker;
         private int nextDamageNumber;
+        private int nextTracer;
+
+        public static int DefaultWeaponRaycastMask => ~(1 << 2);
 
         public event Action<PlayerWeaponController> WeaponFired;
         public event Action<PlayerWeaponController> ReloadStarted;
@@ -61,7 +70,7 @@ namespace FrontierDepths.Combat
         private void Awake()
         {
             playerController = GetComponent<FirstPersonController>();
-            weaponCamera ??= GetComponentInChildren<Camera>();
+            ResolveWeaponCamera();
             ResolveWeaponDefinition();
             weaponState = new WeaponRuntimeState(GetMagazineSize());
             EnsureAudio();
@@ -69,6 +78,7 @@ namespace FrontierDepths.Combat
             EnsureMuzzleFlash();
             EnsureImpactPool();
             EnsureDamageNumberPool();
+            EnsureTracerPool();
         }
 
         private void OnEnable()
@@ -162,6 +172,11 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            if (hitCollider.isTrigger || hitCollider.gameObject.layer == 2)
+            {
+                return false;
+            }
+
             return playerRoot == null || !hitCollider.transform.IsChildOf(playerRoot);
         }
 
@@ -177,67 +192,109 @@ namespace FrontierDepths.Combat
                 : WeaponHitFeedbackKind.Normal;
         }
 
+        internal static bool TryResolveShotHit(RaycastHit[] hits, Transform playerRoot, out WeaponShotHit hitInfo, out int ignoredHitCount)
+        {
+            hitInfo = default;
+            ignoredHitCount = 0;
+
+            if (hits == null || hits.Length == 0)
+            {
+                return false;
+            }
+
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit hit = hits[i];
+                if (!IsWeaponHitAllowed(hit.collider, playerRoot))
+                {
+                    ignoredHitCount++;
+                    continue;
+                }
+
+                IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
+                hitInfo = new WeaponShotHit
+                {
+                    kind = damageable != null ? WeaponShotHitKind.Damageable : WeaponShotHitKind.Environment,
+                    hit = hit,
+                    damageable = damageable
+                };
+                return true;
+            }
+
+            return false;
+        }
+
         private void FireRaycast()
         {
+            ResolveWeaponCamera();
             if (weaponCamera == null)
             {
+                LogShotDebug("camera=null; no raycast fired.");
                 return;
             }
 
             Ray ray = weaponCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-            RaycastHit[] hits = Physics.RaycastAll(ray, GetRange(), weaponRaycastMask, QueryTriggerInteraction.Ignore);
-            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            float range = GetRange();
+            RaycastHit[] hits = Physics.RaycastAll(ray, range, weaponRaycastMask, QueryTriggerInteraction.Ignore);
 
-            for (int i = 0; i < hits.Length; i++)
+            if (!TryResolveShotHit(hits, transform, out WeaponShotHit shotHit, out int ignoredHitCount))
             {
-                RaycastHit hit = hits[i];
-                if (!IsWeaponHitAllowed(hit.collider, transform))
-                {
-                    continue;
-                }
+                Vector3 endPoint = ray.origin + ray.direction * range;
+                DrawShotRay(ray.origin, endPoint, Color.red);
+                ShowTracer(ray.origin, endPoint, Color.red);
+                LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; no raycast hit");
+                return;
+            }
 
+            RaycastHit hit = shotHit.hit;
+            if (shotHit.damageable != null)
+            {
                 DamageInfo damageInfo = CreateDamageInfo(hit.point, hit.normal);
-                IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
-                if (damageable != null)
+                DamageResult result = shotHit.damageable.ApplyDamage(damageInfo);
+                LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; accepted={hit.collider.name}; layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}({hit.collider.gameObject.layer}); distance={hit.distance:0.##}; damageable=yes; applied={result.applied}; damage={result.damageApplied:0.##}");
+
+                if (result.applied)
                 {
-                    DamageResult result = damageable.ApplyDamage(damageInfo);
-                    if (result.applied)
-                    {
-                        WeaponHitFeedbackKind kind = ClassifyHitFeedback(damageInfo.amount, result);
-                        Color impactColor = kind == WeaponHitFeedbackKind.Reduced
-                            ? new Color(1f, 0.56f, 0.18f, 1f)
-                            : (kind == WeaponHitFeedbackKind.Kill ? new Color(1f, 0.22f, 0.18f, 1f) : new Color(1f, 0.9f, 0.35f, 1f));
-                        WeaponHitFeedback feedback = new WeaponHitFeedback
-                        {
-                            kind = kind,
-                            damageResult = result,
-                            targetObject = hit.collider.gameObject,
-                            hitPoint = hit.point,
-                            hitNormal = hit.normal,
-                            requestedDamage = damageInfo.amount,
-                            finalDamage = result.damageApplied
-                        };
-                        DamageHitConfirmed?.Invoke(result);
-                        HitFeedbackReceived?.Invoke(feedback);
-                        ShowImpactMarker(hit.point, hit.normal, impactColor);
-                        ShowDamageNumber(hit.point, result.damageApplied, impactColor, result.killedTarget);
-                        PublishWeaponHitEvents(damageInfo, result, hit.collider.gameObject);
-                    }
-                }
-                else
-                {
+                    WeaponHitFeedbackKind kind = ClassifyHitFeedback(damageInfo.amount, result);
+                    Color impactColor = kind == WeaponHitFeedbackKind.Reduced
+                        ? new Color(1f, 0.56f, 0.18f, 1f)
+                        : (kind == WeaponHitFeedbackKind.Kill ? new Color(1f, 0.22f, 0.18f, 1f) : new Color(1f, 0.9f, 0.35f, 1f));
                     WeaponHitFeedback feedback = new WeaponHitFeedback
                     {
-                        kind = WeaponHitFeedbackKind.Environment,
+                        kind = kind,
+                        damageResult = result,
+                        targetObject = hit.collider.gameObject,
                         hitPoint = hit.point,
-                        hitNormal = hit.normal
+                        hitNormal = hit.normal,
+                        requestedDamage = damageInfo.amount,
+                        finalDamage = result.damageApplied
                     };
+                    DamageHitConfirmed?.Invoke(result);
                     HitFeedbackReceived?.Invoke(feedback);
-                    ShowImpactMarker(hit.point, hit.normal, new Color(0.85f, 0.88f, 0.78f, 1f));
+                    ShowImpactMarker(hit.point, hit.normal, impactColor);
+                    ShowDamageNumber(hit.point, result.damageApplied, impactColor, result.killedTarget);
+                    ShowTracer(ray.origin, hit.point, impactColor);
+                    DrawShotRay(ray.origin, hit.point, Color.green);
+                    PublishWeaponHitEvents(damageInfo, result, hit.collider.gameObject);
                 }
 
                 return;
             }
+
+            WeaponHitFeedback environmentFeedback = new WeaponHitFeedback
+            {
+                kind = WeaponHitFeedbackKind.Environment,
+                targetObject = hit.collider.gameObject,
+                hitPoint = hit.point,
+                hitNormal = hit.normal
+            };
+            HitFeedbackReceived?.Invoke(environmentFeedback);
+            Color environmentColor = new Color(0.85f, 0.88f, 0.78f, 1f);
+            ShowImpactMarker(hit.point, hit.normal, environmentColor);
+            ShowTracer(ray.origin, hit.point, environmentColor);
+            DrawShotRay(ray.origin, hit.point, environmentColor);
+            LogShotDebug($"camera={weaponCamera.name}; origin={ray.origin}; direction={ray.direction}; range={range:0.##}; mask={weaponRaycastMask.value}; hits={hits.Length}; ignored={ignoredHitCount}; accepted={hit.collider.name}; layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}({hit.collider.gameObject.layer}); distance={hit.distance:0.##}; damageable=no; environment block");
         }
 
         private DamageInfo CreateDamageInfo(Vector3 hitPoint, Vector3 hitNormal)
@@ -257,6 +314,31 @@ namespace FrontierDepths.Combat
                 knockbackForce = GetKnockbackForce(),
                 statusChance = GetStatusChance()
             };
+        }
+
+        private void ResolveWeaponCamera()
+        {
+            playerController ??= GetComponent<FirstPersonController>();
+            if (playerController != null && playerController.PlayerCamera != null)
+            {
+                weaponCamera = playerController.PlayerCamera;
+                return;
+            }
+
+            Camera[] activeCameras = GetComponentsInChildren<Camera>(false);
+            for (int i = 0; i < activeCameras.Length; i++)
+            {
+                if (activeCameras[i] != null && activeCameras[i].isActiveAndEnabled)
+                {
+                    weaponCamera = activeCameras[i];
+                    return;
+                }
+            }
+
+            if (weaponCamera == null)
+            {
+                weaponCamera = GetComponentInChildren<Camera>(true);
+            }
         }
 
         private void ResolveWeaponDefinition()
@@ -287,7 +369,7 @@ namespace FrontierDepths.Combat
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            weaponCamera ??= GetComponentInChildren<Camera>();
+            ResolveWeaponCamera();
             ResolveWeaponDefinition();
         }
 
@@ -485,6 +567,41 @@ namespace FrontierDepths.Combat
             }
         }
 
+        private void EnsureTracerPool()
+        {
+            Transform poolTransform = transform.Find("WeaponTracerPool");
+            if (poolTransform == null)
+            {
+                GameObject poolObject = new GameObject("WeaponTracerPool");
+                poolObject.transform.SetParent(transform, false);
+                poolTransform = poolObject.transform;
+            }
+
+            for (int i = 0; i < tracers.Length; i++)
+            {
+                Transform tracerTransform = poolTransform.Find($"Tracer_{i}");
+                GameObject tracerObject;
+                if (tracerTransform != null)
+                {
+                    tracerObject = tracerTransform.gameObject;
+                }
+                else
+                {
+                    tracerObject = new GameObject($"Tracer_{i}", typeof(LineRenderer));
+                    tracerObject.transform.SetParent(poolTransform, false);
+                }
+
+                LineRenderer line = tracerObject.GetComponent<LineRenderer>();
+                line.useWorldSpace = true;
+                line.positionCount = 2;
+                line.startWidth = 0.035f;
+                line.endWidth = 0.006f;
+                line.material = CreateMaterial(new Color(1f, 0.95f, 0.55f, 0.8f));
+                tracerObject.SetActive(false);
+                tracers[i] = new TracerMarker(tracerObject, line);
+            }
+        }
+
         private void PlayFireFeedback(float currentTime)
         {
             if (weaponAudioSource != null && gunshotClip != null)
@@ -558,6 +675,39 @@ namespace FrontierDepths.Combat
             number.Show(point + Vector3.up * 1.25f, Time.time + damageNumberDuration, amount, color, killedTarget);
         }
 
+        private void ShowTracer(Vector3 start, Vector3 end, Color color)
+        {
+            if (tracers.Length == 0)
+            {
+                return;
+            }
+
+            TracerMarker tracer = tracers[nextTracer];
+            nextTracer = (nextTracer + 1) % tracers.Length;
+            tracer.Show(start, end, Time.time + tracerDuration, color);
+        }
+
+        private void DrawShotRay(Vector3 start, Vector3 end, Color color)
+        {
+            if (enableShotDebugDraw && IsDevelopmentDebugEnabled())
+            {
+                Debug.DrawLine(start, end, color, ShotDebugDrawDuration);
+            }
+        }
+
+        private void LogShotDebug(string message)
+        {
+            if (enableShotDebugLogging && IsDevelopmentDebugEnabled())
+            {
+                Debug.Log($"[WeaponShotDebug] {message}", this);
+            }
+        }
+
+        private static bool IsDevelopmentDebugEnabled()
+        {
+            return Application.isEditor || Debug.isDebugBuild;
+        }
+
         private void UpdateImpactMarkers(float currentTime)
         {
             for (int i = 0; i < impactMarkers.Length; i++)
@@ -568,6 +718,11 @@ namespace FrontierDepths.Combat
             for (int i = 0; i < damageNumbers.Length; i++)
             {
                 damageNumbers[i]?.Tick(currentTime, weaponCamera);
+            }
+
+            for (int i = 0; i < tracers.Length; i++)
+            {
+                tracers[i]?.Tick(currentTime);
             }
         }
 
@@ -768,6 +923,44 @@ namespace FrontierDepths.Combat
                 if (markerObject != null && markerObject.activeSelf && currentTime >= hideTime)
                 {
                     markerObject.SetActive(false);
+                }
+            }
+        }
+
+        private sealed class TracerMarker
+        {
+            private readonly GameObject tracerObject;
+            private readonly LineRenderer lineRenderer;
+            private float hideTime;
+
+            public TracerMarker(GameObject tracerObject, LineRenderer lineRenderer)
+            {
+                this.tracerObject = tracerObject;
+                this.lineRenderer = lineRenderer;
+            }
+
+            public void Show(Vector3 start, Vector3 end, float hideTime, Color color)
+            {
+                if (tracerObject == null || lineRenderer == null)
+                {
+                    return;
+                }
+
+                this.hideTime = hideTime;
+                lineRenderer.SetPosition(0, start);
+                lineRenderer.SetPosition(1, end);
+                lineRenderer.startColor = color;
+                Color endColor = color;
+                endColor.a = 0f;
+                lineRenderer.endColor = endColor;
+                tracerObject.SetActive(true);
+            }
+
+            public void Tick(float currentTime)
+            {
+                if (tracerObject != null && tracerObject.activeSelf && currentTime >= hideTime)
+                {
+                    tracerObject.SetActive(false);
                 }
             }
         }

@@ -544,7 +544,7 @@ namespace FrontierDepths.World
                 return;
             }
 
-            List<DungeonSpawnPointRecord> stationSpawns = SelectCombatTestStationSpawns(buildResult, 3);
+            List<DungeonSpawnPointRecord> stationSpawns = SelectCombatTestStationSpawns(buildResult, 3, true);
             if (stationSpawns.Count < 3)
             {
                 Debug.LogWarning($"Combat test station skipped on floor {buildResult.floorIndex}: only {stationSpawns.Count} valid target dummy spawn points were available.");
@@ -558,7 +558,7 @@ namespace FrontierDepths.World
             CreateTargetDummy(stationRoot.transform, stationSpawns[2].position, TargetDummyKind.StatusTest);
         }
 
-        internal static List<DungeonSpawnPointRecord> SelectCombatTestStationSpawns(DungeonBuildResult buildResult, int requestedCount)
+        internal static List<DungeonSpawnPointRecord> SelectCombatTestStationSpawns(DungeonBuildResult buildResult, int requestedCount, bool requireLineOfSight = false)
         {
             List<DungeonSpawnPointRecord> selected = new List<DungeonSpawnPointRecord>();
             if (buildResult == null || buildResult.floorIndex != 1 || requestedCount <= 0)
@@ -566,7 +566,7 @@ namespace FrontierDepths.World
                 return selected;
             }
 
-            if (TryCollectStationSpawnsForRoom(buildResult, buildResult.playerSpawnNodeId, requestedCount, selected))
+            if (TryCollectStationSpawnsForRoom(buildResult, buildResult.playerSpawnNodeId, requestedCount, selected, requireLineOfSight))
             {
                 return selected;
             }
@@ -588,7 +588,7 @@ namespace FrontierDepths.World
             for (int i = 0; i < rooms.Count; i++)
             {
                 selected.Clear();
-                if (TryCollectStationSpawnsForRoom(buildResult, rooms[i].nodeId, requestedCount, selected))
+                if (TryCollectStationSpawnsForRoom(buildResult, rooms[i].nodeId, requestedCount, selected, requireLineOfSight))
                 {
                     return selected;
                 }
@@ -600,7 +600,8 @@ namespace FrontierDepths.World
             {
                 DungeonSpawnPointRecord spawnPoint = buildResult.spawnPoints[i];
                 if (spawnPoint.category != DungeonSpawnPointCategory.TargetDummy ||
-                    Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < TargetDummySpawnMinimumDistance)
+                    Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < TargetDummySpawnMinimumDistance ||
+                    (requireLineOfSight && !HasCombatTestStationLineOfSight(buildResult, spawnPoint)))
                 {
                     continue;
                 }
@@ -628,7 +629,8 @@ namespace FrontierDepths.World
             DungeonBuildResult buildResult,
             string roomId,
             int requestedCount,
-            List<DungeonSpawnPointRecord> selected)
+            List<DungeonSpawnPointRecord> selected,
+            bool requireLineOfSight)
         {
             if (buildResult == null || selected == null || string.IsNullOrWhiteSpace(roomId))
             {
@@ -645,6 +647,11 @@ namespace FrontierDepths.World
                     continue;
                 }
 
+                if (requireLineOfSight && !HasCombatTestStationLineOfSight(buildResult, spawnPoint))
+                {
+                    continue;
+                }
+
                 selected.Add(spawnPoint);
                 if (selected.Count >= requestedCount)
                 {
@@ -655,7 +662,35 @@ namespace FrontierDepths.World
             return false;
         }
 
-        private static void CreateTargetDummy(Transform parent, Vector3 position, TargetDummyKind kind)
+        internal static bool HasCombatTestStationLineOfSight(DungeonBuildResult buildResult, DungeonSpawnPointRecord spawnPoint)
+        {
+            if (buildResult == null || spawnPoint == null)
+            {
+                return false;
+            }
+
+            Vector3 start = GetCombatTestStationApproachPoint(buildResult, spawnPoint);
+            Vector3 target = spawnPoint.position + Vector3.up * 0.35f;
+            if ((target - start).sqrMagnitude <= 0.01f)
+            {
+                return true;
+            }
+
+            return !Physics.Linecast(start, target, out _, PlayerWeaponController.DefaultWeaponRaycastMask, QueryTriggerInteraction.Ignore);
+        }
+
+        internal static Vector3 GetCombatTestStationApproachPoint(DungeonBuildResult buildResult, DungeonSpawnPointRecord spawnPoint)
+        {
+            DungeonRoomBuildRecord room = buildResult != null && spawnPoint != null ? buildResult.FindRoom(spawnPoint.nodeId) : null;
+            if (room != null)
+            {
+                return new Vector3(room.bounds.center.x, spawnPoint.position.y + 0.85f, room.bounds.center.z);
+            }
+
+            return buildResult != null ? buildResult.playerSpawn + Vector3.up * 0.85f : Vector3.up * PlayerSpawnHeight;
+        }
+
+        internal static GameObject CreateTargetDummy(Transform parent, Vector3 position, TargetDummyKind kind)
         {
             GameObject dummy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             dummy.name = $"{kind}Dummy";
@@ -676,6 +711,45 @@ namespace FrontierDepths.World
             label.fontSize = 42;
             label.color = Color.white;
             health.SetStatusText(label);
+            int defaultLayer = LayerMask.NameToLayer("Default");
+            SetLayerRecursively(dummy, defaultLayer >= 0 ? defaultLayer : 0);
+            EnsureTargetDummyColliderSanity(dummy);
+            return dummy;
+        }
+
+        internal static void SetLayerRecursively(GameObject root, int layer)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            root.layer = layer;
+            Transform rootTransform = root.transform;
+            for (int i = 0; i < rootTransform.childCount; i++)
+            {
+                SetLayerRecursively(rootTransform.GetChild(i).gameObject, layer);
+            }
+        }
+
+        private static void EnsureTargetDummyColliderSanity(GameObject dummy)
+        {
+            if (dummy == null)
+            {
+                return;
+            }
+
+            Collider[] colliders = dummy.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                if (colliders[i] == null)
+                {
+                    continue;
+                }
+
+                colliders[i].enabled = true;
+                colliders[i].isTrigger = false;
+            }
         }
 
         private static void EnsurePlayerWeaponController(FirstPersonController player)

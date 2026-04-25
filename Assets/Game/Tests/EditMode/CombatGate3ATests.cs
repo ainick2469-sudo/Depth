@@ -161,6 +161,149 @@ namespace FrontierDepths.Tests.EditMode
             Assert.IsEmpty(selected);
         }
 
+        [Test]
+        public void WeaponRaycast_AgainstDummyCollider_AppliesDamage()
+        {
+            GameObject dummy = DungeonSceneController.CreateTargetDummy(null, new Vector3(0f, 40f, 10f), TargetDummyKind.Standard);
+            try
+            {
+                Physics.SyncTransforms();
+                Ray ray = new Ray(new Vector3(0f, 40f, 0f), Vector3.forward);
+                RaycastHit[] hits = Physics.RaycastAll(ray, 20f, PlayerWeaponController.DefaultWeaponRaycastMask, QueryTriggerInteraction.Ignore);
+
+                Assert.IsTrue(PlayerWeaponController.TryResolveShotHit(hits, null, out WeaponShotHit hit, out _));
+                Assert.AreEqual(WeaponShotHitKind.Damageable, hit.kind);
+                DamageResult result = hit.damageable.ApplyDamage(CreateDamageInfo(25f, DamageType.Physical));
+
+                Assert.IsTrue(result.applied);
+                Assert.AreEqual(75f, dummy.GetComponent<TargetDummyHealth>().CurrentHealth);
+            }
+            finally
+            {
+                Object.DestroyImmediate(dummy);
+            }
+        }
+
+        [Test]
+        public void WeaponRaycast_IgnoresPlayerChildColliders()
+        {
+            GameObject player = new GameObject("PlayerRoot");
+            GameObject playerChild = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject dummy = DungeonSceneController.CreateTargetDummy(null, new Vector3(0f, 50f, 12f), TargetDummyKind.Standard);
+            try
+            {
+                playerChild.name = "WeaponHelperCollider";
+                playerChild.transform.SetParent(player.transform, true);
+                playerChild.transform.position = new Vector3(0f, 50f, 5f);
+                playerChild.transform.localScale = Vector3.one * 2f;
+                Physics.SyncTransforms();
+
+                Ray ray = new Ray(new Vector3(0f, 50f, 0f), Vector3.forward);
+                RaycastHit[] hits = Physics.RaycastAll(ray, 25f, PlayerWeaponController.DefaultWeaponRaycastMask, QueryTriggerInteraction.Ignore);
+
+                Assert.IsTrue(PlayerWeaponController.TryResolveShotHit(hits, player.transform, out WeaponShotHit hit, out int ignored));
+                Assert.AreEqual(WeaponShotHitKind.Damageable, hit.kind);
+                Assert.GreaterOrEqual(ignored, 1);
+                Assert.AreEqual(dummy, hit.hit.collider.gameObject);
+            }
+            finally
+            {
+                Object.DestroyImmediate(dummy);
+                Object.DestroyImmediate(playerChild);
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void WeaponRaycast_StopsOnEnvironmentBeforeDummy()
+        {
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject dummy = DungeonSceneController.CreateTargetDummy(null, new Vector3(0f, 60f, 12f), TargetDummyKind.Standard);
+            try
+            {
+                wall.name = "EnvironmentWall";
+                wall.transform.position = new Vector3(0f, 60f, 5f);
+                wall.transform.localScale = new Vector3(4f, 4f, 1f);
+                Physics.SyncTransforms();
+
+                Ray ray = new Ray(new Vector3(0f, 60f, 0f), Vector3.forward);
+                RaycastHit[] hits = Physics.RaycastAll(ray, 25f, PlayerWeaponController.DefaultWeaponRaycastMask, QueryTriggerInteraction.Ignore);
+
+                Assert.IsTrue(PlayerWeaponController.TryResolveShotHit(hits, null, out WeaponShotHit hit, out _));
+                Assert.AreEqual(WeaponShotHitKind.Environment, hit.kind);
+                Assert.AreEqual(wall, hit.hit.collider.gameObject);
+                Assert.IsNull(hit.damageable);
+                Assert.AreEqual(dummy.GetComponent<TargetDummyHealth>().MaxHealth, dummy.GetComponent<TargetDummyHealth>().CurrentHealth);
+            }
+            finally
+            {
+                Object.DestroyImmediate(dummy);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void DefaultWeaponRaycastMask_IncludesDefaultAndExcludesIgnoreRaycast()
+        {
+            int mask = PlayerWeaponController.DefaultWeaponRaycastMask;
+
+            Assert.AreNotEqual(0, mask & (1 << LayerMask.NameToLayer("Default")));
+            Assert.AreEqual(0, mask & (1 << LayerMask.NameToLayer("Ignore Raycast")));
+        }
+
+        [Test]
+        public void CreatedTargetDummy_UsesDefaultLayerAndEnabledNonTriggerCollider()
+        {
+            GameObject dummy = DungeonSceneController.CreateTargetDummy(null, Vector3.zero, TargetDummyKind.Standard);
+            try
+            {
+                int defaultLayer = LayerMask.NameToLayer("Default");
+                Transform[] transforms = dummy.GetComponentsInChildren<Transform>(true);
+                for (int i = 0; i < transforms.Length; i++)
+                {
+                    Assert.AreEqual(defaultLayer, transforms[i].gameObject.layer);
+                }
+
+                Collider[] colliders = dummy.GetComponentsInChildren<Collider>(true);
+                Assert.IsNotEmpty(colliders);
+                for (int i = 0; i < colliders.Length; i++)
+                {
+                    Assert.IsTrue(colliders[i].enabled);
+                    Assert.IsFalse(colliders[i].isTrigger);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(dummy);
+            }
+        }
+
+        [Test]
+        public void CombatTestStation_RejectsBlockedLineOfSightCandidate()
+        {
+            DungeonBuildResult build = CreateLineOfSightBuildResult();
+            GameObject blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                blocker.name = "LineOfSightBlocker";
+                blocker.transform.position = new Vector3(5f, 4.1f, 0f);
+                blocker.transform.localScale = new Vector3(1f, 4f, 4f);
+                Physics.SyncTransforms();
+
+                var selected = DungeonSceneController.SelectCombatTestStationSpawns(build, 3, true);
+
+                Assert.AreEqual(3, selected.Count);
+                for (int i = 0; i < selected.Count; i++)
+                {
+                    Assert.AreNotEqual(new Vector3(10f, 3.5f, 0f), selected[i].position);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(blocker);
+            }
+        }
+
         private static DamageInfo CreateDamageInfo(float amount, DamageType damageType)
         {
             return new DamageInfo
@@ -212,6 +355,45 @@ namespace FrontierDepths.Tests.EditMode
                     category = DungeonSpawnPointCategory.TargetDummy,
                     position = position,
                     bounds = new Bounds(position, new Vector3(2f, 6f, 2f)),
+                    score = 100f - i
+                });
+            }
+
+            return build;
+        }
+
+        private static DungeonBuildResult CreateLineOfSightBuildResult()
+        {
+            DungeonBuildResult build = new DungeonBuildResult
+            {
+                floorIndex = 1,
+                playerSpawn = new Vector3(-20f, 3.5f, -20f),
+                playerSpawnNodeId = "ordinary_0"
+            };
+
+            build.rooms.Add(new DungeonRoomBuildRecord
+            {
+                nodeId = "ordinary_0",
+                roomType = DungeonNodeKind.Ordinary,
+                bounds = new Bounds(Vector3.zero, new Vector3(48f, 8f, 48f))
+            });
+
+            Vector3[] positions =
+            {
+                new Vector3(10f, 3.5f, 0f),
+                new Vector3(0f, 3.5f, 10f),
+                new Vector3(-10f, 3.5f, 0f),
+                new Vector3(0f, 3.5f, -10f)
+            };
+
+            for (int i = 0; i < positions.Length; i++)
+            {
+                build.spawnPoints.Add(new DungeonSpawnPointRecord
+                {
+                    nodeId = "ordinary_0",
+                    category = DungeonSpawnPointCategory.TargetDummy,
+                    position = positions[i],
+                    bounds = new Bounds(positions[i], new Vector3(2f, 6f, 2f)),
                     score = 100f - i
                 });
             }

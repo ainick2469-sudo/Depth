@@ -36,6 +36,7 @@ namespace FrontierDepths.Core
         private static AudioClip landingClip;
 
         public PlayerInteractor Interactor => interactor;
+        public Camera PlayerCamera => playerCamera;
         public bool IsUiCaptured => externalUiCaptured || manualPauseCaptured;
         public bool IsManualPauseActive => manualPauseCaptured;
 
