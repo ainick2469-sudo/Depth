@@ -51,16 +51,33 @@ namespace FrontierDepths.Tests.EditMode
         {
             float normalized = DungeonSceneController.NormalizeRoomSpacing(56f);
 
-            Assert.That(normalized, Is.InRange(78f, 86f));
+            Assert.That(normalized, Is.InRange(74f, 82f));
             Assert.AreEqual(DungeonSceneController.GetMinimumSafeRoomSpacing(), normalized, 0.01f);
         }
 
         [Test]
         public void KeyCombatTemplates_HaveLargerCombatReadyFootprints()
         {
-            AssertFootprint(DungeonRoomTemplateKind.SquareChamber, 42f, 42f);
-            AssertFootprint(DungeonRoomTemplateKind.BroadRectangle, 54f, 42f);
-            AssertFootprint(DungeonRoomTemplateKind.LongGallery, 66f, 30f);
+            AssertFootprint(DungeonRoomTemplateKind.SquareChamber, 54f, 54f);
+            AssertFootprint(DungeonRoomTemplateKind.BroadRectangle, 66f, 54f);
+            AssertFootprint(DungeonRoomTemplateKind.LongGallery, 66f, 42f);
+        }
+
+        [Test]
+        public void SafeTemplateFootprints_StayCompactEnoughForShorterSpacing()
+        {
+            DungeonRoomTemplateKind[] templates = DungeonRoomTemplateLibrary.GetGateOneSafeOrdinaryTemplates();
+            for (int i = 0; i < templates.Length; i++)
+            {
+                for (int rotation = 0; rotation < 4; rotation++)
+                {
+                    Vector2 footprint = DungeonRoomTemplateLibrary.GetFootprintSize(templates[i], rotation, 6f);
+                    Assert.LessOrEqual(
+                        Mathf.Max(footprint.x, footprint.y),
+                        66.01f,
+                        $"{templates[i]} rotation {rotation} is too large for compact 78-unit room spacing.");
+                }
+            }
         }
 
         private static void AssertFootprint(DungeonRoomTemplateKind kind, float expectedWidth, float expectedLength)

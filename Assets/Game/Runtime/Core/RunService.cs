@@ -146,7 +146,9 @@ namespace FrontierDepths.Core
                 floorBandId = source.floorBandId,
                 chapterId = source.chapterId,
                 themeKitId = source.themeKitId,
-                stairDiscovered = source.stairDiscovered
+                stairDiscovered = source.stairDiscovered,
+                graphLayoutSignature = source.graphLayoutSignature,
+                layoutShapeSignature = source.layoutShapeSignature
             };
         }
 

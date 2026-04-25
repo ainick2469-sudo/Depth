@@ -27,17 +27,19 @@ namespace FrontierDepths.World
         private const float SpawnCandidateRadius = 4f;
         private const float SpawnCandidateHeight = 3.5f;
         private const float SpawnCandidateClearanceRadius = 3f;
-        private const float EnemyMeleeSpawnMinimumDistance = 18f;
+        private const float EnemyMeleeSpawnMinimumDistance = 20f;
+        private const float CombatTestEnemyMinimumSeparation = 14f;
         private const float EnemyRangedSpawnMinimumDistance = 30f;
         private const float EliteEnemySpawnMinimumDistance = 24f;
         private const float TargetDummySpawnMinimumDistance = 12f;
         private const int MaxCategorySpawnPointsPerRoom = 4;
-        private const float DefaultRoomSpacing = 84f;
-        private const float MinimumRecommendedRoomSpacing = 78f;
-        private const float MaximumRecommendedRoomSpacing = 86f;
-        private const float MinimumRoomGap = 18f;
+        private const float DefaultRoomSpacing = 78f;
+        private const float MinimumRecommendedRoomSpacing = 74f;
+        private const float MaximumRecommendedRoomSpacing = 82f;
+        private const float MinimumRoomGap = 12f;
+        private const float CorridorTargetLength = 36f;
         private const string CombatTestStationName = "CombatTestStation";
-        private const string CombatTestEnemyName = "CombatTestEnemy";
+        private const string CombatTestEnemiesName = "CombatTestEnemies";
 
         private sealed class BoundarySpan
         {
@@ -81,7 +83,7 @@ namespace FrontierDepths.World
         [SerializeField] private Transform runtimeRoot;
         [SerializeField] private float roomSpacing = DefaultRoomSpacing;
         [SerializeField] private bool enableCombatTestStation = true;
-        [SerializeField] private bool enableCombatTestEnemy = true;
+        [SerializeField] private bool enableCombatTestEnemies = true;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private DungeonBuildResult activeBuildResult;
@@ -135,16 +137,24 @@ namespace FrontierDepths.World
                 : currentFloor.floorSeed;
 
             DungeonValidationReport latestReport = null;
+            List<GraphValidationReport> failedGraphReports = new List<GraphValidationReport>();
+            List<string> renderedValidationFailures = new List<string>();
+            FloorState repeatedFloorState = null;
+            DungeonLayoutGraph repeatedGraph = null;
+            GraphValidationReport repeatedGraphReport = null;
+            int repeatedAttemptNumber = 0;
             for (int attempt = 0; attempt < MaxBuildAttempts; attempt++)
             {
                 int attemptSeed = GraphFirstDungeonGenerator.GetNormalAttemptBaseSeed(baseSeed, attempt);
                 FloorState attemptFloorState = CloneFloorState(currentFloor, run.floorIndex, attemptSeed);
                 if (!generator.TryGenerateNormal(attemptFloorState, out DungeonLayoutGraph graph, out GraphValidationReport graphReport))
                 {
+                    failedGraphReports.Add(graphReport);
                     graphReport.Log("Normal dungeon graph generation failed.");
                     continue;
                 }
 
+                failedGraphReports.Add(graphReport);
                 graphReport.Log("Normal dungeon graph generation succeeded.");
                 DungeonBuildResult attemptBuild = BuildFloorAttempt(attemptFloorState, graph, graphReport, false, attempt + 1, MaxBuildAttempts);
                 latestReport = DungeonValidator.Validate(attemptBuild);
@@ -152,21 +162,66 @@ namespace FrontierDepths.World
                 Debug.Log(attemptBuild.validationSummary);
                 if (latestReport.IsValid)
                 {
+                    bool canTryAnotherNormalAttempt = attempt < MaxBuildAttempts - 1;
+                    if (ShouldRejectRepeatedLayout(run, attemptBuild, canTryAnotherNormalAttempt))
+                    {
+                        if (repeatedGraph == null)
+                        {
+                            repeatedFloorState = attemptFloorState;
+                            repeatedGraph = graph;
+                            repeatedGraphReport = graphReport;
+                            repeatedAttemptNumber = attempt + 1;
+                        }
+
+                        Debug.LogWarning(
+                            $"Normal dungeon layout shape repeated a recent floor on floor {attemptBuild.floorIndex}; " +
+                            "rerolling while normal attempts remain. Reliability still wins over anti-repetition.");
+                        ClearRuntimeRoot(true);
+                        continue;
+                    }
+
                     ApplySuccessfulBuild(run, attemptBuild);
                     return;
                 }
 
+                renderedValidationFailures.Add(latestReport.ToSummaryString(attemptBuild, 5));
                 latestReport.LogFailures(attemptBuild);
+                ClearRuntimeRoot(true);
+            }
+
+            if (repeatedGraph != null)
+            {
+                Debug.LogWarning("Anti-repetition found only repeated valid normal layouts; accepting best valid normal layout instead of falling back.");
+                DungeonBuildResult repeatedBuild = BuildFloorAttempt(
+                    repeatedFloorState,
+                    repeatedGraph,
+                    repeatedGraphReport,
+                    false,
+                    repeatedAttemptNumber,
+                    MaxBuildAttempts);
+                latestReport = DungeonValidator.Validate(repeatedBuild);
+                FinalizeValidation(repeatedBuild, latestReport, false);
+                Debug.Log(repeatedBuild.validationSummary);
+                if (latestReport.IsValid)
+                {
+                    ApplySuccessfulBuild(run, repeatedBuild);
+                    return;
+                }
+
+                renderedValidationFailures.Add(latestReport.ToSummaryString(repeatedBuild, 5));
+                latestReport.LogFailures(repeatedBuild);
                 ClearRuntimeRoot(true);
             }
 
             FloorState fallbackFloorState = CloneFloorState(currentFloor, run.floorIndex, baseSeed);
             DungeonLayoutGraph fallbackGraph = generator.GenerateFallback(fallbackFloorState);
             GraphValidationReport fallbackGraphReport = CreateFallbackGraphReport(fallbackFloorState, fallbackGraph);
+            LogFallbackDiagnostics(fallbackFloorState, failedGraphReports, renderedValidationFailures);
             Debug.Log($"Explicit dungeon fallback requested. {fallbackGraphReport.ToSummaryString()}");
             DungeonBuildResult fallbackBuild = BuildFloorAttempt(fallbackFloorState, fallbackGraph, fallbackGraphReport, true, 1, 1);
             latestReport = DungeonValidator.Validate(fallbackBuild);
             FinalizeValidation(fallbackBuild, latestReport, !latestReport.IsValid);
+            fallbackBuild.validationSummary = $"{fallbackBuild.validationSummary} | NORMAL GENERATION FAILED";
             Debug.Log(fallbackBuild.validationSummary);
             if (latestReport.IsValid)
             {
@@ -205,6 +260,9 @@ namespace FrontierDepths.World
                 graphLayoutSignature = graphValidationReport != null
                     ? graphValidationReport.layoutSignature
                     : DungeonLayoutSignatureUtility.BuildSignature(graph, floorState),
+                layoutShapeSignature = graphValidationReport != null && !string.IsNullOrWhiteSpace(graphValidationReport.layoutShapeSignature)
+                    ? graphValidationReport.layoutShapeSignature
+                    : DungeonLayoutSignatureUtility.BuildShapeSignature(graph),
                 entryNodeId = graph.entryHubNodeId,
                 transitUpNodeId = graph.transitUpNodeId,
                 transitDownNodeId = graph.transitDownNodeId,
@@ -246,6 +304,8 @@ namespace FrontierDepths.World
             currentBuildResult = buildResult;
             SetVisibleInteractablesEnabled(true);
             run.currentFloor.floorSeed = buildResult.seed;
+            run.currentFloor.graphLayoutSignature = buildResult.graphLayoutSignature ?? string.Empty;
+            run.currentFloor.layoutShapeSignature = buildResult.layoutShapeSignature ?? string.Empty;
             GameBootstrap.Instance.RunService.Save();
 
             FirstPersonController player = FindAnyObjectByType<FirstPersonController>();
@@ -256,7 +316,7 @@ namespace FrontierDepths.World
             }
 
             SpawnCombatTestStation(buildResult);
-            SpawnCombatTestEnemy(buildResult);
+            SpawnCombatTestEnemies(buildResult);
             RefreshStatusMessage();
         }
 
@@ -561,38 +621,57 @@ namespace FrontierDepths.World
             CreateTargetDummy(stationRoot.transform, stationSpawns[2].position, TargetDummyKind.StatusTest);
         }
 
-        private void SpawnCombatTestEnemy(DungeonBuildResult buildResult)
+        private void SpawnCombatTestEnemies(DungeonBuildResult buildResult)
         {
-            if (!enableCombatTestEnemy ||
+            if (!enableCombatTestEnemies ||
                 buildResult == null ||
-                buildResult.floorIndex != 1 ||
+                buildResult.floorIndex > 5 ||
                 buildResult.isEmergencyDebugBuild ||
                 runtimeRoot == null)
             {
                 return;
             }
 
-            if (runtimeRoot.Find(CombatTestEnemyName) != null)
-            {
-                return;
-            }
-
+            Transform enemyRoot = GetOrCreateCombatTestEnemiesRoot();
+            ClearCombatTestEnemies(enemyRoot, true);
+            int requestedCount = GetCombatTestEnemyCount(buildResult.floorIndex);
             List<Vector3> occupiedPositions = GetCombatTestStationOccupiedPositions();
-            DungeonSpawnPointRecord spawnPoint = SelectCombatTestEnemySpawn(buildResult, occupiedPositions);
-            if (spawnPoint == null)
+            List<DungeonSpawnPointRecord> spawnPoints = SelectCombatTestEnemySpawns(buildResult, requestedCount, occupiedPositions, true);
+            if (spawnPoints.Count == 0)
             {
                 Debug.LogWarning($"Combat test enemy skipped on floor {buildResult.floorIndex}: no safe EnemyMelee spawn point was available.");
                 return;
             }
 
-            CreateCombatTestEnemy(runtimeRoot, spawnPoint.position);
+            for (int i = 0; i < spawnPoints.Count; i++)
+            {
+                CreateCombatTestEnemy(enemyRoot, spawnPoints[i].position);
+            }
+
+            if (spawnPoints.Count < requestedCount)
+            {
+                Debug.LogWarning($"Combat test enemy population underfilled on floor {buildResult.floorIndex}: spawned {spawnPoints.Count}/{requestedCount} safe enemies.");
+            }
+
+            Debug.Log(GetCombatTestEnemySummary(buildResult, spawnPoints.Count, requestedCount));
         }
 
         internal static DungeonSpawnPointRecord SelectCombatTestEnemySpawn(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions = null)
         {
-            if (buildResult == null || buildResult.floorIndex != 1)
+            List<DungeonSpawnPointRecord> selected = SelectCombatTestEnemySpawns(buildResult, 1, occupiedPositions, false);
+            return selected.Count > 0 ? selected[0] : null;
+        }
+
+        internal static List<DungeonSpawnPointRecord> SelectCombatTestEnemySpawns(
+            DungeonBuildResult buildResult,
+            int requestedCount,
+            IList<Vector3> occupiedPositions = null,
+            bool requireReachability = false)
+        {
+            List<DungeonSpawnPointRecord> selected = new List<DungeonSpawnPointRecord>();
+            if (buildResult == null || buildResult.floorIndex > 5 || requestedCount <= 0)
             {
-                return null;
+                return selected;
             }
 
             List<DungeonSpawnPointRecord> candidates = new List<DungeonSpawnPointRecord>();
@@ -604,18 +683,7 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                DungeonRoomBuildRecord room = buildResult.FindRoom(spawnPoint.nodeId);
-                if (room == null || (room.roomType != DungeonNodeKind.Ordinary && room.roomType != DungeonNodeKind.Landmark))
-                {
-                    continue;
-                }
-
-                if (Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < EnemyMeleeSpawnMinimumDistance)
-                {
-                    continue;
-                }
-
-                if (IsNearOccupiedCombatTestPosition(spawnPoint.position, occupiedPositions))
+                if (!IsCombatTestEnemySpawnSafe(buildResult, spawnPoint, occupiedPositions, selected, requireReachability))
                 {
                     continue;
                 }
@@ -640,7 +708,119 @@ namespace FrontierDepths.World
                 return distanceCompare != 0 ? distanceCompare : right.score.CompareTo(left.score);
             });
 
-            return candidates.Count > 0 ? candidates[0] : null;
+            for (int i = 0; i < candidates.Count && selected.Count < requestedCount; i++)
+            {
+                DungeonSpawnPointRecord candidate = candidates[i];
+                if (!IsCombatTestEnemySpawnSafe(buildResult, candidate, occupiedPositions, selected, requireReachability))
+                {
+                    continue;
+                }
+
+                selected.Add(candidate);
+            }
+
+            return selected;
+        }
+
+        internal static bool IsCombatTestEnemySpawnSafe(
+            DungeonBuildResult buildResult,
+            DungeonSpawnPointRecord spawnPoint,
+            IList<Vector3> occupiedPositions,
+            IList<DungeonSpawnPointRecord> selectedSpawnPoints,
+            bool requireReachability = false)
+        {
+            if (buildResult == null || spawnPoint == null || spawnPoint.category != DungeonSpawnPointCategory.EnemyMelee)
+            {
+                return false;
+            }
+
+            DungeonRoomBuildRecord room = buildResult.FindRoom(spawnPoint.nodeId);
+            if (room == null || (room.roomType != DungeonNodeKind.Ordinary && room.roomType != DungeonNodeKind.Landmark))
+            {
+                return false;
+            }
+
+            if (Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < EnemyMeleeSpawnMinimumDistance)
+            {
+                return false;
+            }
+
+            if (IsNearOccupiedCombatTestPosition(spawnPoint.position, occupiedPositions, CombatTestEnemyMinimumSeparation))
+            {
+                return false;
+            }
+
+            if (selectedSpawnPoints != null)
+            {
+                for (int i = 0; i < selectedSpawnPoints.Count; i++)
+                {
+                    if (Vector3.Distance(spawnPoint.position, selectedSpawnPoints[i].position) < CombatTestEnemyMinimumSeparation)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            Bounds candidateBounds = GetSpawnPointBounds(spawnPoint);
+            candidateBounds.Expand(new Vector3(2f, 0f, 2f));
+            if (IntersectsBlockedSpawnGeometry(buildResult, room, candidateBounds))
+            {
+                return false;
+            }
+
+            return !requireReachability || HasCombatTestEnemyReachability(buildResult, spawnPoint);
+        }
+
+        private static int GetCombatTestEnemyCount(int floorIndex)
+        {
+            return floorIndex <= 1 ? 3 : 4;
+        }
+
+        private static string GetCombatTestEnemySummary(DungeonBuildResult buildResult, int spawnedCount, int requestedCount)
+        {
+            if (buildResult == null)
+            {
+                return "Combat test enemy summary unavailable.";
+            }
+
+            return
+                $"Combat test enemies | Floor {buildResult.floorIndex} | " +
+                $"Spawned {spawnedCount}/{requestedCount} | EnemyMelee spawn points {buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} | " +
+                $"PlayerNode {buildResult.playerSpawnNodeId}";
+        }
+
+        private Transform GetOrCreateCombatTestEnemiesRoot()
+        {
+            Transform existing = runtimeRoot != null ? runtimeRoot.Find(CombatTestEnemiesName) : null;
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            GameObject root = new GameObject(CombatTestEnemiesName);
+            root.transform.SetParent(runtimeRoot, false);
+            return root.transform;
+        }
+
+        private static void ClearCombatTestEnemies(Transform enemyRoot, bool immediate)
+        {
+            if (enemyRoot == null)
+            {
+                return;
+            }
+
+            for (int i = enemyRoot.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = enemyRoot.GetChild(i).gameObject;
+                if (immediate)
+                {
+                    DestroyImmediate(child);
+                }
+                else
+                {
+                    Destroy(child);
+                }
+            }
         }
 
         private List<Vector3> GetCombatTestStationOccupiedPositions()
@@ -669,7 +849,7 @@ namespace FrontierDepths.World
             return positions;
         }
 
-        private static bool IsNearOccupiedCombatTestPosition(Vector3 position, IList<Vector3> occupiedPositions)
+        private static bool IsNearOccupiedCombatTestPosition(Vector3 position, IList<Vector3> occupiedPositions, float minimumDistance = 6f)
         {
             if (occupiedPositions == null)
             {
@@ -678,13 +858,104 @@ namespace FrontierDepths.World
 
             for (int i = 0; i < occupiedPositions.Count; i++)
             {
-                if (Vector3.Distance(position, occupiedPositions[i]) < 6f)
+                if (Vector3.Distance(position, occupiedPositions[i]) < minimumDistance)
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static Bounds GetSpawnPointBounds(DungeonSpawnPointRecord spawnPoint)
+        {
+            if (spawnPoint.bounds.size.sqrMagnitude > 0.01f)
+            {
+                return spawnPoint.bounds;
+            }
+
+            return new Bounds(spawnPoint.position, new Vector3(SpawnCandidateClearanceRadius, 6f, SpawnCandidateClearanceRadius));
+        }
+
+        private static bool IntersectsBlockedSpawnGeometry(DungeonBuildResult buildResult, DungeonRoomBuildRecord room, Bounds candidateBounds)
+        {
+            for (int i = 0; i < buildResult.interactables.Count; i++)
+            {
+                DungeonInteractableBuildRecord interactable = buildResult.interactables[i];
+                if (interactable.nodeId != room.nodeId)
+                {
+                    continue;
+                }
+
+                Bounds bounds = interactable.bounds;
+                bounds.Expand(new Vector3(SpawnInteractableClearance, 0f, SpawnInteractableClearance));
+                if (bounds.Intersects(candidateBounds))
+                {
+                    return true;
+                }
+            }
+
+            for (int i = 0; i < buildResult.reservedZones.Count; i++)
+            {
+                DungeonReservedZoneRecord zone = buildResult.reservedZones[i];
+                if (zone.ownerId != room.nodeId || zone.kind != "Doorway")
+                {
+                    continue;
+                }
+
+                Bounds bounds = zone.bounds;
+                bounds.Expand(new Vector3(SpawnDoorwayClearance, 0f, SpawnDoorwayClearance));
+                if (bounds.Intersects(candidateBounds))
+                {
+                    return true;
+                }
+            }
+
+            for (int i = 0; i < buildResult.wallSpans.Count; i++)
+            {
+                DungeonWallSpanRecord wall = buildResult.wallSpans[i];
+                if (wall.ownerId != room.nodeId)
+                {
+                    continue;
+                }
+
+                Bounds bounds = wall.bounds;
+                bounds.Expand(new Vector3(0.25f, 0f, 0.25f));
+                if (bounds.Intersects(candidateBounds))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool HasCombatTestEnemyReachability(DungeonBuildResult buildResult, DungeonSpawnPointRecord spawnPoint)
+        {
+            if (buildResult == null || spawnPoint == null)
+            {
+                return false;
+            }
+
+            if (buildResult.graph != null &&
+                !string.IsNullOrWhiteSpace(buildResult.playerSpawnNodeId) &&
+                !string.IsNullOrWhiteSpace(spawnPoint.nodeId) &&
+                !buildResult.graph.HasPath(buildResult.playerSpawnNodeId, spawnPoint.nodeId))
+            {
+                return false;
+            }
+
+            DungeonRoomBuildRecord room = buildResult.FindRoom(spawnPoint.nodeId);
+            Vector3 start = room != null
+                ? new Vector3(room.bounds.center.x, spawnPoint.position.y + 0.85f, room.bounds.center.z)
+                : buildResult.playerSpawn + Vector3.up * 0.85f;
+            Vector3 target = spawnPoint.position + Vector3.up * 0.85f;
+            if ((target - start).sqrMagnitude <= 0.01f)
+            {
+                return true;
+            }
+
+            return !Physics.Linecast(start, target, out _, PlayerWeaponController.DefaultWeaponRaycastMask, QueryTriggerInteraction.Ignore);
         }
 
         internal static List<DungeonSpawnPointRecord> SelectCombatTestStationSpawns(DungeonBuildResult buildResult, int requestedCount, bool requireLineOfSight = false)
@@ -1069,16 +1340,25 @@ namespace FrontierDepths.World
 
             float corridorLengthTotal = 0f;
             float maxCorridorLength = 0f;
+            int corridorsOverTarget = 0;
             for (int i = 0; i < buildResult.corridors.Count; i++)
             {
-                corridorLengthTotal += buildResult.corridors[i].length;
-                maxCorridorLength = Mathf.Max(maxCorridorLength, buildResult.corridors[i].length);
+                float length = buildResult.corridors[i].length;
+                corridorLengthTotal += length;
+                maxCorridorLength = Mathf.Max(maxCorridorLength, length);
+                if (length > CorridorTargetLength)
+                {
+                    corridorsOverTarget++;
+                }
             }
 
             buildResult.averageRoomFootprint = buildResult.rooms.Count > 0 ? roomFootprintTotal / buildResult.rooms.Count : 0f;
             buildResult.largestRoomFootprint = largestRoomFootprint;
             buildResult.averageCorridorLength = buildResult.corridors.Count > 0 ? corridorLengthTotal / buildResult.corridors.Count : 0f;
             buildResult.maxCorridorLength = maxCorridorLength;
+            buildResult.percentCorridorsOverTarget = buildResult.corridors.Count > 0
+                ? corridorsOverTarget * 100f / buildResult.corridors.Count
+                : 0f;
         }
 
         private bool TryFindSafeSpawnPosition(DungeonRoomBuildRecord room, string nodeId, out Vector3 spawnPosition)
@@ -1327,6 +1607,7 @@ namespace FrontierDepths.World
             }
 
             bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
             if (Input.GetKeyDown(KeyCode.F5))
             {
                 if (shiftHeld)
@@ -1337,6 +1618,26 @@ namespace FrontierDepths.World
                 {
                     BuildFloor();
                 }
+            }
+
+            if (ctrlHeld && Input.GetKeyDown(KeyCode.F7))
+            {
+                if (shiftHeld)
+                {
+                    KillCombatTestEnemies();
+                }
+                else
+                {
+                    RespawnCombatTestEnemies();
+                }
+
+                return;
+            }
+
+            if (ctrlHeld && Input.GetKeyDown(KeyCode.F8))
+            {
+                PrintCombatTestEnemySummary();
+                return;
             }
 
             if (Input.GetKeyDown(KeyCode.F6))
@@ -1380,6 +1681,64 @@ namespace FrontierDepths.World
             run.currentFloor.floorSeed = Mathf.Abs(Guid.NewGuid().GetHashCode()) + Mathf.Max(1, run.floorIndex) * 977;
             GameBootstrap.Instance.RunService.Save();
             BuildFloor();
+        }
+
+        private void RespawnCombatTestEnemies()
+        {
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            if (visibleBuild == null)
+            {
+                Debug.LogWarning("Cannot respawn combat test enemies: dungeon build not ready.");
+                return;
+            }
+
+            SpawnCombatTestEnemies(visibleBuild);
+        }
+
+        private void KillCombatTestEnemies()
+        {
+            Transform enemyRoot = runtimeRoot != null ? runtimeRoot.Find(CombatTestEnemiesName) : null;
+            if (enemyRoot == null)
+            {
+                Debug.Log("No combat test enemies to kill.");
+                return;
+            }
+
+            EnemyHealth[] enemies = enemyRoot.GetComponentsInChildren<EnemyHealth>(true);
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                if (enemies[i] != null && !enemies[i].IsDead)
+                {
+                    enemies[i].ApplyDamage(new DamageInfo
+                    {
+                        amount = 9999f,
+                        source = gameObject,
+                        weaponId = "debug.kill_all_test_enemies",
+                        damageType = DamageType.Void,
+                        deliveryType = DamageDeliveryType.Trap,
+                        hitPoint = enemies[i].transform.position,
+                        hitNormal = Vector3.up
+                    });
+                }
+            }
+
+            Debug.Log($"Killed {enemies.Length} combat test enemies.");
+        }
+
+        private void PrintCombatTestEnemySummary()
+        {
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            int activeCount = CountCombatTestEnemies();
+            int requested = visibleBuild != null && visibleBuild.floorIndex <= 5 ? GetCombatTestEnemyCount(visibleBuild.floorIndex) : 0;
+            Debug.Log(visibleBuild != null
+                ? GetCombatTestEnemySummary(visibleBuild, activeCount, requested)
+                : $"Combat test enemy summary unavailable. Active={activeCount}");
+        }
+
+        private int CountCombatTestEnemies()
+        {
+            Transform enemyRoot = runtimeRoot != null ? runtimeRoot.Find(CombatTestEnemiesName) : null;
+            return enemyRoot != null ? enemyRoot.GetComponentsInChildren<EnemyHealth>(true).Length : 0;
         }
 
         private void TryTeleportToNode(string nodeId)
@@ -1468,10 +1827,45 @@ namespace FrontierDepths.World
                 floorBandId = source != null ? source.floorBandId : "floorband.frontier_mine",
                 chapterId = source != null ? source.chapterId : "chapter.frontier_descent",
                 themeKitId = source != null ? source.themeKitId : "theme.frontier_town",
-                stairDiscovered = source != null && source.stairDiscovered
+                stairDiscovered = source != null && source.stairDiscovered,
+                graphLayoutSignature = source != null ? source.graphLayoutSignature : string.Empty,
+                layoutShapeSignature = source != null ? source.layoutShapeSignature : string.Empty
             };
             clone.Normalize(clone.floorIndex, floorSeed);
             return clone;
+        }
+
+        internal static bool ShouldRejectRepeatedLayout(RunState run, DungeonBuildResult buildResult, bool canTryAnotherNormalAttempt)
+        {
+            if (!canTryAnotherNormalAttempt ||
+                run == null ||
+                buildResult == null ||
+                buildResult.requestedFallback ||
+                string.IsNullOrWhiteSpace(buildResult.layoutShapeSignature) ||
+                run.visitedFloors == null)
+            {
+                return false;
+            }
+
+            int currentFloor = Mathf.Max(1, buildResult.floorIndex);
+            for (int i = 0; i < run.visitedFloors.Count; i++)
+            {
+                FloorState visited = run.visitedFloors[i];
+                if (visited == null ||
+                    visited.floorIndex >= currentFloor ||
+                    currentFloor - visited.floorIndex > 3 ||
+                    string.IsNullOrWhiteSpace(visited.layoutShapeSignature))
+                {
+                    continue;
+                }
+
+                if (string.Equals(visited.layoutShapeSignature, buildResult.layoutShapeSignature, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void ClearRuntimeRoot(bool immediate)
@@ -1538,8 +1932,111 @@ namespace FrontierDepths.World
                 floorIndex = floorIndex,
                 seed = seed,
                 attemptCount = 1,
-                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, seed)
+                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, seed),
+                layoutShapeSignature = DungeonLayoutSignatureUtility.BuildShapeSignature(graph)
             };
+        }
+
+        private static void LogFallbackDiagnostics(
+            FloorState fallbackFloorState,
+            List<GraphValidationReport> failedGraphReports,
+            List<string> renderedValidationFailures)
+        {
+            int floorIndex = fallbackFloorState != null ? Mathf.Max(1, fallbackFloorState.floorIndex) : 1;
+            int seed = fallbackFloorState != null ? fallbackFloorState.floorSeed : 0;
+            string graphReasons = BuildTopGraphFailureSummary(failedGraphReports, 3);
+            string attemptSeeds = BuildAttemptSeedSummary(failedGraphReports);
+            string bestFailed = BuildBestFailedGraphSummary(failedGraphReports);
+            string renderedReasons = renderedValidationFailures != null && renderedValidationFailures.Count > 0
+                ? string.Join(" || ", renderedValidationFailures)
+                : "None";
+
+            Debug.LogError(
+                $"REQUESTED FALLBACK - NORMAL GENERATION FAILED | Floor {floorIndex} | Seed {seed} | " +
+                $"NormalAttemptSeeds {attemptSeeds} | TopGraphFailures {graphReasons} | BestFailedGraph {bestFailed} | " +
+                $"RenderedValidationFailures {renderedReasons}");
+        }
+
+        private static string BuildAttemptSeedSummary(List<GraphValidationReport> reports)
+        {
+            if (reports == null || reports.Count == 0)
+            {
+                return "None";
+            }
+
+            List<string> parts = new List<string>();
+            for (int i = 0; i < reports.Count; i++)
+            {
+                parts.Add(reports[i].GetAttemptSeedsSummary());
+            }
+
+            return string.Join(" | ", parts);
+        }
+
+        private static string BuildBestFailedGraphSummary(List<GraphValidationReport> reports)
+        {
+            if (reports == null || reports.Count == 0)
+            {
+                return "None";
+            }
+
+            for (int i = reports.Count - 1; i >= 0; i--)
+            {
+                string summary = reports[i].GetBestFailedAttemptSummary();
+                if (!string.IsNullOrWhiteSpace(summary) && summary != "None")
+                {
+                    return summary;
+                }
+            }
+
+            return "None";
+        }
+
+        private static string BuildTopGraphFailureSummary(List<GraphValidationReport> reports, int maxReasons)
+        {
+            if (reports == null || reports.Count == 0)
+            {
+                return "None";
+            }
+
+            Dictionary<string, int> counts = new Dictionary<string, int>();
+            for (int reportIndex = 0; reportIndex < reports.Count; reportIndex++)
+            {
+                GraphValidationReport report = reports[reportIndex];
+                for (int attemptIndex = 0; attemptIndex < report.attempts.Count; attemptIndex++)
+                {
+                    List<string> failures = report.attempts[attemptIndex].failures;
+                    for (int failureIndex = 0; failureIndex < failures.Count; failureIndex++)
+                    {
+                        string reason = string.IsNullOrWhiteSpace(failures[failureIndex]) ? "Unknown reason." : failures[failureIndex];
+                        if (!counts.TryAdd(reason, 1))
+                        {
+                            counts[reason]++;
+                        }
+                    }
+                }
+            }
+
+            if (counts.Count == 0)
+            {
+                return "None";
+            }
+
+            List<KeyValuePair<string, int>> ordered = new List<KeyValuePair<string, int>>(counts);
+            ordered.Sort((left, right) =>
+            {
+                int countCompare = right.Value.CompareTo(left.Value);
+                return countCompare != 0 ? countCompare : string.CompareOrdinal(left.Key, right.Key);
+            });
+
+            List<string> parts = new List<string>();
+            int limit = Mathf.Min(maxReasons, ordered.Count);
+            for (int i = 0; i < limit; i++)
+            {
+                parts.Add($"{ordered[i].Key} x{ordered[i].Value}");
+            }
+
+            return string.Join("; ", parts);
         }
 
         private static string ComposeBuildSummary(DungeonBuildResult buildResult)
@@ -1550,7 +2047,7 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | CorridorOver36 {buildResult.percentCorridorsOverTarget:0.#}% | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
         }
 
         private void SetVisibleInteractablesEnabled(bool enabled)

@@ -18,6 +18,16 @@ namespace FrontierDepths.Tests.EditMode
             6123
         };
 
+        private static readonly int[] ReliabilitySeeds =
+        {
+            778287037,
+            1932105958,
+            1039624398,
+            5100,
+            8800,
+            14000
+        };
+
         [Test]
         public void Generator_AlwaysBuildsPathsFromEntryToTransitRooms()
         {
@@ -85,6 +95,48 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Generator_PrototypeFloorsOneToFive_ReliablyGenerateNormalLayouts()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            for (int floor = 1; floor <= 5; floor++)
+            {
+                for (int seedIndex = 0; seedIndex < ReliabilitySeeds.Length; seedIndex++)
+                {
+                    int seed = ReliabilitySeeds[seedIndex] + floor * 977;
+                    DungeonLayoutGraph graph = GenerateNormalGraph(generator, floor, seed, out GraphValidationReport report);
+
+                    Assert.Greater(graph.nodes.Count, 6, report.ToSummaryString(10));
+                    Assert.IsFalse(report.ToSummaryString(10).Contains("fallback"));
+                }
+            }
+        }
+
+        [Test]
+        public void Generator_FloorFourRegressionSeed_UsesTransitionProfileWithoutFallback()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 4, 1039624398, out GraphValidationReport report);
+
+            Assert.That(graph.nodes.Count, Is.InRange(14, 18), report.ToSummaryString(10));
+            Assert.GreaterOrEqual(GetCoveredSectorCount(graph), 3, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(GetMinorAxisExtent(graph), 3, report.ToSummaryString(10));
+            Assert.GreaterOrEqual(graph.edges.Count, graph.nodes.Count - 1, report.ToSummaryString(10));
+        }
+
+        [Test]
+        public void Generator_FloorsFourAndFive_UsePrototypeTransitionRoomCounts()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            for (int floor = 4; floor <= 5; floor++)
+            {
+                DungeonLayoutGraph graph = GenerateNormalGraph(generator, floor, 1039624398 + floor * 977, out GraphValidationReport report);
+
+                Assert.That(graph.nodes.Count, Is.InRange(14, 18), report.ToSummaryString(10));
+                Assert.GreaterOrEqual(GetCoveredSectorCount(graph), 3, report.ToSummaryString(10));
+            }
+        }
+
+        [Test]
         public void Generator_SpreadsSpecialRoomsApart()
         {
             GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
@@ -129,6 +181,83 @@ namespace FrontierDepths.Tests.EditMode
             string floorTwoSignature = DungeonLayoutSignatureUtility.BuildSignature(floorTwo, 2, baseSeed);
 
             Assert.AreNotEqual(floorOneSignature, floorTwoSignature);
+        }
+
+        [Test]
+        public void LayoutShapeSignature_ExcludesFloorSeedAndTemplateCosmetics()
+        {
+            GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+            DungeonLayoutGraph graph = GenerateNormalGraph(generator, 4, 1039624398, out _);
+
+            string fullOne = DungeonLayoutSignatureUtility.BuildSignature(graph, 4, 1039624398);
+            string fullTwo = DungeonLayoutSignatureUtility.BuildSignature(graph, 5, 1039625367);
+            string shapeOne = DungeonLayoutSignatureUtility.BuildShapeSignature(graph);
+            string shapeTwo = DungeonLayoutSignatureUtility.BuildShapeSignature(graph);
+
+            Assert.AreNotEqual(fullOne, fullTwo);
+            Assert.AreEqual(shapeOne, shapeTwo);
+            StringAssert.DoesNotContain("1039624398", shapeOne);
+            StringAssert.DoesNotContain("LChamberSafe", shapeOne);
+        }
+
+        [Test]
+        public void AntiRepetition_PrefersUniqueShapeButNeverForcesFallback()
+        {
+            RunState run = new RunState
+            {
+                floorIndex = 4,
+                currentFloor = new FloorState { floorIndex = 4, floorSeed = 4000 },
+                visitedFloors = new List<FloorState>
+                {
+                    new FloorState { floorIndex = 1, layoutShapeSignature = "repeat-shape" },
+                    new FloorState { floorIndex = 2, layoutShapeSignature = "other-shape" },
+                    new FloorState { floorIndex = 3, layoutShapeSignature = "repeat-shape" }
+                }
+            };
+            DungeonBuildResult repeated = new DungeonBuildResult
+            {
+                floorIndex = 4,
+                layoutShapeSignature = "repeat-shape"
+            };
+
+            Assert.IsTrue(DungeonSceneController.ShouldRejectRepeatedLayout(run, repeated, true));
+            Assert.IsFalse(DungeonSceneController.ShouldRejectRepeatedLayout(run, repeated, false));
+        }
+
+        [Test]
+        public void GraphValidationReport_FallbackDiagnosticsExposeTopReasonsAndBestAttempt()
+        {
+            GraphValidationReport report = new GraphValidationReport
+            {
+                floorIndex = 4,
+                seed = 1039624398,
+                attemptCount = 2
+            };
+            GraphValidationAttemptResult first = new GraphValidationAttemptResult
+            {
+                attemptNumber = 1,
+                attemptSeed = 10,
+                layoutSignature = "layout-a",
+                layoutShapeSignature = "shape-a",
+                graph = new DungeonLayoutGraph()
+            };
+            first.failures.Add("Covered sectors 2 below required 3.");
+            GraphValidationAttemptResult second = new GraphValidationAttemptResult
+            {
+                attemptNumber = 2,
+                attemptSeed = 20,
+                layoutSignature = "layout-b",
+                layoutShapeSignature = "shape-b",
+                graph = new DungeonLayoutGraph()
+            };
+            second.failures.Add("Covered sectors 2 below required 3.");
+            second.failures.Add("Edge count 10 below required 14.");
+            report.attempts.Add(first);
+            report.attempts.Add(second);
+
+            StringAssert.Contains("10, 20", report.GetAttemptSeedsSummary());
+            StringAssert.Contains("Covered sectors 2 below required 3. x2", report.GetTopFailureReasonsSummary(3));
+            StringAssert.Contains("shape-a", report.GetBestFailedAttemptSummary());
         }
 
         [Test]
@@ -329,6 +458,23 @@ namespace FrontierDepths.Tests.EditMode
             }
 
             return best;
+        }
+
+        private static int GetMinorAxisExtent(DungeonLayoutGraph graph)
+        {
+            int minX = int.MaxValue;
+            int maxX = int.MinValue;
+            int minY = int.MaxValue;
+            int maxY = int.MinValue;
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                minX = Mathf.Min(minX, graph.nodes[i].gridPosition.x);
+                maxX = Mathf.Max(maxX, graph.nodes[i].gridPosition.x);
+                minY = Mathf.Min(minY, graph.nodes[i].gridPosition.y);
+                maxY = Mathf.Max(maxY, graph.nodes[i].gridPosition.y);
+            }
+
+            return Mathf.Min(maxX - minX, maxY - minY);
         }
 
         private static int GetNeighborCount(DungeonLayoutGraph graph, string nodeId)

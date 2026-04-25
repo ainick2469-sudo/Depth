@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using FrontierDepths.Core;
 using UnityEngine;
 
 namespace FrontierDepths.Combat
@@ -9,12 +11,16 @@ namespace FrontierDepths.Combat
         private static readonly Color IdleColor = new Color(0.72f, 0.28f, 0.22f, 1f);
         private static readonly Color ChaseColor = new Color(0.92f, 0.42f, 0.18f, 1f);
         private static readonly Color AttackColor = new Color(1f, 0.12f, 0.08f, 1f);
+        private const float LastKnownPositionStopDistance = 1.2f;
+        private static readonly List<SimpleMeleeEnemyController> ActiveEnemies = new List<SimpleMeleeEnemyController>();
 
         [SerializeField] private float moveSpeed = 4.6f;
         [SerializeField] private float detectionRange = 45f;
         [SerializeField] private float attackRange = 2.2f;
         [SerializeField] private float attackDamage = 10f;
         [SerializeField] private float attackCooldown = 1.2f;
+        [SerializeField] private float alertMemoryDuration = 8f;
+        [SerializeField] private float groupAlertRadius = 30f;
         [SerializeField] private float gravity = -20f;
         [SerializeField] private bool requireLineOfSightToAttack = true;
         [SerializeField] private LayerMask lineOfSightMask = -1;
@@ -25,27 +31,45 @@ namespace FrontierDepths.Combat
         private float nextAttackTime;
         private float verticalVelocity;
         private float nextTargetResolveTime;
+        private float alertUntilTime;
+        private Vector3 lastKnownTargetPosition;
         private SimpleMeleeEnemyState state;
         private bool subscribedToHealth;
+        private bool subscribedToGameplayEvents;
+        private bool registeredActive;
+        private bool hasLastKnownTargetPosition;
 
         public SimpleMeleeEnemyState State => state;
         public float NextAttackTime => nextAttackTime;
+        public bool IsAlerted => IsAlertedAt(Time.time);
 
         private void Awake()
         {
             EnsureComponents();
         }
 
+        private void OnEnable()
+        {
+            RegisterActiveEnemy();
+            SubscribeGameplayEvents();
+            EnsureComponents();
+        }
+
+        private void OnDisable()
+        {
+            UnregisterActiveEnemy();
+            UnsubscribeGameplayEvents();
+            UnsubscribeHealthEvents();
+        }
+
         private void OnDestroy()
         {
-            if (health != null)
-            {
-                health.Died -= HandleDied;
-            }
+            OnDisable();
         }
 
         private void Update()
         {
+            float currentTime = Time.time;
             EnsureComponents();
             if (health == null || health.IsDead)
             {
@@ -56,6 +80,18 @@ namespace FrontierDepths.Combat
             ResolveTarget();
             if (target == null || target.IsDead)
             {
+                if (IsAlertedAt(currentTime) && hasLastKnownTargetPosition)
+                {
+                    Vector3 toLastKnown = lastKnownTargetPosition - transform.position;
+                    toLastKnown.y = 0f;
+                    if (toLastKnown.magnitude > LastKnownPositionStopDistance)
+                    {
+                        SetState(SimpleMeleeEnemyState.Chase);
+                        MoveToward(toLastKnown);
+                        return;
+                    }
+                }
+
                 SetState(SimpleMeleeEnemyState.Idle);
                 ApplyGravityOnly();
                 return;
@@ -64,7 +100,14 @@ namespace FrontierDepths.Combat
             Vector3 toTarget = target.transform.position - transform.position;
             toTarget.y = 0f;
             float distance = toTarget.magnitude;
-            if (distance > detectionRange)
+            bool alerted = IsAlertedAt(currentTime);
+            if (!alerted)
+            {
+                lastKnownTargetPosition = target.transform.position;
+                hasLastKnownTargetPosition = true;
+            }
+
+            if (distance > detectionRange && !alerted)
             {
                 SetState(SimpleMeleeEnemyState.Idle);
                 ApplyGravityOnly();
@@ -74,7 +117,7 @@ namespace FrontierDepths.Combat
             if (distance <= attackRange && HasLineOfSightTo(target))
             {
                 SetState(SimpleMeleeEnemyState.Attack);
-                TryApplyAttack(target, Time.time);
+                TryApplyAttack(target, currentTime);
                 ApplyGravityOnly();
                 return;
             }
@@ -121,13 +164,50 @@ namespace FrontierDepths.Combat
             return toTarget.magnitude <= attackRange && currentTime >= nextAttackTime && HasLineOfSightTo(playerHealth);
         }
 
+        internal bool IsAlertedAt(float currentTime)
+        {
+            return currentTime <= alertUntilTime;
+        }
+
+        internal void Alert(PlayerHealth playerHealth, Vector3 knownPosition, float currentTime)
+        {
+            EnsureComponents();
+            if (health == null || health.IsDead)
+            {
+                return;
+            }
+
+            target = playerHealth != null && !playerHealth.IsDead ? playerHealth : target;
+            lastKnownTargetPosition = target != null ? target.transform.position : knownPosition;
+            hasLastKnownTargetPosition = true;
+            alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
+            SetState(SimpleMeleeEnemyState.Chase);
+        }
+
+        internal void HandleDamagedForTests(DamageInfo damageInfo, DamageResult result, float currentTime)
+        {
+            HandleDamageAggro(damageInfo, result, currentTime);
+        }
+
+        internal bool HandleWeaponFiredForTests(GameplayEvent gameplayEvent, float currentTime)
+        {
+            return HandleWeaponFired(gameplayEvent, currentTime);
+        }
+
         private void EnsureComponents()
         {
             controller ??= GetComponent<CharacterController>();
             health ??= GetComponent<EnemyHealth>();
-            if (health != null && !subscribedToHealth)
+            if (isActiveAndEnabled && (health == null || !health.IsDead))
+            {
+                RegisterActiveEnemy();
+                SubscribeGameplayEvents();
+            }
+
+            if (health != null && !subscribedToHealth && !health.IsDead)
             {
                 health.Died += HandleDied;
+                health.Damaged += HandleDamaged;
                 health.SetStateColor(IdleColor);
                 subscribedToHealth = true;
             }
@@ -147,6 +227,65 @@ namespace FrontierDepths.Combat
 
             target = FindAnyObjectByType<PlayerHealth>();
             nextTargetResolveTime = Time.unscaledTime + 0.35f;
+        }
+
+        private void HandleDamaged(EnemyHealth enemyHealth, DamageInfo damageInfo, DamageResult result)
+        {
+            HandleDamageAggro(damageInfo, result, Time.time);
+        }
+
+        private void HandleDamageAggro(DamageInfo damageInfo, DamageResult result, float currentTime)
+        {
+            EnsureComponents();
+            if (!result.applied || health == null || health.IsDead)
+            {
+                return;
+            }
+
+            PlayerHealth sourcePlayer = ResolvePlayerFromSource(damageInfo.source);
+            Vector3 knownPosition = sourcePlayer != null
+                ? sourcePlayer.transform.position
+                : (damageInfo.source != null ? damageInfo.source.transform.position : damageInfo.hitPoint);
+
+            if (!result.killedTarget)
+            {
+                Alert(sourcePlayer, knownPosition, currentTime);
+            }
+
+            AlertNearbyAllies(sourcePlayer, knownPosition, currentTime, this);
+        }
+
+        private void HandleGameplayEvent(GameplayEvent gameplayEvent)
+        {
+            if (gameplayEvent.eventType == GameplayEventType.WeaponFired)
+            {
+                HandleWeaponFired(gameplayEvent, Time.time);
+            }
+        }
+
+        private bool HandleWeaponFired(GameplayEvent gameplayEvent, float currentTime)
+        {
+            EnsureComponents();
+            if (health == null || health.IsDead || !IsEventOnCurrentFloor(gameplayEvent))
+            {
+                return false;
+            }
+
+            float radius = Mathf.Max(0f, gameplayEvent.radius);
+            if (radius <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 eventPosition = gameplayEvent.worldPosition;
+            if ((transform.position - eventPosition).sqrMagnitude > radius * radius)
+            {
+                return false;
+            }
+
+            PlayerHealth sourcePlayer = ResolvePlayerFromSource(gameplayEvent.sourceObject);
+            Alert(sourcePlayer, eventPosition, currentTime);
+            return true;
         }
 
         private void MoveToward(Vector3 planarDirection)
@@ -256,11 +395,116 @@ namespace FrontierDepths.Combat
 
         private void HandleDied(EnemyHealth enemyHealth)
         {
+            target = null;
+            alertUntilTime = 0f;
+            hasLastKnownTargetPosition = false;
             SetState(SimpleMeleeEnemyState.Dead);
+            UnregisterActiveEnemy();
+            UnsubscribeGameplayEvents();
+            UnsubscribeHealthEvents();
             if (controller != null)
             {
                 controller.enabled = false;
             }
+        }
+
+        private static PlayerHealth ResolvePlayerFromSource(GameObject source)
+        {
+            return source != null ? source.GetComponentInParent<PlayerHealth>() : null;
+        }
+
+        private static void AlertNearbyAllies(
+            PlayerHealth sourcePlayer,
+            Vector3 knownPosition,
+            float currentTime,
+            SimpleMeleeEnemyController sourceEnemy)
+        {
+            SimpleMeleeEnemyController[] sceneEnemies = FindObjectsByType<SimpleMeleeEnemyController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None);
+            for (int i = 0; i < sceneEnemies.Length; i++)
+            {
+                if (sceneEnemies[i] != null)
+                {
+                    sceneEnemies[i].EnsureComponents();
+                }
+            }
+
+            List<SimpleMeleeEnemyController> snapshot = new List<SimpleMeleeEnemyController>(ActiveEnemies);
+            for (int i = snapshot.Count - 1; i >= 0; i--)
+            {
+                SimpleMeleeEnemyController enemy = snapshot[i];
+                if (enemy == null || enemy == sourceEnemy || enemy.health == null || enemy.health.IsDead)
+                {
+                    continue;
+                }
+
+                if ((enemy.transform.position - knownPosition).sqrMagnitude > enemy.groupAlertRadius * enemy.groupAlertRadius)
+                {
+                    continue;
+                }
+
+                enemy.Alert(sourcePlayer, knownPosition, currentTime);
+            }
+        }
+
+        private void RegisterActiveEnemy()
+        {
+            if (!registeredActive)
+            {
+                ActiveEnemies.Add(this);
+                registeredActive = true;
+            }
+        }
+
+        private void UnregisterActiveEnemy()
+        {
+            if (registeredActive)
+            {
+                ActiveEnemies.Remove(this);
+                registeredActive = false;
+            }
+        }
+
+        private void SubscribeGameplayEvents()
+        {
+            if (!subscribedToGameplayEvents)
+            {
+                GameplayEventBus.Subscribe(HandleGameplayEvent);
+                subscribedToGameplayEvents = true;
+            }
+        }
+
+        private void UnsubscribeGameplayEvents()
+        {
+            if (subscribedToGameplayEvents)
+            {
+                GameplayEventBus.Unsubscribe(HandleGameplayEvent);
+                subscribedToGameplayEvents = false;
+            }
+        }
+
+        private void UnsubscribeHealthEvents()
+        {
+            if (health != null && subscribedToHealth)
+            {
+                health.Died -= HandleDied;
+                health.Damaged -= HandleDamaged;
+                subscribedToHealth = false;
+            }
+        }
+
+        private static bool IsEventOnCurrentFloor(GameplayEvent gameplayEvent)
+        {
+            if (gameplayEvent.floorIndex <= 0)
+            {
+                return true;
+            }
+
+            RunState run = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current
+                : null;
+            return run == null || run.floorIndex <= 0 || run.floorIndex == gameplayEvent.floorIndex;
         }
     }
 

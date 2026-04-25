@@ -18,6 +18,7 @@ namespace FrontierDepths.World
         public int attemptNumber;
         public int attemptCount;
         public string graphLayoutSignature;
+        public string layoutShapeSignature;
         public string validationSummary;
         public Vector3 playerSpawn;
         public string playerSpawnNodeId;
@@ -31,6 +32,7 @@ namespace FrontierDepths.World
         public float largestRoomFootprint;
         public float averageCorridorLength;
         public float maxCorridorLength;
+        public float percentCorridorsOverTarget;
 
         public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
         public readonly List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();

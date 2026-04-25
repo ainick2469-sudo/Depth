@@ -96,7 +96,9 @@ namespace FrontierDepths.Core
                 floorBandId = source.floorBandId,
                 chapterId = source.chapterId,
                 themeKitId = source.themeKitId,
-                stairDiscovered = source.stairDiscovered
+                stairDiscovered = source.stairDiscovered,
+                graphLayoutSignature = source.graphLayoutSignature,
+                layoutShapeSignature = source.layoutShapeSignature
             };
         }
     }
@@ -110,6 +112,8 @@ namespace FrontierDepths.Core
         public string chapterId = "chapter.frontier_descent";
         public string themeKitId = "theme.frontier_town";
         public bool stairDiscovered;
+        public string graphLayoutSignature = string.Empty;
+        public string layoutShapeSignature = string.Empty;
 
         public void Normalize(int fallbackFloorIndex, int fallbackSeed)
         {
@@ -118,6 +122,8 @@ namespace FrontierDepths.Core
             floorBandId = string.IsNullOrWhiteSpace(floorBandId) ? "floorband.frontier_mine" : floorBandId;
             chapterId = string.IsNullOrWhiteSpace(chapterId) ? "chapter.frontier_descent" : chapterId;
             themeKitId = string.IsNullOrWhiteSpace(themeKitId) ? "theme.frontier_town" : themeKitId;
+            graphLayoutSignature ??= string.Empty;
+            layoutShapeSignature ??= string.Empty;
         }
     }
 

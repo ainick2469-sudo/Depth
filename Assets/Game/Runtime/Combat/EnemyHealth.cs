@@ -19,7 +19,7 @@ namespace FrontierDepths.Combat
         private bool isDead;
         private bool deathEventRaised;
 
-        public event Action<EnemyHealth, DamageResult> Damaged;
+        public event Action<EnemyHealth, DamageInfo, DamageResult> Damaged;
         public event Action<EnemyHealth> Died;
 
         public float MaxHealth => maxHealth;
@@ -71,7 +71,7 @@ namespace FrontierDepths.Combat
             };
 
             Flash(Color.white, 0.12f);
-            Damaged?.Invoke(this, result);
+            Damaged?.Invoke(this, damageInfo, result);
 
             if (killed)
             {

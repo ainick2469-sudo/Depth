@@ -16,6 +16,8 @@ namespace FrontierDepths.Core
         public float amount;
         public float finalAmount;
         public float distance;
+        public Vector3 worldPosition;
+        public float radius;
         public string[] tags;
         public bool wasCritical;
         public bool killedTarget;

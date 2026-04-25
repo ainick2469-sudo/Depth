@@ -7,7 +7,7 @@ namespace FrontierDepths.World
 {
     public sealed class GraphFirstDungeonGenerator : IDungeonGenerator
     {
-        internal const int NormalGenerationAttemptsPerCall = 16;
+        internal const int NormalGenerationAttemptsPerCall = 24;
         internal const int NormalGenerationSeedStep = 1543;
 
         private struct ExpansionCandidate
@@ -499,6 +499,8 @@ namespace FrontierDepths.World
                 node.rotationQuarterTurns = ChooseRotation(node.roomTemplate, requiredExits, validRotations, random);
                 assignedTemplates[node.nodeId] = node.roomTemplate;
             }
+
+            ResolveOrdinaryTemplateStreaks(graph, random);
         }
 
         private static List<DungeonRoomTemplateKind> GetTemplateCandidates(
@@ -558,10 +560,10 @@ namespace FrontierDepths.World
             {
                 return new List<DungeonRoomTemplateKind>
                 {
-                    DungeonRoomTemplateKind.AlcoveRoomSafe,
                     DungeonRoomTemplateKind.SquareChamber,
                     DungeonRoomTemplateKind.BroadRectangle,
-                    DungeonRoomTemplateKind.OctagonChamberSafe
+                    DungeonRoomTemplateKind.OctagonChamberSafe,
+                    DungeonRoomTemplateKind.AlcoveRoomSafe
                 };
             }
 
@@ -669,9 +671,8 @@ namespace FrontierDepths.World
                 DungeonNodeKind.Secret => roll < 45 ? DungeonRoomSizeTier.Small : DungeonRoomSizeTier.Medium,
                 _ => roll switch
                 {
-                    < 10 => DungeonRoomSizeTier.Small,
-                    < 55 => DungeonRoomSizeTier.Medium,
-                    < 90 => DungeonRoomSizeTier.Large,
+                    < 45 => DungeonRoomSizeTier.Medium,
+                    < 88 => DungeonRoomSizeTier.Large,
                     _ => DungeonRoomSizeTier.Grand
                 }
             };
@@ -808,6 +809,146 @@ namespace FrontierDepths.World
                     }
 
                     if (assignedTemplates.TryGetValue(secondary.nodeId, out DungeonRoomTemplateKind secondaryTemplate) && secondaryTemplate == template)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static void ResolveOrdinaryTemplateStreaks(DungeonLayoutGraph graph, System.Random random)
+        {
+            int maxPasses = Mathf.Max(1, graph.nodes.Count * 2);
+            for (int pass = 0; pass < maxPasses; pass++)
+            {
+                bool changed = false;
+                for (int i = 0; i < graph.nodes.Count; i++)
+                {
+                    DungeonNode node = graph.nodes[i];
+                    if (node.nodeKind != DungeonNodeKind.Ordinary || !HasTemplateStreakAtNode(graph, node))
+                    {
+                        continue;
+                    }
+
+                    if (TryChooseTemplateToBreakStreak(graph, node, random, out DungeonRoomTemplateKind replacement, out int rotation))
+                    {
+                        node.roomTemplate = replacement;
+                        node.rotationQuarterTurns = rotation;
+                        changed = true;
+                    }
+                }
+
+                if (!changed || !HasAnyOrdinaryTemplateStreak(graph))
+                {
+                    return;
+                }
+            }
+        }
+
+        private static bool TryChooseTemplateToBreakStreak(
+            DungeonLayoutGraph graph,
+            DungeonNode node,
+            System.Random random,
+            out DungeonRoomTemplateKind replacement,
+            out int rotation)
+        {
+            int degree = graph.GetDegree(node.nodeId);
+            int distance = graph.BuildDistanceMap(graph.entryHubNodeId).TryGetValue(node.nodeId, out int found) ? found : 0;
+            DungeonExitMask requiredExits = GetRequiredExitMask(graph, node);
+            List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, requiredExits, degree, distance);
+            candidates.AddRange(GetFallbackTemplateCandidates(node.nodeKind, requiredExits));
+            FilterTemplatesByRotationFit(candidates, requiredExits);
+            RemoveDuplicateTemplates(candidates);
+
+            int startIndex = candidates.Count > 0 ? random.Next(candidates.Count) : 0;
+            for (int offset = 0; offset < candidates.Count; offset++)
+            {
+                DungeonRoomTemplateKind candidate = candidates[(startIndex + offset) % candidates.Count];
+                if (candidate == node.roomTemplate || WouldTemplateCreateFinalStreak(graph, node, candidate))
+                {
+                    continue;
+                }
+
+                List<int> rotations = DungeonRoomTemplateLibrary.GetValidRotations(candidate, requiredExits);
+                replacement = candidate;
+                rotation = ChooseRotation(candidate, requiredExits, rotations, random);
+                return true;
+            }
+
+            replacement = node.roomTemplate;
+            rotation = node.rotationQuarterTurns;
+            return false;
+        }
+
+        private static void RemoveDuplicateTemplates(List<DungeonRoomTemplateKind> templates)
+        {
+            HashSet<DungeonRoomTemplateKind> seen = new HashSet<DungeonRoomTemplateKind>();
+            for (int i = templates.Count - 1; i >= 0; i--)
+            {
+                if (!seen.Add(templates[i]))
+                {
+                    templates.RemoveAt(i);
+                }
+            }
+        }
+
+        private static bool HasAnyOrdinaryTemplateStreak(DungeonLayoutGraph graph)
+        {
+            for (int i = 0; i < graph.nodes.Count; i++)
+            {
+                if (graph.nodes[i].nodeKind == DungeonNodeKind.Ordinary && HasTemplateStreakAtNode(graph, graph.nodes[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool HasTemplateStreakAtNode(DungeonLayoutGraph graph, DungeonNode node)
+        {
+            if (node.nodeKind != DungeonNodeKind.Ordinary)
+            {
+                return false;
+            }
+
+            return WouldTemplateCreateFinalStreak(graph, node, node.roomTemplate);
+        }
+
+        private static bool WouldTemplateCreateFinalStreak(
+            DungeonLayoutGraph graph,
+            DungeonNode node,
+            DungeonRoomTemplateKind template)
+        {
+            List<DungeonNode> neighbors = graph.GetNeighbors(node.nodeId);
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                DungeonNode neighbor = neighbors[i];
+                if (neighbor.nodeKind != DungeonNodeKind.Ordinary || neighbor.roomTemplate != template)
+                {
+                    continue;
+                }
+
+                for (int otherIndex = 0; otherIndex < neighbors.Count; otherIndex++)
+                {
+                    DungeonNode otherNeighbor = neighbors[otherIndex];
+                    if (otherNeighbor.nodeId != neighbor.nodeId &&
+                        otherNeighbor.nodeKind == DungeonNodeKind.Ordinary &&
+                        otherNeighbor.roomTemplate == template)
+                    {
+                        return true;
+                    }
+                }
+
+                List<DungeonNode> secondaryNeighbors = graph.GetNeighbors(neighbor.nodeId);
+                for (int secondaryIndex = 0; secondaryIndex < secondaryNeighbors.Count; secondaryIndex++)
+                {
+                    DungeonNode secondary = secondaryNeighbors[secondaryIndex];
+                    if (secondary.nodeId != node.nodeId &&
+                        secondary.nodeKind == DungeonNodeKind.Ordinary &&
+                        secondary.roomTemplate == template)
                     {
                         return true;
                     }
@@ -1215,7 +1356,8 @@ namespace FrontierDepths.World
                 attemptNumber = attemptNumber,
                 attemptSeed = attemptSeed,
                 graph = graph,
-                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, attemptSeed)
+                layoutSignature = DungeonLayoutSignatureUtility.BuildSignature(graph, floorIndex, attemptSeed),
+                layoutShapeSignature = DungeonLayoutSignatureUtility.BuildShapeSignature(graph)
             };
 
             if (graph == null)
@@ -1317,15 +1459,19 @@ namespace FrontierDepths.World
             {
                 result.failures.Add($"Graph extents too narrow on minor axis ({minorAxisExtent} < {requiredMinorAxisExtent}).");
             }
+            else if (minorAxisExtent < GetPreferredMinorAxisExtent(floorIndex))
+            {
+                result.warnings.Add($"Graph extents on minor axis {minorAxisExtent} below preferred {GetPreferredMinorAxisExtent(floorIndex)}.");
+            }
 
             int requiredEdgeCount = GetRequiredEdgeCount(floorIndex, graph.nodes.Count);
             if (graph.edges.Count < requiredEdgeCount)
             {
                 result.failures.Add($"Edge count {graph.edges.Count} below required {requiredEdgeCount}.");
             }
-            else if (floorIndex <= 3 && graph.edges.Count < graph.nodes.Count)
+            else if (graph.edges.Count < GetPreferredEdgeCount(floorIndex, graph.nodes.Count))
             {
-                result.warnings.Add("Layout has no loop edges; loops are preferred on early floors.");
+                result.warnings.Add("Layout has no loop edges; loops are preferred on prototype floors.");
             }
 
             DungeonNode landmark = FindFirstNodeByKind(graph, DungeonNodeKind.Landmark);
@@ -1349,6 +1495,10 @@ namespace FrontierDepths.World
             {
                 result.failures.Add($"Landmark room {landmark.nodeId} is too close to stairs down.");
             }
+            else if (landmark != null && graph.GetGraphDistance(landmark.nodeId, graph.transitDownNodeId) < GetPreferredLandmarkToDownDistance(floorIndex))
+            {
+                result.warnings.Add($"Landmark room {landmark.nodeId} is closer to stairs down than preferred.");
+            }
 
             if (secret != null)
             {
@@ -1356,10 +1506,18 @@ namespace FrontierDepths.World
                 {
                     result.failures.Add($"Secret room {secret.nodeId} is too close to stairs down.");
                 }
+                else if (graph.GetGraphDistance(secret.nodeId, graph.transitDownNodeId) < GetPreferredSecretToDownDistance(floorIndex))
+                {
+                    result.warnings.Add($"Secret room {secret.nodeId} is closer to stairs down than preferred.");
+                }
 
                 if (landmark != null && graph.GetGraphDistance(secret.nodeId, landmark.nodeId) < GetRequiredSecretToLandmarkDistance(floorIndex))
                 {
                     result.failures.Add($"Secret room {secret.nodeId} is too close to landmark room {landmark.nodeId}.");
+                }
+                else if (landmark != null && graph.GetGraphDistance(secret.nodeId, landmark.nodeId) < GetPreferredSecretToLandmarkDistance(floorIndex))
+                {
+                    result.warnings.Add($"Secret room {secret.nodeId} is closer to landmark room {landmark.nodeId} than preferred.");
                 }
             }
 
@@ -1433,17 +1591,22 @@ namespace FrontierDepths.World
         {
             if (floorIndex <= 1)
             {
-                return random.Next(10, 15);
+                return random.Next(9, 14);
             }
 
             if (floorIndex <= 3)
             {
-                return random.Next(12, 17);
+                return random.Next(11, 16);
+            }
+
+            if (floorIndex <= 5)
+            {
+                return random.Next(13, 18);
             }
 
             if (floorIndex <= 8)
             {
-                return random.Next(16, 23);
+                return random.Next(15, 22);
             }
 
             if (floorIndex <= 15)
@@ -1467,6 +1630,11 @@ namespace FrontierDepths.World
                 return 12;
             }
 
+            if (floorIndex <= 5)
+            {
+                return 14;
+            }
+
             if (floorIndex <= 8)
             {
                 return 16;
@@ -1482,12 +1650,12 @@ namespace FrontierDepths.World
 
         private static int GetRequiredEntryDegree(int floorIndex)
         {
-            return floorIndex >= 4 ? 3 : 2;
+            return floorIndex >= 6 ? 3 : 2;
         }
 
         private static int GetPreferredEntryDegree(int floorIndex)
         {
-            return floorIndex <= 3 ? 3 : GetRequiredEntryDegree(floorIndex);
+            return floorIndex <= 5 ? 3 : GetRequiredEntryDegree(floorIndex);
         }
 
         private static int GetRequiredCoveredSectors(int floorIndex)
@@ -1497,7 +1665,7 @@ namespace FrontierDepths.World
                 return 2;
             }
 
-            return floorIndex <= 3 ? 3 : 4;
+            return floorIndex <= 5 ? 3 : 4;
         }
 
         private static int GetPreferredCoveredSectors(int floorIndex)
@@ -1507,42 +1675,82 @@ namespace FrontierDepths.World
                 return 3;
             }
 
-            return GetRequiredCoveredSectors(floorIndex);
+            return floorIndex >= 4 && floorIndex <= 5 ? 4 : GetRequiredCoveredSectors(floorIndex);
         }
 
         private static int GetRequiredMinorAxisExtent(int floorIndex)
         {
-            return floorIndex >= 4 ? 4 : 3;
+            return floorIndex >= 6 ? 4 : 3;
+        }
+
+        private static int GetPreferredMinorAxisExtent(int floorIndex)
+        {
+            return floorIndex >= 4 && floorIndex <= 5 ? 4 : GetRequiredMinorAxisExtent(floorIndex);
         }
 
         private static int GetRequiredEdgeCount(int floorIndex, int nodeCount)
         {
-            return floorIndex >= 4 ? nodeCount : Mathf.Max(0, nodeCount - 1);
+            return floorIndex >= 6 ? nodeCount : Mathf.Max(0, nodeCount - 1);
+        }
+
+        private static int GetPreferredEdgeCount(int floorIndex, int nodeCount)
+        {
+            return floorIndex <= 5 ? nodeCount : GetRequiredEdgeCount(floorIndex, nodeCount);
         }
 
         private static int GetRequiredEntryToDownDistance(int floorIndex)
         {
-            return floorIndex <= 3 ? 4 : Mathf.Clamp(5 + floorIndex / 4, 5, 12);
+            if (floorIndex <= 5)
+            {
+                return 4;
+            }
+
+            if (floorIndex <= 8)
+            {
+                return 4;
+            }
+
+            if (floorIndex <= 15)
+            {
+                return 5;
+            }
+
+            return Mathf.Clamp(5 + floorIndex / 4, 5, 12);
         }
 
         private static int GetRequiredUpToDownDistance(int floorIndex)
         {
-            return floorIndex <= 3 ? 3 : 4;
+            return floorIndex <= 5 ? 3 : 4;
         }
 
         private static int GetRequiredLandmarkToDownDistance(int floorIndex)
         {
-            return floorIndex <= 1 ? 2 : 3;
+            return floorIndex <= 1 || (floorIndex >= 4 && floorIndex <= 5) ? 2 : 3;
+        }
+
+        private static int GetPreferredLandmarkToDownDistance(int floorIndex)
+        {
+            return floorIndex >= 4 && floorIndex <= 5 ? 3 : GetRequiredLandmarkToDownDistance(floorIndex);
         }
 
         private static int GetRequiredSecretToDownDistance(int floorIndex)
         {
-            return floorIndex <= 1 ? 2 : 3;
+            return floorIndex <= 1 || (floorIndex >= 4 && floorIndex <= 5) ? 2 : 3;
+        }
+
+        private static int GetPreferredSecretToDownDistance(int floorIndex)
+        {
+            return floorIndex >= 4 && floorIndex <= 5 ? 3 : GetRequiredSecretToDownDistance(floorIndex);
         }
 
         private static int GetRequiredSecretToLandmarkDistance(int floorIndex)
         {
-            return floorIndex <= 3 ? 2 : 3;
+            return floorIndex <= 5 ? 2 : 3;
+        }
+
+        private static int GetPreferredSecretToLandmarkDistance(int floorIndex)
+        {
+            return floorIndex >= 4 && floorIndex <= 5 ? 3 : GetRequiredSecretToLandmarkDistance(floorIndex);
         }
 
         private static int GetMaxRadius(int floorIndex, int targetRoomCount)

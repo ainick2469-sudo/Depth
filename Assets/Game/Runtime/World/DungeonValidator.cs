@@ -71,6 +71,9 @@ namespace FrontierDepths.World
             builder.Append(buildResult.averageCorridorLength.ToString("0.#"));
             builder.Append(" | MaxCorridor ");
             builder.Append(buildResult.maxCorridorLength.ToString("0.#"));
+            builder.Append(" | CorridorOver36 ");
+            builder.Append(buildResult.percentCorridorsOverTarget.ToString("0.#"));
+            builder.Append("%");
             builder.Append(" | SpawnPts ");
             builder.Append("P");
             builder.Append(buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn));

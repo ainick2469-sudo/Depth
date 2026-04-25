@@ -14,6 +14,7 @@ namespace FrontierDepths.Combat
         private const int DefaultMagazineSize = 6;
         private const float DefaultReloadDuration = 1.4f;
         private const float DefaultRange = 100f;
+        private const float DefaultRevolverHearingRadius = 55f;
         private const int ImpactPoolSize = 12;
         private const int DamageNumberPoolSize = 12;
         private const int TracerPoolSize = 8;
@@ -33,6 +34,7 @@ namespace FrontierDepths.Combat
         [SerializeField] private float recoilRecoverySeconds = 0.15f;
         [SerializeField] private bool autoReloadOnEmpty = true;
         [SerializeField] private float autoReloadDelay = 0.12f;
+        [SerializeField] private float weaponHearingRadius = DefaultRevolverHearingRadius;
         [SerializeField] private bool enableShotDebugLogging = true;
         [SerializeField] private bool enableShotDebugDraw = true;
 
@@ -1092,6 +1094,11 @@ namespace FrontierDepths.Combat
             return weaponDefinition != null ? Mathf.Max(0f, weaponDefinition.statusChance) : 0f;
         }
 
+        private float GetWeaponHearingRadius()
+        {
+            return Mathf.Max(0f, weaponHearingRadius);
+        }
+
         private int GetFloorIndex()
         {
             return GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
@@ -1110,6 +1117,8 @@ namespace FrontierDepths.Combat
                 damageType = GetDamageType().ToString(),
                 deliveryType = GetDeliveryType().ToString(),
                 amount = amount,
+                worldPosition = transform.position,
+                radius = eventType == GameplayEventType.WeaponFired ? GetWeaponHearingRadius() : 0f,
                 floorIndex = GetFloorIndex(),
                 timestamp = Time.unscaledTime
             });
@@ -1136,6 +1145,7 @@ namespace FrontierDepths.Combat
                 deliveryType = damageInfo.deliveryType.ToString(),
                 amount = damageInfo.amount,
                 finalAmount = result.damageApplied,
+                worldPosition = damageInfo.hitPoint,
                 tags = ConvertTags(damageInfo.tags),
                 wasCritical = damageInfo.isCritical,
                 killedTarget = result.killedTarget,
