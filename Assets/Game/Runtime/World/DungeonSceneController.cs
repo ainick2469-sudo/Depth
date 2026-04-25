@@ -669,7 +669,6 @@ namespace FrontierDepths.World
             GameObject labelObject = new GameObject("Label", typeof(TextMesh));
             labelObject.transform.SetParent(dummy.transform, false);
             labelObject.transform.localPosition = new Vector3(0f, 1.75f, 0f);
-            labelObject.transform.localRotation = Quaternion.Euler(65f, 0f, 0f);
             TextMesh label = labelObject.GetComponent<TextMesh>();
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;

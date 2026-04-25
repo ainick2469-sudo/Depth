@@ -21,6 +21,8 @@ namespace FrontierDepths.Combat
 
         private Renderer[] renderers;
         private Collider[] colliders;
+        private MaterialPropertyBlock materialPropertyBlock;
+        private Camera labelCamera;
         private Color baseColor = Color.gray;
         private float currentHealth;
         private bool dead;
@@ -48,6 +50,7 @@ namespace FrontierDepths.Combat
         {
             AdvanceReset(Time.deltaTime);
             AdvanceFlash(Time.deltaTime);
+            UpdateLabelFacingCamera();
         }
 
         public void Configure(TargetDummyKind kind)
@@ -169,6 +172,7 @@ namespace FrontierDepths.Combat
         {
             renderers ??= GetComponentsInChildren<Renderer>(true);
             colliders ??= GetComponentsInChildren<Collider>(true);
+            materialPropertyBlock ??= new MaterialPropertyBlock();
         }
 
         private void FlashHit()
@@ -240,9 +244,41 @@ namespace FrontierDepths.Combat
                 Renderer targetRenderer = renderers[i];
                 if (targetRenderer != null && targetRenderer.GetComponent<TextMesh>() == null)
                 {
-                    targetRenderer.sharedMaterial.color = color;
+                    targetRenderer.GetPropertyBlock(materialPropertyBlock);
+                    materialPropertyBlock.SetColor("_Color", color);
+                    targetRenderer.SetPropertyBlock(materialPropertyBlock);
                 }
             }
+        }
+
+        private void UpdateLabelFacingCamera()
+        {
+            if (statusText == null)
+            {
+                return;
+            }
+
+            if (labelCamera == null || !labelCamera.isActiveAndEnabled)
+            {
+                labelCamera = Camera.main;
+                if (labelCamera == null)
+                {
+                    labelCamera = FindAnyObjectByType<Camera>();
+                }
+            }
+
+            if (labelCamera == null)
+            {
+                return;
+            }
+
+            Vector3 awayFromCamera = statusText.transform.position - labelCamera.transform.position;
+            if (awayFromCamera.sqrMagnitude <= 0.001f)
+            {
+                return;
+            }
+
+            statusText.transform.rotation = Quaternion.LookRotation(awayFromCamera.normalized, Vector3.up);
         }
 
         private void RefreshStatusText()

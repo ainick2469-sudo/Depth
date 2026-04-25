@@ -24,11 +24,13 @@ namespace FrontierDepths.Core
         private float pitch;
         private float verticalVelocity;
         private float stepDistanceAccumulated;
+        private float eventDistanceAccumulated;
         private Vector3 lastPosition;
         private bool wasGroundedLastFrame;
         private bool externalUiCaptured;
         private bool manualPauseCaptured;
         private int suppressLookFrames;
+        private LookRecoilState lookRecoil;
 
         private static AudioClip footstepClip;
         private static AudioClip landingClip;
@@ -103,6 +105,9 @@ namespace FrontierDepths.Core
                 suppressLookFrames--;
             }
 
+            lookRecoil.Tick(Time.unscaledDeltaTime);
+            ApplyCameraRotation();
+
             if (IsUiCaptured)
             {
                 stepDistanceAccumulated = 0f;
@@ -132,6 +137,7 @@ namespace FrontierDepths.Core
             controller.enabled = true;
             verticalVelocity = GroundSnapVelocity;
             stepDistanceAccumulated = 0f;
+            eventDistanceAccumulated = 0f;
             lastPosition = worldPosition;
             wasGroundedLastFrame = controller.isGrounded;
         }
@@ -165,6 +171,12 @@ namespace FrontierDepths.Core
             UpdateUiCaptureState();
         }
 
+        public void ApplyLookRecoil(float pitchUpDegrees, float yawDegrees, float recoverySeconds)
+        {
+            lookRecoil.AddImpulse(pitchUpDegrees, yawDegrees, recoverySeconds);
+            ApplyCameraRotation();
+        }
+
         private void HandleLook()
         {
             if (playerCamera == null || suppressLookFrames > 0)
@@ -176,7 +188,7 @@ namespace FrontierDepths.Core
             float mouseY = Input.GetAxisRaw("Mouse Y") * lookSensitivity;
             pitch = Mathf.Clamp(pitch - mouseY, -89f, 89f);
             transform.Rotate(Vector3.up, mouseX);
-            playerCamera.transform.localEulerAngles = Vector3.right * pitch;
+            ApplyCameraRotation();
         }
 
         private void HandleMovement()
@@ -195,6 +207,12 @@ namespace FrontierDepths.Core
             if (Input.GetKeyDown(KeyCode.Space) && groundedBeforeMove)
             {
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                GameplayEventBus.Publish(new GameplayEvent
+                {
+                    eventType = GameplayEventType.PlayerJumped,
+                    sourceObject = gameObject,
+                    timestamp = Time.unscaledTime
+                });
             }
 
             float preMoveVerticalVelocity = verticalVelocity;
@@ -237,7 +255,19 @@ namespace FrontierDepths.Core
 
             Vector3 planarDelta = transform.position - lastPosition;
             planarDelta.y = 0f;
-            stepDistanceAccumulated += planarDelta.magnitude;
+            float planarDistance = planarDelta.magnitude;
+            stepDistanceAccumulated += planarDistance;
+            if (DistanceMovedAccumulator.TryAccumulate(ref eventDistanceAccumulated, planarDistance, 10f, out float emittedDistance))
+            {
+                GameplayEventBus.Publish(new GameplayEvent
+                {
+                    eventType = GameplayEventType.DistanceMoved,
+                    sourceObject = gameObject,
+                    distance = emittedDistance,
+                    timestamp = Time.unscaledTime
+                });
+            }
+
             while (stepDistanceAccumulated >= footstepDistance)
             {
                 feedbackAudioSource.PlayOneShot(footstepClip, 0.85f);
@@ -250,6 +280,17 @@ namespace FrontierDepths.Core
             Time.timeScale = IsUiCaptured ? 0f : 1f;
             Cursor.lockState = IsUiCaptured ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = IsUiCaptured;
+        }
+
+        private void ApplyCameraRotation()
+        {
+            if (playerCamera == null)
+            {
+                return;
+            }
+
+            Vector2 recoilOffset = lookRecoil.OffsetDegrees;
+            playerCamera.transform.localEulerAngles = new Vector3(pitch + recoilOffset.x, recoilOffset.y, 0f);
         }
 
         private static void RestoreRealtime()

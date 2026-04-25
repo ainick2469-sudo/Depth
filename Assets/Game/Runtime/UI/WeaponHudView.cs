@@ -15,6 +15,8 @@ namespace FrontierDepths.UI
         private PlayerWeaponController weapon;
         private float nextResolveTime;
         private float hitMarkerVisibleUntil;
+        private Color hitMarkerColor = new Color(1f, 0.95f, 0.62f, 0.95f);
+        private Vector2 hitMarkerSize = new Vector2(22f, 22f);
 
         private void Awake()
         {
@@ -62,7 +64,7 @@ namespace FrontierDepths.UI
             if (reloadText != null)
             {
                 reloadText.enabled = weapon.IsReloading;
-                reloadText.text = weapon.IsReloading ? "RELOADING" : string.Empty;
+                reloadText.text = weapon.IsReloading ? $"RELOADING {Mathf.RoundToInt(weapon.ReloadProgress * 100f)}%" : string.Empty;
             }
 
             UpdateHitMarker();
@@ -86,7 +88,7 @@ namespace FrontierDepths.UI
             weapon = found;
             if (weapon != null)
             {
-                weapon.DamageHitConfirmed += HandleDamageHitConfirmed;
+                weapon.HitFeedbackReceived += HandleHitFeedbackReceived;
             }
         }
 
@@ -94,18 +96,29 @@ namespace FrontierDepths.UI
         {
             if (weapon != null)
             {
-                weapon.DamageHitConfirmed -= HandleDamageHitConfirmed;
+                weapon.HitFeedbackReceived -= HandleHitFeedbackReceived;
             }
 
             weapon = null;
         }
 
-        private void HandleDamageHitConfirmed(DamageResult result)
+        private void HandleHitFeedbackReceived(WeaponHitFeedback feedback)
         {
-            if (result.applied)
+            if (!feedback.IsDamageHit)
             {
-                hitMarkerVisibleUntil = Time.unscaledTime + 0.18f;
+                return;
             }
+
+            hitMarkerVisibleUntil = Time.unscaledTime + 0.18f;
+            hitMarkerColor = feedback.kind switch
+            {
+                WeaponHitFeedbackKind.Reduced => new Color(1f, 0.56f, 0.18f, 0.98f),
+                WeaponHitFeedbackKind.Kill => new Color(1f, 0.22f, 0.18f, 1f),
+                _ => new Color(1f, 0.95f, 0.62f, 0.95f)
+            };
+            hitMarkerSize = feedback.kind == WeaponHitFeedbackKind.Kill
+                ? new Vector2(34f, 34f)
+                : new Vector2(22f, 22f);
         }
 
         private void UpdateHitMarker()
@@ -120,7 +133,10 @@ namespace FrontierDepths.UI
             if (visible)
             {
                 float alpha = Mathf.InverseLerp(hitMarkerVisibleUntil - 0.18f, hitMarkerVisibleUntil, Time.unscaledTime);
-                hitMarkerImage.color = new Color(1f, 0.95f, 0.62f, 1f - alpha * 0.65f);
+                Color color = hitMarkerColor;
+                color.a = Mathf.Lerp(hitMarkerColor.a, 0.2f, alpha);
+                hitMarkerImage.color = color;
+                hitMarkerImage.rectTransform.sizeDelta = hitMarkerSize;
             }
         }
 

@@ -16,6 +16,13 @@ namespace FrontierDepths.World
 
         public void Interact(PlayerInteractor interactor)
         {
+            GameplayEventBus.Publish(new GameplayEvent
+            {
+                eventType = GameplayEventType.StairsUsed,
+                sourceObject = gameObject,
+                floorIndex = GameBootstrap.Instance.RunService.Current.floorIndex,
+                timestamp = Time.unscaledTime
+            });
             GameBootstrap.Instance.RunService.DescendToNextFloor();
             GameBootstrap.Instance.SceneFlowService.ReloadCurrentScene();
         }
