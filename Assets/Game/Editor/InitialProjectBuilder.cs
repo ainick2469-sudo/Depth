@@ -414,6 +414,8 @@ namespace FrontierDepths.Editor
             controllerSo.FindProperty("playerCamera").objectReferenceValue = camera;
             controllerSo.ApplyModifiedPropertiesWithoutUndo();
 
+            player.AddComponent<PlayerHealth>();
+            player.AddComponent<PlayerDeathReturnController>();
             player.AddComponent<PlayerWeaponController>();
         }
 
@@ -538,6 +540,8 @@ namespace FrontierDepths.Editor
             weaponHudSo.FindProperty("reloadText").objectReferenceValue = weaponReload;
             weaponHudSo.FindProperty("hitMarkerImage").objectReferenceValue = hitMarker;
             weaponHudSo.ApplyModifiedPropertiesWithoutUndo();
+
+            canvasObject.AddComponent<PlayerHealthHudView>();
         }
 
         private static void CreateInteractableStation(string name, Vector3 position, string shopId)

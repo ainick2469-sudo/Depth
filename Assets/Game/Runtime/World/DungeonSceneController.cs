@@ -37,6 +37,7 @@ namespace FrontierDepths.World
         private const float MaximumRecommendedRoomSpacing = 86f;
         private const float MinimumRoomGap = 18f;
         private const string CombatTestStationName = "CombatTestStation";
+        private const string CombatTestEnemyName = "CombatTestEnemy";
 
         private sealed class BoundarySpan
         {
@@ -80,6 +81,7 @@ namespace FrontierDepths.World
         [SerializeField] private Transform runtimeRoot;
         [SerializeField] private float roomSpacing = DefaultRoomSpacing;
         [SerializeField] private bool enableCombatTestStation = true;
+        [SerializeField] private bool enableCombatTestEnemy = true;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private DungeonBuildResult activeBuildResult;
@@ -249,11 +251,12 @@ namespace FrontierDepths.World
             FirstPersonController player = FindAnyObjectByType<FirstPersonController>();
             if (player != null)
             {
-                EnsurePlayerWeaponController(player);
+                EnsurePlayerCombatComponents(player);
                 player.WarpTo(buildResult.playerSpawn);
             }
 
             SpawnCombatTestStation(buildResult);
+            SpawnCombatTestEnemy(buildResult);
             RefreshStatusMessage();
         }
 
@@ -558,6 +561,132 @@ namespace FrontierDepths.World
             CreateTargetDummy(stationRoot.transform, stationSpawns[2].position, TargetDummyKind.StatusTest);
         }
 
+        private void SpawnCombatTestEnemy(DungeonBuildResult buildResult)
+        {
+            if (!enableCombatTestEnemy ||
+                buildResult == null ||
+                buildResult.floorIndex != 1 ||
+                buildResult.isEmergencyDebugBuild ||
+                runtimeRoot == null)
+            {
+                return;
+            }
+
+            if (runtimeRoot.Find(CombatTestEnemyName) != null)
+            {
+                return;
+            }
+
+            List<Vector3> occupiedPositions = GetCombatTestStationOccupiedPositions();
+            DungeonSpawnPointRecord spawnPoint = SelectCombatTestEnemySpawn(buildResult, occupiedPositions);
+            if (spawnPoint == null)
+            {
+                Debug.LogWarning($"Combat test enemy skipped on floor {buildResult.floorIndex}: no safe EnemyMelee spawn point was available.");
+                return;
+            }
+
+            CreateCombatTestEnemy(runtimeRoot, spawnPoint.position);
+        }
+
+        internal static DungeonSpawnPointRecord SelectCombatTestEnemySpawn(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions = null)
+        {
+            if (buildResult == null || buildResult.floorIndex != 1)
+            {
+                return null;
+            }
+
+            List<DungeonSpawnPointRecord> candidates = new List<DungeonSpawnPointRecord>();
+            for (int i = 0; i < buildResult.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawnPoint = buildResult.spawnPoints[i];
+                if (spawnPoint.category != DungeonSpawnPointCategory.EnemyMelee)
+                {
+                    continue;
+                }
+
+                DungeonRoomBuildRecord room = buildResult.FindRoom(spawnPoint.nodeId);
+                if (room == null || (room.roomType != DungeonNodeKind.Ordinary && room.roomType != DungeonNodeKind.Landmark))
+                {
+                    continue;
+                }
+
+                if (Vector3.Distance(spawnPoint.position, buildResult.playerSpawn) < EnemyMeleeSpawnMinimumDistance)
+                {
+                    continue;
+                }
+
+                if (IsNearOccupiedCombatTestPosition(spawnPoint.position, occupiedPositions))
+                {
+                    continue;
+                }
+
+                candidates.Add(spawnPoint);
+            }
+
+            candidates.Sort((left, right) =>
+            {
+                DungeonRoomBuildRecord leftRoom = buildResult.FindRoom(left.nodeId);
+                DungeonRoomBuildRecord rightRoom = buildResult.FindRoom(right.nodeId);
+                int leftRank = leftRoom != null && leftRoom.roomType == DungeonNodeKind.Ordinary ? 0 : 1;
+                int rightRank = rightRoom != null && rightRoom.roomType == DungeonNodeKind.Ordinary ? 0 : 1;
+                int rankCompare = leftRank.CompareTo(rightRank);
+                if (rankCompare != 0)
+                {
+                    return rankCompare;
+                }
+
+                int distanceCompare = Vector3.Distance(left.position, buildResult.playerSpawn)
+                    .CompareTo(Vector3.Distance(right.position, buildResult.playerSpawn));
+                return distanceCompare != 0 ? distanceCompare : right.score.CompareTo(left.score);
+            });
+
+            return candidates.Count > 0 ? candidates[0] : null;
+        }
+
+        private List<Vector3> GetCombatTestStationOccupiedPositions()
+        {
+            List<Vector3> positions = new List<Vector3>();
+            if (runtimeRoot == null)
+            {
+                return positions;
+            }
+
+            Transform stationRoot = runtimeRoot.Find(CombatTestStationName);
+            if (stationRoot == null)
+            {
+                return positions;
+            }
+
+            TargetDummyHealth[] dummies = stationRoot.GetComponentsInChildren<TargetDummyHealth>(true);
+            for (int i = 0; i < dummies.Length; i++)
+            {
+                if (dummies[i] != null)
+                {
+                    positions.Add(dummies[i].transform.position);
+                }
+            }
+
+            return positions;
+        }
+
+        private static bool IsNearOccupiedCombatTestPosition(Vector3 position, IList<Vector3> occupiedPositions)
+        {
+            if (occupiedPositions == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < occupiedPositions.Count; i++)
+            {
+                if (Vector3.Distance(position, occupiedPositions[i]) < 6f)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         internal static List<DungeonSpawnPointRecord> SelectCombatTestStationSpawns(DungeonBuildResult buildResult, int requestedCount, bool requireLineOfSight = false)
         {
             List<DungeonSpawnPointRecord> selected = new List<DungeonSpawnPointRecord>();
@@ -717,6 +846,41 @@ namespace FrontierDepths.World
             return dummy;
         }
 
+        internal static GameObject CreateCombatTestEnemy(Transform parent, Vector3 position)
+        {
+            GameObject enemy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            enemy.name = "SandboxMeleeEnemy";
+            enemy.transform.SetParent(parent, true);
+            enemy.transform.position = position;
+            enemy.transform.localScale = new Vector3(1.25f, 1.55f, 1.25f);
+
+            CapsuleCollider capsuleCollider = enemy.GetComponent<CapsuleCollider>();
+            if (capsuleCollider != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(capsuleCollider);
+                }
+                else
+                {
+                    DestroyImmediate(capsuleCollider);
+                }
+            }
+
+            CharacterController characterController = enemy.AddComponent<CharacterController>();
+            characterController.height = 3.1f;
+            characterController.radius = 0.55f;
+            characterController.center = Vector3.zero;
+
+            EnemyHealth health = enemy.AddComponent<EnemyHealth>();
+            health.Configure(50f, new Color(0.72f, 0.28f, 0.22f, 1f));
+            enemy.AddComponent<SimpleMeleeEnemyController>();
+
+            int defaultLayer = LayerMask.NameToLayer("Default");
+            SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
+            return enemy;
+        }
+
         internal static void SetLayerRecursively(GameObject root, int layer)
         {
             if (root == null)
@@ -752,14 +916,27 @@ namespace FrontierDepths.World
             }
         }
 
-        private static void EnsurePlayerWeaponController(FirstPersonController player)
+        private static void EnsurePlayerCombatComponents(FirstPersonController player)
         {
-            if (player == null || player.GetComponent<PlayerWeaponController>() != null)
+            if (player == null)
             {
                 return;
             }
 
-            player.gameObject.AddComponent<PlayerWeaponController>();
+            if (player.GetComponent<PlayerHealth>() == null)
+            {
+                player.gameObject.AddComponent<PlayerHealth>();
+            }
+
+            if (player.GetComponent<PlayerDeathReturnController>() == null)
+            {
+                player.gameObject.AddComponent<PlayerDeathReturnController>();
+            }
+
+            if (player.GetComponent<PlayerWeaponController>() == null)
+            {
+                player.gameObject.AddComponent<PlayerWeaponController>();
+            }
         }
 
         private bool IsSpawnPointValid(

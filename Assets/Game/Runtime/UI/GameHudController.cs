@@ -205,6 +205,7 @@ namespace FrontierDepths.UI
             EnsurePromptBackground();
             EnsureCrosshairVisuals();
             EnsureWeaponHudView();
+            EnsurePlayerHealthHudView();
         }
 
         private void EnsureWeaponHudView()
@@ -212,6 +213,14 @@ namespace FrontierDepths.UI
             if (GetComponent<WeaponHudView>() == null)
             {
                 gameObject.AddComponent<WeaponHudView>();
+            }
+        }
+
+        private void EnsurePlayerHealthHudView()
+        {
+            if (GetComponent<PlayerHealthHudView>() == null)
+            {
+                gameObject.AddComponent<PlayerHealthHudView>();
             }
         }
 

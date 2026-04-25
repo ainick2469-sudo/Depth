@@ -41,6 +41,7 @@ namespace FrontierDepths.Combat
         private readonly TracerMarker[] tracers = new TracerMarker[TracerPoolSize];
 
         private FirstPersonController playerController;
+        private PlayerHealth playerHealth;
         private WeaponRuntimeState weaponState;
         private AudioSource weaponAudioSource;
         private AudioClip gunshotClip;
@@ -578,6 +579,7 @@ namespace FrontierDepths.Combat
             }
 
             playerController = GetComponent<FirstPersonController>();
+            playerHealth = GetComponent<PlayerHealth>();
             ResolveWeaponCamera();
             ResolveWeaponDefinition();
             weaponState ??= new WeaponRuntimeState(GetMagazineSize());
@@ -597,7 +599,13 @@ namespace FrontierDepths.Combat
 
         private bool IsGameplayInputBlocked()
         {
-            return playerController != null && playerController.IsUiCaptured;
+            if (playerHealth == null)
+            {
+                playerHealth = GetComponent<PlayerHealth>();
+            }
+
+            return (playerController != null && playerController.IsUiCaptured) ||
+                   (playerHealth != null && playerHealth.IsDead);
         }
 
         private void BeginReloadFeedback()
