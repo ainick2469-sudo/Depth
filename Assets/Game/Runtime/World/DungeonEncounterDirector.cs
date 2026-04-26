@@ -1,0 +1,695 @@
+using System;
+using System.Collections.Generic;
+using FrontierDepths.Combat;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace FrontierDepths.World
+{
+    public sealed class DungeonEncounterDirector
+    {
+        public const string EncounterEnemiesRootName = "EncounterEnemies";
+        public const string SpawnSourceEncounterDirector = "EncounterDirectorLite";
+
+        private readonly Transform runtimeRoot;
+        private readonly EncounterDropService dropService;
+        private readonly List<EnemyHealth> livingEnemies = new List<EnemyHealth>();
+        private DungeonEncounterSummary summary = DungeonEncounterSummary.Empty;
+
+        public DungeonEncounterDirector(Transform runtimeRoot)
+        {
+            this.runtimeRoot = runtimeRoot;
+            dropService = new EncounterDropService(runtimeRoot);
+        }
+
+        public DungeonEncounterSummary Summary => summary;
+        public EncounterDropService DropService => dropService;
+
+        public DungeonEncounterSummary Spawn(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions, bool clearExisting)
+        {
+            if (runtimeRoot == null || buildResult == null || buildResult.isEmergencyDebugBuild)
+            {
+                summary = DungeonEncounterSummary.Empty;
+                return summary;
+            }
+
+            if (clearExisting)
+            {
+                Clear(true);
+            }
+
+            DungeonEncounterPlan plan = BuildPlan(buildResult, occupiedPositions, buildResult.seed);
+            summary = plan.ToSummary();
+            Transform enemyRoot = GetOrCreateEnemyRoot(runtimeRoot);
+            for (int i = 0; i < plan.spawns.Count; i++)
+            {
+                DungeonEncounterSpawn spawn = plan.spawns[i];
+                GameObject enemy = CreateEnemy(enemyRoot, spawn.position, spawn.definition);
+                EnemyHealth enemyHealth = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
+                if (enemyHealth == null)
+                {
+                    continue;
+                }
+
+                RegisterEnemy(enemyHealth);
+                dropService.RegisterEnemy(enemyHealth);
+            }
+
+            summary.livingEnemyCount = livingEnemies.Count;
+            return summary;
+        }
+
+        public void Clear(bool immediate)
+        {
+            dropService.SuppressDrops = true;
+            for (int i = livingEnemies.Count - 1; i >= 0; i--)
+            {
+                if (livingEnemies[i] != null)
+                {
+                    livingEnemies[i].Died -= HandleEnemyDied;
+                    dropService.UnregisterEnemy(livingEnemies[i]);
+                }
+            }
+
+            livingEnemies.Clear();
+            Transform enemyRoot = runtimeRoot != null ? runtimeRoot.Find(EncounterEnemiesRootName) : null;
+            if (enemyRoot != null)
+            {
+                for (int i = enemyRoot.childCount - 1; i >= 0; i--)
+                {
+                    GameObject child = enemyRoot.GetChild(i).gameObject;
+                    if (immediate)
+                    {
+                        Object.DestroyImmediate(child);
+                    }
+                    else
+                    {
+                        Object.Destroy(child);
+                    }
+                }
+            }
+
+            dropService.Clear(immediate);
+            dropService.SuppressDrops = false;
+            summary.livingEnemyCount = 0;
+        }
+
+        public static DungeonEncounterPlan BuildPlan(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions, int seed)
+        {
+            DungeonEncounterPlan plan = new DungeonEncounterPlan
+            {
+                floorIndex = buildResult != null ? buildResult.floorIndex : 0,
+                spawnSource = SpawnSourceEncounterDirector
+            };
+
+            if (buildResult == null || buildResult.floorIndex > 5)
+            {
+                plan.warning = buildResult == null
+                    ? "Encounter Director skipped: dungeon build missing."
+                    : $"Encounter Director Lite has no floor {buildResult.floorIndex} budget yet.";
+                return plan;
+            }
+
+            System.Random random = new System.Random(seed == 0 ? buildResult.floorIndex * 7919 : seed);
+            EncounterBudget budget = GetBudget(buildResult.floorIndex, random);
+            plan.requestedBudget = budget.requested;
+            Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom = CollectSafeSpawns(buildResult, occupiedPositions);
+            List<DungeonEncounterRoomCandidate> candidates = BuildRoomCandidates(buildResult, safeSpawnsByRoom);
+            if (candidates.Count == 0)
+            {
+                plan.warning = "Encounter Director underfilled: no safe EnemyMelee spawn points were available.";
+                return plan;
+            }
+
+            AllocateRooms(plan, candidates, budget.requested, random);
+            List<EnemyDefinition> definitions = EnemyCatalog.CreateDefinitionsForFloor(buildResult.floorIndex);
+            for (int assignmentIndex = 0; assignmentIndex < plan.assignments.Count; assignmentIndex++)
+            {
+                DungeonEncounterRoomAssignment assignment = plan.assignments[assignmentIndex];
+                DungeonEncounterRoomCandidate candidate = candidates.Find(item => item.room.nodeId == assignment.roomId);
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                int spawnCount = Mathf.Min(assignment.plannedCount, candidate.safeSpawns.Count);
+                List<EnemyDefinition> groupDefinitions = ChooseArchetypesForGroup(definitions, buildResult.floorIndex, spawnCount, random);
+                if (groupDefinitions.Count == 0)
+                {
+                    continue;
+                }
+
+                for (int spawnIndex = 0; spawnIndex < spawnCount; spawnIndex++)
+                {
+                    EnemyDefinition definition = groupDefinitions[Mathf.Min(spawnIndex, groupDefinitions.Count - 1)];
+                    DungeonSpawnPointRecord spawnPoint = candidate.safeSpawns[spawnIndex];
+                    assignment.spawnedCount++;
+                    assignment.archetypes.Add(definition.archetype);
+                    plan.spawns.Add(new DungeonEncounterSpawn
+                    {
+                        roomId = assignment.roomId,
+                        role = assignment.role,
+                        position = spawnPoint.position,
+                        definition = definition
+                    });
+                    plan.AddArchetype(definition.archetype);
+                }
+            }
+
+            plan.spawnedCount = plan.spawns.Count;
+            if (plan.spawnedCount < budget.min)
+            {
+                plan.warning = $"Encounter Director underfilled floor {buildResult.floorIndex}: spawned {plan.spawnedCount}/{budget.requested}.";
+            }
+
+            return plan;
+        }
+
+        public static int GetRoomCapacity(DungeonRoomBuildRecord room, int safeSpawnCount)
+        {
+            if (room == null || safeSpawnCount <= 0)
+            {
+                return 0;
+            }
+
+            int footprintCapacity = room.footprintArea >= 1600f ? 3 : (room.footprintArea >= 900f ? 2 : 1);
+            if (room.roomType == DungeonNodeKind.Landmark)
+            {
+                footprintCapacity = Mathf.Max(2, footprintCapacity + 1);
+            }
+
+            if (room.roomType == DungeonNodeKind.Secret)
+            {
+                footprintCapacity = Mathf.Min(1, footprintCapacity);
+            }
+
+            return Mathf.Clamp(Mathf.Min(footprintCapacity, safeSpawnCount), 0, room.roomType == DungeonNodeKind.Landmark ? 4 : 3);
+        }
+
+        public static bool IsSafeRoomType(DungeonNodeKind roomType)
+        {
+            return roomType == DungeonNodeKind.EntryHub ||
+                   roomType == DungeonNodeKind.TransitUp ||
+                   roomType == DungeonNodeKind.TransitDown;
+        }
+
+        private static Dictionary<string, List<DungeonSpawnPointRecord>> CollectSafeSpawns(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions)
+        {
+            Dictionary<string, List<DungeonSpawnPointRecord>> result = new Dictionary<string, List<DungeonSpawnPointRecord>>();
+            List<DungeonSpawnPointRecord> selected = new List<DungeonSpawnPointRecord>();
+            for (int i = 0; i < buildResult.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawnPoint = buildResult.spawnPoints[i];
+                if (spawnPoint.category != DungeonSpawnPointCategory.EnemyMelee ||
+                    !DungeonSceneController.IsCombatTestEnemySpawnSafe(buildResult, spawnPoint, occupiedPositions, selected, true))
+                {
+                    continue;
+                }
+
+                selected.Add(spawnPoint);
+                if (!result.TryGetValue(spawnPoint.nodeId, out List<DungeonSpawnPointRecord> roomSpawns))
+                {
+                    roomSpawns = new List<DungeonSpawnPointRecord>();
+                    result.Add(spawnPoint.nodeId, roomSpawns);
+                }
+
+                roomSpawns.Add(spawnPoint);
+            }
+
+            foreach (KeyValuePair<string, List<DungeonSpawnPointRecord>> pair in result)
+            {
+                pair.Value.Sort((left, right) => right.score.CompareTo(left.score));
+            }
+
+            return result;
+        }
+
+        private static List<DungeonEncounterRoomCandidate> BuildRoomCandidates(
+            DungeonBuildResult buildResult,
+            Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom)
+        {
+            List<DungeonEncounterRoomCandidate> candidates = new List<DungeonEncounterRoomCandidate>();
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = buildResult.rooms[i];
+                if (room == null || IsSafeRoomType(room.roomType) || !safeSpawnsByRoom.TryGetValue(room.nodeId, out List<DungeonSpawnPointRecord> safeSpawns))
+                {
+                    continue;
+                }
+
+                int capacity = GetRoomCapacity(room, safeSpawns.Count);
+                if (capacity <= 0)
+                {
+                    continue;
+                }
+
+                candidates.Add(new DungeonEncounterRoomCandidate
+                {
+                    room = room,
+                    safeSpawns = safeSpawns,
+                    capacity = capacity,
+                    distanceFromPlayer = Vector3.Distance(room.bounds.center, buildResult.playerSpawn)
+                });
+            }
+
+            candidates.Sort((left, right) =>
+            {
+                int roleCompare = GetRoomPriority(left.room).CompareTo(GetRoomPriority(right.room));
+                if (roleCompare != 0)
+                {
+                    return roleCompare;
+                }
+
+                return left.distanceFromPlayer.CompareTo(right.distanceFromPlayer);
+            });
+
+            return candidates;
+        }
+
+        private static void AllocateRooms(
+            DungeonEncounterPlan plan,
+            List<DungeonEncounterRoomCandidate> candidates,
+            int requestedBudget,
+            System.Random random)
+        {
+            int remaining = requestedBudget;
+            if (remaining <= 0)
+            {
+                return;
+            }
+
+            DungeonEncounterRoomCandidate firstGroup = candidates.Find(candidate =>
+                candidate.capacity >= 2 &&
+                candidate.room.roomType != DungeonNodeKind.Secret);
+            if (plan.floorIndex == 1 && firstGroup != null && remaining >= 2)
+            {
+                AddAssignment(plan, firstGroup, 2);
+                remaining -= 2;
+            }
+
+            List<DungeonEncounterRoomCandidate> sorted = new List<DungeonEncounterRoomCandidate>(candidates);
+            sorted.Sort((left, right) =>
+            {
+                int capacityCompare = right.capacity.CompareTo(left.capacity);
+                if (capacityCompare != 0)
+                {
+                    return capacityCompare;
+                }
+
+                return left.distanceFromPlayer.CompareTo(right.distanceFromPlayer);
+            });
+
+            for (int i = 0; i < sorted.Count && remaining > 0; i++)
+            {
+                DungeonEncounterRoomCandidate candidate = sorted[i];
+                DungeonEncounterRoomAssignment existing = plan.assignments.Find(item => item.roomId == candidate.room.nodeId);
+                int existingCount = existing != null ? existing.plannedCount : 0;
+                int capacityLeft = candidate.capacity - existingCount;
+                if (capacityLeft <= 0)
+                {
+                    continue;
+                }
+
+                int groupTarget = candidate.room.roomType == DungeonNodeKind.Landmark ? Mathf.Min(4, capacityLeft) : Mathf.Min(3, capacityLeft);
+                if (remaining == 1 && existing != null)
+                {
+                    groupTarget = 1;
+                }
+                else if (remaining >= 2 && groupTarget > 1)
+                {
+                    groupTarget = Mathf.Min(groupTarget, random.Next(2, groupTarget + 1));
+                }
+                else
+                {
+                    groupTarget = 1;
+                }
+
+                int addCount = Mathf.Min(remaining, groupTarget);
+                if (addCount <= 0)
+                {
+                    continue;
+                }
+
+                if (existing != null)
+                {
+                    existing.plannedCount += addCount;
+                }
+                else
+                {
+                    AddAssignment(plan, candidate, addCount);
+                }
+
+                remaining -= addCount;
+            }
+        }
+
+        private static void AddAssignment(DungeonEncounterPlan plan, DungeonEncounterRoomCandidate candidate, int count)
+        {
+            plan.assignments.Add(new DungeonEncounterRoomAssignment
+            {
+                roomId = candidate.room.nodeId,
+                roomType = candidate.room.roomType,
+                role = GetRole(candidate.room, count),
+                plannedCount = count,
+                roomCapacity = candidate.capacity
+            });
+        }
+
+        private static List<EnemyDefinition> ChooseArchetypesForGroup(
+            List<EnemyDefinition> definitions,
+            int floorIndex,
+            int count,
+            System.Random random)
+        {
+            List<EnemyDefinition> selected = new List<EnemyDefinition>();
+            if (definitions == null || definitions.Count == 0 || count <= 0)
+            {
+                return selected;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                EnemyDefinition next = ChooseWeightedDefinition(definitions, floorIndex, random, selected);
+                selected.Add(next);
+            }
+
+            return selected;
+        }
+
+        private static EnemyDefinition ChooseWeightedDefinition(
+            List<EnemyDefinition> definitions,
+            int floorIndex,
+            System.Random random,
+            List<EnemyDefinition> currentGroup)
+        {
+            float totalWeight = 0f;
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                totalWeight += GetSpawnWeight(definitions[i], floorIndex, currentGroup);
+            }
+
+            if (totalWeight <= 0f)
+            {
+                return definitions[0];
+            }
+
+            double roll = random.NextDouble() * totalWeight;
+            float cursor = 0f;
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                cursor += GetSpawnWeight(definitions[i], floorIndex, currentGroup);
+                if (roll <= cursor)
+                {
+                    return definitions[i];
+                }
+            }
+
+            return definitions[definitions.Count - 1];
+        }
+
+        private static float GetSpawnWeight(EnemyDefinition definition, int floorIndex, List<EnemyDefinition> currentGroup = null)
+        {
+            if (definition == null || !definition.IsEligibleForFloor(floorIndex))
+            {
+                return 0f;
+            }
+
+            float weight = definition.archetype switch
+            {
+                EnemyArchetype.Slime => floorIndex <= 1 ? 55f : (floorIndex == 2 ? 35f : (floorIndex == 3 ? 20f : 10f)),
+                EnemyArchetype.Bat => floorIndex <= 1 ? 25f : (floorIndex == 2 ? 30f : (floorIndex == 3 ? 30f : 25f)),
+                EnemyArchetype.GoblinBrute => floorIndex < 3 ? 0f : (floorIndex == 3 ? 10f : 20f),
+                _ => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex == 3 ? 40f : 45f))
+            };
+
+            if (currentGroup != null && currentGroup.Count > 0)
+            {
+                for (int i = 0; i < currentGroup.Count; i++)
+                {
+                    if (currentGroup[i] != null && currentGroup[i].archetype == definition.archetype)
+                    {
+                        weight *= 0.35f;
+                    }
+                }
+            }
+
+            return Mathf.Max(0f, weight);
+        }
+
+        private static EncounterBudget GetBudget(int floorIndex, System.Random random)
+        {
+            int min;
+            int max;
+            if (floorIndex <= 1)
+            {
+                min = 5;
+                max = 8;
+            }
+            else if (floorIndex == 2)
+            {
+                min = 7;
+                max = 10;
+            }
+            else if (floorIndex == 3)
+            {
+                min = 8;
+                max = 12;
+            }
+            else
+            {
+                min = 10;
+                max = 15;
+            }
+
+            return new EncounterBudget
+            {
+                min = min,
+                max = max,
+                requested = random.Next(min, max + 1)
+            };
+        }
+
+        private static int GetRoomPriority(DungeonRoomBuildRecord room)
+        {
+            return room.roomType switch
+            {
+                DungeonNodeKind.Ordinary => 0,
+                DungeonNodeKind.Landmark => 1,
+                DungeonNodeKind.Secret => 2,
+                _ => 9
+            };
+        }
+
+        private static DungeonEncounterRoomRole GetRole(DungeonRoomBuildRecord room, int count)
+        {
+            if (room.roomType == DungeonNodeKind.Secret)
+            {
+                return DungeonEncounterRoomRole.OptionalDanger;
+            }
+
+            if (room.roomType == DungeonNodeKind.Landmark || count >= 3)
+            {
+                return DungeonEncounterRoomRole.HeavyCombat;
+            }
+
+            return count <= 1 ? DungeonEncounterRoomRole.LightCombat : DungeonEncounterRoomRole.StandardCombat;
+        }
+
+        private void RegisterEnemy(EnemyHealth enemyHealth)
+        {
+            if (enemyHealth == null || livingEnemies.Contains(enemyHealth))
+            {
+                return;
+            }
+
+            livingEnemies.Add(enemyHealth);
+            enemyHealth.Died += HandleEnemyDied;
+        }
+
+        private void HandleEnemyDied(EnemyHealth enemyHealth)
+        {
+            if (enemyHealth != null)
+            {
+                enemyHealth.Died -= HandleEnemyDied;
+                livingEnemies.Remove(enemyHealth);
+                dropService.UnregisterEnemy(enemyHealth);
+            }
+
+            summary.livingEnemyCount = livingEnemies.Count;
+        }
+
+        private static Transform GetOrCreateEnemyRoot(Transform runtimeRoot)
+        {
+            Transform existing = runtimeRoot.Find(EncounterEnemiesRootName);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            GameObject root = new GameObject(EncounterEnemiesRootName);
+            root.transform.SetParent(runtimeRoot, false);
+            return root.transform;
+        }
+
+        internal static GameObject CreateEnemy(Transform parent, Vector3 position, EnemyDefinition definition)
+        {
+            EnemyDefinition safeDefinition = definition != null
+                ? definition
+                : EnemyCatalog.CreateDefinition(EnemyArchetype.GoblinGrunt);
+
+            GameObject enemy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            enemy.name = safeDefinition.displayName;
+            enemy.transform.SetParent(parent, true);
+            enemy.transform.position = position;
+            enemy.transform.localScale = safeDefinition.visualScale;
+
+            CapsuleCollider capsuleCollider = enemy.GetComponent<CapsuleCollider>();
+            if (capsuleCollider != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Object.Destroy(capsuleCollider);
+                }
+                else
+                {
+                    Object.DestroyImmediate(capsuleCollider);
+                }
+            }
+
+            CharacterController characterController = enemy.AddComponent<CharacterController>();
+            float visualHeight = Mathf.Max(1.1f, safeDefinition.visualScale.y * 2f);
+            float visualRadius = Mathf.Clamp(Mathf.Max(safeDefinition.visualScale.x, safeDefinition.visualScale.z) * 0.42f, 0.32f, 0.82f);
+            characterController.height = visualHeight;
+            characterController.radius = visualRadius;
+            characterController.center = Vector3.zero;
+
+            EnemyHealth health = enemy.AddComponent<EnemyHealth>();
+            health.Configure(safeDefinition);
+            SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
+            melee.Configure(safeDefinition);
+
+            int defaultLayer = LayerMask.NameToLayer("Default");
+            DungeonSceneController.SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
+            return enemy;
+        }
+
+        private sealed class DungeonEncounterRoomCandidate
+        {
+            public DungeonRoomBuildRecord room;
+            public List<DungeonSpawnPointRecord> safeSpawns;
+            public int capacity;
+            public float distanceFromPlayer;
+        }
+
+        private struct EncounterBudget
+        {
+            public int min;
+            public int max;
+            public int requested;
+        }
+    }
+
+    public enum DungeonEncounterRoomRole
+    {
+        SafeStart,
+        LightCombat,
+        StandardCombat,
+        HeavyCombat,
+        OptionalDanger,
+        FutureStairGuardian
+    }
+
+    public sealed class DungeonEncounterPlan
+    {
+        public int floorIndex;
+        public int requestedBudget;
+        public int spawnedCount;
+        public string spawnSource = string.Empty;
+        public string warning = string.Empty;
+        public readonly List<DungeonEncounterRoomAssignment> assignments = new List<DungeonEncounterRoomAssignment>();
+        public readonly List<DungeonEncounterSpawn> spawns = new List<DungeonEncounterSpawn>();
+        public readonly Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
+
+        public void AddArchetype(EnemyArchetype archetype)
+        {
+            archetypeCounts.TryGetValue(archetype, out int count);
+            archetypeCounts[archetype] = count + 1;
+        }
+
+        public DungeonEncounterSummary ToSummary()
+        {
+            return new DungeonEncounterSummary
+            {
+                floorIndex = floorIndex,
+                requestedBudget = requestedBudget,
+                spawnedEnemyCount = spawnedCount,
+                livingEnemyCount = spawnedCount,
+                spawnSource = spawnSource,
+                warning = warning,
+                roomAssignments = new List<DungeonEncounterRoomAssignment>(assignments),
+                archetypeCounts = new Dictionary<EnemyArchetype, int>(archetypeCounts)
+            };
+        }
+    }
+
+    public sealed class DungeonEncounterSpawn
+    {
+        public string roomId;
+        public DungeonEncounterRoomRole role;
+        public Vector3 position;
+        public EnemyDefinition definition;
+    }
+
+    public sealed class DungeonEncounterRoomAssignment
+    {
+        public string roomId;
+        public DungeonNodeKind roomType;
+        public DungeonEncounterRoomRole role;
+        public int plannedCount;
+        public int spawnedCount;
+        public int roomCapacity;
+        public readonly List<EnemyArchetype> archetypes = new List<EnemyArchetype>();
+    }
+
+    public sealed class DungeonEncounterSummary
+    {
+        public static readonly DungeonEncounterSummary Empty = new DungeonEncounterSummary
+        {
+            spawnSource = "None"
+        };
+
+        public int floorIndex;
+        public int requestedBudget;
+        public int spawnedEnemyCount;
+        public int livingEnemyCount;
+        public string spawnSource = string.Empty;
+        public string warning = string.Empty;
+        public List<DungeonEncounterRoomAssignment> roomAssignments = new List<DungeonEncounterRoomAssignment>();
+        public Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
+
+        public string ToDebugString()
+        {
+            return
+                $"Encounter Director Lite | Floor {floorIndex} | Source {spawnSource} | " +
+                $"Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | " +
+                $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}" +
+                (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
+        }
+
+        private string FormatArchetypes()
+        {
+            if (archetypeCounts == null || archetypeCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<EnemyArchetype, int> pair in archetypeCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+    }
+}

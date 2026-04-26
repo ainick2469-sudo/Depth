@@ -15,13 +15,13 @@ These are the intended development-only controls for the current milestone:
 - `F7`
   Teleport to stairs down
 - `Ctrl+F7`
-  Respawn the temporary combat test enemy population
+  Respawn Encounter Director Lite enemies; if the director is disabled, respawn the temporary combat test enemy population
 - `Ctrl+Shift+F7`
-  Kill all temporary combat test enemies
+  Clear Encounter Director Lite enemies without drops/progression; if the director is disabled, kill temporary combat test enemies
 - `F8`
   Teleport to landmark
 - `Ctrl+F8`
-  Print temporary combat test enemy counts and spawn summary
+  Print encounter enemy counts, archetype counts, and spawn summary
 - `F9`
   Teleport to secret
 - `F10`

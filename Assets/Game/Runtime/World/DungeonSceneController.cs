@@ -83,9 +83,12 @@ namespace FrontierDepths.World
         [SerializeField] private Transform runtimeRoot;
         [SerializeField] private float roomSpacing = DefaultRoomSpacing;
         [SerializeField] private bool enableCombatTestStation = true;
-        [SerializeField] private bool enableCombatTestEnemies = true;
+        [SerializeField] private bool enableEncounterDirector = true;
+        [SerializeField] private bool enableCombatTestEnemies;
+        [SerializeField] private bool allowCombatTestEnemiesWithEncounters;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+        private DungeonEncounterDirector encounterDirector;
         private DungeonBuildResult activeBuildResult;
         private DungeonBuildResult currentBuildResult;
         private DungeonBuildResult emergencyDebugBuildResult;
@@ -316,7 +319,11 @@ namespace FrontierDepths.World
             }
 
             SpawnCombatTestStation(buildResult);
-            SpawnCombatTestEnemies(buildResult);
+            SpawnEncounterEnemies(buildResult);
+            if (enableCombatTestEnemies && (!enableEncounterDirector || allowCombatTestEnemiesWithEncounters))
+            {
+                SpawnCombatTestEnemies(buildResult);
+            }
             RefreshStatusMessage();
         }
 
@@ -621,6 +628,27 @@ namespace FrontierDepths.World
             CreateTargetDummy(stationRoot.transform, stationSpawns[2].position, TargetDummyKind.StatusTest);
         }
 
+        private void SpawnEncounterEnemies(DungeonBuildResult buildResult)
+        {
+            if (!enableEncounterDirector ||
+                buildResult == null ||
+                buildResult.isEmergencyDebugBuild ||
+                runtimeRoot == null)
+            {
+                return;
+            }
+
+            DungeonEncounterDirector director = GetOrCreateEncounterDirector();
+            List<Vector3> occupiedPositions = GetCombatTestStationOccupiedPositions();
+            DungeonEncounterSummary encounterSummary = director.Spawn(buildResult, occupiedPositions, true);
+            if (!string.IsNullOrWhiteSpace(encounterSummary.warning))
+            {
+                Debug.LogWarning(encounterSummary.warning);
+            }
+
+            Debug.Log(encounterSummary.ToDebugString());
+        }
+
         private void SpawnCombatTestEnemies(DungeonBuildResult buildResult)
         {
             if (!enableCombatTestEnemies ||
@@ -654,6 +682,16 @@ namespace FrontierDepths.World
             }
 
             Debug.Log(GetCombatTestEnemySummary(buildResult, spawnPoints.Count, requestedCount));
+        }
+
+        private DungeonEncounterDirector GetOrCreateEncounterDirector()
+        {
+            if (encounterDirector == null)
+            {
+                encounterDirector = new DungeonEncounterDirector(runtimeRoot);
+            }
+
+            return encounterDirector;
         }
 
         internal static DungeonSpawnPointRecord SelectCombatTestEnemySpawn(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions = null)
@@ -1624,11 +1662,11 @@ namespace FrontierDepths.World
             {
                 if (shiftHeld)
                 {
-                    KillCombatTestEnemies();
+                    KillEncounterOrTestEnemies();
                 }
                 else
                 {
-                    RespawnCombatTestEnemies();
+                    RespawnEncounterOrTestEnemies();
                 }
 
                 return;
@@ -1636,7 +1674,7 @@ namespace FrontierDepths.World
 
             if (ctrlHeld && Input.GetKeyDown(KeyCode.F8))
             {
-                PrintCombatTestEnemySummary();
+                PrintEncounterOrTestEnemySummary();
                 return;
             }
 
@@ -1683,6 +1721,74 @@ namespace FrontierDepths.World
             BuildFloor();
         }
 
+        private void RespawnEncounterOrTestEnemies()
+        {
+            if (enableEncounterDirector)
+            {
+                RespawnEncounterEnemies();
+                if (enableCombatTestEnemies && allowCombatTestEnemiesWithEncounters)
+                {
+                    RespawnCombatTestEnemies();
+                }
+
+                return;
+            }
+
+            RespawnCombatTestEnemies();
+        }
+
+        private void KillEncounterOrTestEnemies()
+        {
+            if (enableEncounterDirector)
+            {
+                KillEncounterEnemies();
+                if (enableCombatTestEnemies && allowCombatTestEnemiesWithEncounters)
+                {
+                    KillCombatTestEnemies();
+                }
+
+                return;
+            }
+
+            KillCombatTestEnemies();
+        }
+
+        private void PrintEncounterOrTestEnemySummary()
+        {
+            if (enableEncounterDirector && encounterDirector != null)
+            {
+                Debug.Log(encounterDirector.Summary.ToDebugString());
+                return;
+            }
+
+            PrintCombatTestEnemySummary();
+        }
+
+        private void RespawnEncounterEnemies()
+        {
+            DungeonBuildResult visibleBuild = GetVisibleBuildResult();
+            if (visibleBuild == null)
+            {
+                Debug.LogWarning("Cannot respawn encounter enemies: dungeon build not ready.");
+                return;
+            }
+
+            SpawnEncounterEnemies(visibleBuild);
+        }
+
+        private void KillEncounterEnemies()
+        {
+            if (encounterDirector == null)
+            {
+                Debug.Log("No encounter enemies to clear.");
+                return;
+            }
+
+            int activeCount = encounterDirector.Summary.livingEnemyCount;
+            encounterDirector.Clear(true);
+            Debug.Log($"Cleared {activeCount} encounter enemies without drops or progression.");
+        }
+
         private void RespawnCombatTestEnemies()
         {
             DungeonBuildResult visibleBuild = GetVisibleBuildResult();
@@ -1705,24 +1811,8 @@ namespace FrontierDepths.World
             }
 
             EnemyHealth[] enemies = enemyRoot.GetComponentsInChildren<EnemyHealth>(true);
-            for (int i = 0; i < enemies.Length; i++)
-            {
-                if (enemies[i] != null && !enemies[i].IsDead)
-                {
-                    enemies[i].ApplyDamage(new DamageInfo
-                    {
-                        amount = 9999f,
-                        source = gameObject,
-                        weaponId = "debug.kill_all_test_enemies",
-                        damageType = DamageType.Void,
-                        deliveryType = DamageDeliveryType.Trap,
-                        hitPoint = enemies[i].transform.position,
-                        hitNormal = Vector3.up
-                    });
-                }
-            }
-
-            Debug.Log($"Killed {enemies.Length} combat test enemies.");
+            ClearCombatTestEnemies(enemyRoot, true);
+            Debug.Log($"Cleared {enemies.Length} combat test enemies without drops or progression.");
         }
 
         private void PrintCombatTestEnemySummary()
@@ -1874,6 +1964,8 @@ namespace FrontierDepths.World
             {
                 return;
             }
+
+            encounterDirector?.Clear(immediate);
 
             for (int i = runtimeRoot.childCount - 1; i >= 0; i--)
             {
@@ -2088,6 +2180,10 @@ namespace FrontierDepths.World
             statusMessage = string.IsNullOrWhiteSpace(visibleBuild.validationSummary)
                 ? ComposeBuildSummary(visibleBuild)
                 : visibleBuild.validationSummary;
+            if (encounterDirector != null && encounterDirector.Summary.spawnSource != "None")
+            {
+                statusMessage = $"{statusMessage} | {encounterDirector.Summary.ToDebugString()}";
+            }
         }
 
         internal static List<Vector3> BuildCorridorRoute(Vector3 start, Vector3 end, Vector2Int direction)

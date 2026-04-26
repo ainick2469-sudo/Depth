@@ -20,7 +20,7 @@ namespace FrontierDepths.Combat
         public string displayName = "Frontier Revolver";
         [TextArea] public string description = "Reliable sidearm for the long descent.";
         public WeaponArchetype weaponArchetype = WeaponArchetype.Revolver;
-        public float baseDamage = 25f;
+        public float baseDamage = 18f;
         public float fireRate = 2.857f;
         public int magazineSize = 6;
         public float reloadDuration = 1.4f;

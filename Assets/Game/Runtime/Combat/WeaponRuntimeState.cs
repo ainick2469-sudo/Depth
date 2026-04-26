@@ -82,6 +82,30 @@ namespace FrontierDepths.Combat
             autoReloadReadyTime = 0f;
         }
 
+        public int TryAddAmmoToMagazine(int amount, bool cancelReloadIfNeeded)
+        {
+            if (amount <= 0 || CurrentAmmo >= MagazineSize)
+            {
+                return 0;
+            }
+
+            int before = CurrentAmmo;
+            CurrentAmmo = UnityEngine.Mathf.Min(MagazineSize, CurrentAmmo + amount);
+            int added = CurrentAmmo - before;
+            if (added > 0)
+            {
+                ClearPendingAutoReload();
+                if (cancelReloadIfNeeded && IsReloading)
+                {
+                    IsReloading = false;
+                    reloadStartTime = 0f;
+                    reloadCompleteTime = 0f;
+                }
+            }
+
+            return added;
+        }
+
         public bool Tick(float currentTime)
         {
             if (!IsReloading || currentTime < reloadCompleteTime)

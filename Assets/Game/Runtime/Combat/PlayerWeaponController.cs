@@ -9,7 +9,7 @@ namespace FrontierDepths.Combat
     {
         private const string DefaultWeaponId = "weapon.frontier_revolver";
         private const string DefaultWeaponName = "Frontier Revolver";
-        private const float DefaultDamage = 25f;
+        private const float DefaultDamage = 18f;
         private const float DefaultFireRate = 2.857f;
         private const int DefaultMagazineSize = 6;
         private const float DefaultReloadDuration = 1.4f;
@@ -276,6 +276,25 @@ namespace FrontierDepths.Combat
 
             BeginReloadFeedback();
             return true;
+        }
+
+        public int TryAddAmmoToMagazine(int amount, bool cancelReloadIfNeeded = true)
+        {
+            EnsureRuntimeReady();
+            if (weaponState == null)
+            {
+                weaponState = new WeaponRuntimeState(GetMagazineSize());
+            }
+
+            bool wasReloading = weaponState.IsReloading;
+            int added = weaponState.TryAddAmmoToMagazine(amount, cancelReloadIfNeeded);
+            if (added > 0 && wasReloading && cancelReloadIfNeeded)
+            {
+                ReloadFinished?.Invoke(this);
+                PublishWeaponEvent(GameplayEventType.ReloadFinished);
+            }
+
+            return added;
         }
 
         public static bool IsWeaponHitAllowed(Collider hitCollider, Transform playerRoot)

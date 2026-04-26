@@ -18,6 +18,10 @@ namespace FrontierDepths.Combat
         private float deathTimer;
         private bool isDead;
         private bool deathEventRaised;
+        private EnemyDefinition definition;
+        private DamageInfo lastDamageInfo;
+        private DamageResult lastDamageResult;
+        private Color stateColor;
 
         public event Action<EnemyHealth, DamageInfo, DamageResult> Damaged;
         public event Action<EnemyHealth> Died;
@@ -25,6 +29,11 @@ namespace FrontierDepths.Combat
         public float MaxHealth => maxHealth;
         public float CurrentHealth => currentHealth;
         public bool IsDead => isDead;
+        public EnemyDefinition Definition => definition;
+        public EnemyArchetype Archetype => definition != null ? definition.archetype : EnemyArchetype.GoblinGrunt;
+        public string EnemyId => definition != null ? definition.enemyId : string.Empty;
+        public DamageInfo LastDamageInfo => lastDamageInfo;
+        public DamageResult LastDamageResult => lastDamageResult;
 
         private void Awake()
         {
@@ -40,8 +49,21 @@ namespace FrontierDepths.Combat
 
         public void Configure(float health, Color color)
         {
+            definition = null;
             maxHealth = Mathf.Max(1f, health);
             baseColor = color;
+            ResetHealth();
+        }
+
+        public void Configure(EnemyDefinition enemyDefinition)
+        {
+            definition = enemyDefinition;
+            if (definition != null)
+            {
+                maxHealth = Mathf.Max(1f, definition.maxHealth);
+                baseColor = definition.bodyColor;
+            }
+
             ResetHealth();
         }
 
@@ -70,6 +92,8 @@ namespace FrontierDepths.Combat
                 remainingHealth = currentHealth
             };
 
+            lastDamageInfo = damageInfo;
+            lastDamageResult = result;
             Flash(Color.white, 0.12f);
             Damaged?.Invoke(this, damageInfo, result);
 
@@ -89,17 +113,25 @@ namespace FrontierDepths.Combat
             deathEventRaised = false;
             flashTimer = 0f;
             deathTimer = 0f;
+            lastDamageInfo = default;
+            lastDamageResult = default;
+            stateColor = baseColor;
             SetCollidersEnabled(true);
             SetRenderersEnabled(true);
-            ApplyColor(baseColor);
+            ApplyColor(stateColor);
         }
 
         internal void SetStateColor(Color color)
         {
-            if (!isDead && flashTimer <= 0f)
+            if (isDead)
             {
-                baseColor = color;
-                ApplyColor(baseColor);
+                return;
+            }
+
+            stateColor = color;
+            if (flashTimer <= 0f)
+            {
+                ApplyColor(stateColor);
             }
         }
 
@@ -143,7 +175,12 @@ namespace FrontierDepths.Combat
                 weaponId = damageInfo.weaponId,
                 damageType = damageInfo.damageType.ToString(),
                 deliveryType = damageInfo.deliveryType.ToString(),
+                amount = definition != null ? Mathf.Max(0f, definition.masteryXpValue) : 1f,
                 floorIndex = run != null ? run.floorIndex : 0,
+                worldPosition = transform.position,
+                tags = definition != null
+                    ? new[] { definition.archetype.ToString(), definition.enemyId }
+                    : Array.Empty<string>(),
                 timestamp = Time.unscaledTime
             });
         }
@@ -158,7 +195,7 @@ namespace FrontierDepths.Combat
             flashTimer -= Mathf.Max(0f, deltaTime);
             if (flashTimer <= 0f)
             {
-                ApplyColor(baseColor);
+                ApplyColor(stateColor);
             }
         }
 

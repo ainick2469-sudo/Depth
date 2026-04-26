@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Frontier Revolver
   description: Starter sidearm for the first descent.
   weaponArchetype: 0
-  baseDamage: 25
+baseDamage: 18
   fireRate: 2.857
   magazineSize: 6
   reloadDuration: 1.4

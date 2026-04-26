@@ -8,8 +8,6 @@ namespace FrontierDepths.Combat
     [RequireComponent(typeof(EnemyHealth))]
     public sealed class SimpleMeleeEnemyController : MonoBehaviour
     {
-        private static readonly Color IdleColor = new Color(0.72f, 0.28f, 0.22f, 1f);
-        private static readonly Color ChaseColor = new Color(0.92f, 0.42f, 0.18f, 1f);
         private static readonly Color AttackColor = new Color(1f, 0.12f, 0.08f, 1f);
         private const float LastKnownPositionStopDistance = 1.2f;
         private static readonly List<SimpleMeleeEnemyController> ActiveEnemies = new List<SimpleMeleeEnemyController>();
@@ -38,10 +36,38 @@ namespace FrontierDepths.Combat
         private bool subscribedToGameplayEvents;
         private bool registeredActive;
         private bool hasLastKnownTargetPosition;
+        private Color baseBodyColor = new Color(0.72f, 0.28f, 0.22f, 1f);
+        private float hearingRadiusMultiplier = 1f;
 
         public SimpleMeleeEnemyState State => state;
         public float NextAttackTime => nextAttackTime;
         public bool IsAlerted => IsAlertedAt(Time.time);
+        public float MoveSpeed => moveSpeed;
+        public float AttackDamage => attackDamage;
+        public float AttackRange => attackRange;
+        public float AttackCooldown => attackCooldown;
+        public float DetectionRange => detectionRange;
+        public float HearingRadiusMultiplier => hearingRadiusMultiplier;
+        public float GroupAlertRadius => groupAlertRadius;
+
+        public void Configure(EnemyDefinition definition)
+        {
+            if (definition == null)
+            {
+                return;
+            }
+
+            moveSpeed = Mathf.Max(0.1f, definition.moveSpeed);
+            detectionRange = Mathf.Max(0f, definition.detectionRange);
+            attackRange = Mathf.Max(0.1f, definition.attackRange);
+            attackDamage = Mathf.Max(0f, definition.attackDamage);
+            attackCooldown = Mathf.Max(0.05f, definition.attackCooldown);
+            hearingRadiusMultiplier = Mathf.Max(0f, definition.hearingRadiusMultiplier);
+            groupAlertRadius = Mathf.Max(0f, definition.groupAlertRadius);
+            baseBodyColor = definition.bodyColor;
+            SetState(state);
+            ApplyStateColor(state);
+        }
 
         private void Awake()
         {
@@ -208,7 +234,15 @@ namespace FrontierDepths.Combat
             {
                 health.Died += HandleDied;
                 health.Damaged += HandleDamaged;
-                health.SetStateColor(IdleColor);
+                if (health.Definition != null)
+                {
+                    Configure(health.Definition);
+                }
+                else
+                {
+                    health.SetStateColor(GetIdleColor());
+                }
+
                 subscribedToHealth = true;
             }
 
@@ -271,7 +305,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            float radius = Mathf.Max(0f, gameplayEvent.radius);
+            float radius = Mathf.Max(0f, gameplayEvent.radius) * Mathf.Max(0f, hearingRadiusMultiplier);
             if (radius <= 0f)
             {
                 return false;
@@ -372,15 +406,20 @@ namespace FrontierDepths.Combat
             }
 
             state = nextState;
+            ApplyStateColor(state);
+        }
+
+        private void ApplyStateColor(SimpleMeleeEnemyState nextState)
+        {
             if (health == null)
             {
                 return;
             }
 
-            switch (state)
+            switch (nextState)
             {
                 case SimpleMeleeEnemyState.Chase:
-                    health.SetStateColor(ChaseColor);
+                    health.SetStateColor(GetChaseColor());
                     break;
                 case SimpleMeleeEnemyState.Attack:
                     health.SetStateColor(AttackColor);
@@ -388,9 +427,19 @@ namespace FrontierDepths.Combat
                 case SimpleMeleeEnemyState.Dead:
                     break;
                 default:
-                    health.SetStateColor(IdleColor);
+                    health.SetStateColor(GetIdleColor());
                     break;
             }
+        }
+
+        private Color GetIdleColor()
+        {
+            return baseBodyColor;
+        }
+
+        private Color GetChaseColor()
+        {
+            return Color.Lerp(baseBodyColor, new Color(1f, 0.48f, 0.16f, 1f), 0.35f);
         }
 
         private void HandleDied(EnemyHealth enemyHealth)
