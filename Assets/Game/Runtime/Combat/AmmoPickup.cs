@@ -23,7 +23,8 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            return weapon.TryAddAmmoToMagazine(amount, true) > 0;
+            int modifiedAmount = Mathf.Max(1, Mathf.CeilToInt(amount * RunStatAggregator.Current.AmmoPickupMultiplier));
+            return weapon.TryAddAmmoToMagazine(modifiedAmount, true) > 0;
         }
 
         private void Awake()

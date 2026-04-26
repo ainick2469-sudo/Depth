@@ -12,6 +12,7 @@ namespace FrontierDepths.Combat
 
         private AudioSource hurtAudioSource;
         private AudioClip hurtClip;
+        private float baseMaxHealth;
         private float currentHealth;
         private float invulnerableUntil;
         private bool isDead;
@@ -113,12 +114,35 @@ namespace FrontierDepths.Combat
 
         public void ResetHealth()
         {
-            maxHealth = Mathf.Max(1f, maxHealth);
+            CaptureBaseMaxHealth();
+            maxHealth = Mathf.Max(1f, baseMaxHealth + RunStatAggregator.Current.maxHealthFlat);
             currentHealth = maxHealth;
             invulnerableUntil = 0f;
             isDead = false;
             deathEventRaised = false;
             initialized = true;
+        }
+
+        public void RefreshRunStatBonuses(bool healAddedMaximum = true)
+        {
+            CaptureBaseMaxHealth();
+            float previousMax = maxHealth;
+            maxHealth = Mathf.Max(1f, baseMaxHealth + RunStatAggregator.Current.maxHealthFlat);
+            if (!initialized)
+            {
+                currentHealth = maxHealth;
+                initialized = true;
+                return;
+            }
+
+            if (healAddedMaximum && maxHealth > previousMax)
+            {
+                currentHealth = Mathf.Min(maxHealth, currentHealth + (maxHealth - previousMax));
+            }
+            else
+            {
+                currentHealth = Mathf.Min(currentHealth, maxHealth);
+            }
         }
 
         private void EnsureInitialized()
@@ -129,6 +153,16 @@ namespace FrontierDepths.Combat
             }
 
             ResetHealth();
+        }
+
+        private void CaptureBaseMaxHealth()
+        {
+            if (baseMaxHealth > 0f)
+            {
+                return;
+            }
+
+            baseMaxHealth = Mathf.Max(1f, maxHealth);
         }
 
         private void MarkDead()

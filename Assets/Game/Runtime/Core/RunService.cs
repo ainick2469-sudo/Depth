@@ -38,6 +38,7 @@ namespace FrontierDepths.Core
                 floorIndex = 1,
                 equippedWeaponId = profileService.Current.equippedWeaponId,
                 acceptedBountyIds = new List<string>(profileService.GetActiveBounties()),
+                runUpgrades = new List<RunUpgradeRecord>(),
                 currentFloor = floorOne,
                 visitedFloors = new List<FloorState> { CloneFloor(floorOne) },
                 portalAnchor = PortalAnchorState.Invalid,
@@ -60,6 +61,20 @@ namespace FrontierDepths.Core
             Current.currentFloor = GetOrCreateFloorState(Current.floorIndex);
             Current.portalAnchor = PortalAnchorState.Invalid;
             Current.lastTransition = FloorTransitionKind.Descended;
+            Save();
+        }
+
+        public void AddRunUpgrade(string upgradeId)
+        {
+            EnsureRun();
+            Current.AddOrStackUpgrade(upgradeId);
+            Save();
+        }
+
+        public void MarkCurrentFloorRewardGranted()
+        {
+            EnsureRun();
+            Current.currentFloor.rewardGranted = true;
             Save();
         }
 
@@ -147,6 +162,7 @@ namespace FrontierDepths.Core
                 chapterId = source.chapterId,
                 themeKitId = source.themeKitId,
                 stairDiscovered = source.stairDiscovered,
+                rewardGranted = source.rewardGranted,
                 graphLayoutSignature = source.graphLayoutSignature,
                 layoutShapeSignature = source.layoutShapeSignature
             };

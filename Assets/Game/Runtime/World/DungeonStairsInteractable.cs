@@ -16,6 +16,16 @@ namespace FrontierDepths.World
 
         public void Interact(PlayerInteractor interactor)
         {
+            if (DungeonRewardChoiceController.TryBeginDescentReward(interactor, CompleteDescent))
+            {
+                return;
+            }
+
+            CompleteDescent();
+        }
+
+        private void CompleteDescent()
+        {
             GameplayEventBus.Publish(new GameplayEvent
             {
                 eventType = GameplayEventType.StairsUsed,

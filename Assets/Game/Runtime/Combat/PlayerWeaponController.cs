@@ -56,8 +56,13 @@ namespace FrontierDepths.Combat
         private int nextDamageNumber;
         private int nextTracer;
         private bool runtimeReady;
+        private bool firstShotAfterReloadReady;
+        private float pendingShotDamageMultiplier = 1f;
+        private int runUpgradeWeaponHitCounter;
+        private bool applyingChainHit;
 
         public static int DefaultWeaponRaycastMask => ~(1 << 2);
+        public static Func<float> CritRollProviderForTests { get; set; }
 
         public event Action<PlayerWeaponController> WeaponFired;
         public event Action<PlayerWeaponController> ReloadStarted;
@@ -73,21 +78,31 @@ namespace FrontierDepths.Combat
         public bool IsReloading => weaponState != null && weaponState.IsReloading;
         public float ReloadProgress => weaponState != null ? weaponState.GetReloadProgress(Time.time) : 1f;
         public float ReloadDuration => GetReloadDuration();
+        internal bool IsFirstShotAfterReloadReadyForTests => firstShotAfterReloadReady;
 
         private void Awake()
         {
             EnsureRuntimeReady();
+            SubscribeGameplayEvents();
         }
 
         private void OnEnable()
         {
             SceneManager.sceneLoaded += HandleSceneLoaded;
+            SubscribeGameplayEvents();
         }
 
         private void OnDisable()
         {
             SceneManager.sceneLoaded -= HandleSceneLoaded;
+            GameplayEventBus.Unsubscribe(HandleGameplayEvent);
             HideAllTracers();
+        }
+
+        private void SubscribeGameplayEvents()
+        {
+            GameplayEventBus.Unsubscribe(HandleGameplayEvent);
+            GameplayEventBus.Subscribe(HandleGameplayEvent);
         }
 
         private void Update()
@@ -195,6 +210,7 @@ namespace FrontierDepths.Combat
             }
 
             PlayReloadFeedback(false);
+            firstShotAfterReloadReady = RunStatAggregator.Current.HasFirstShotAfterReloadBonus;
             ReloadFinished?.Invoke(this);
             PublishWeaponEvent(GameplayEventType.ReloadFinished);
             return true;
@@ -243,8 +259,13 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            pendingShotDamageMultiplier = firstShotAfterReloadReady
+                ? RunStatAggregator.Current.FirstShotAfterReloadMultiplier
+                : 1f;
+            firstShotAfterReloadReady = false;
             WeaponShotResolution resolution = ResolveShot();
             ApplyShotResolution(resolution);
+            pendingShotDamageMultiplier = 1f;
             WeaponFired?.Invoke(this);
             PublishWeaponEvent(GameplayEventType.WeaponFired, amount: GetBaseDamage());
             PlayFireFeedback(currentTime);
@@ -290,6 +311,7 @@ namespace FrontierDepths.Combat
             int added = weaponState.TryAddAmmoToMagazine(amount, cancelReloadIfNeeded);
             if (added > 0 && wasReloading && cancelReloadIfNeeded)
             {
+                firstShotAfterReloadReady = RunStatAggregator.Current.HasFirstShotAfterReloadBonus;
                 ReloadFinished?.Invoke(this);
                 PublishWeaponEvent(GameplayEventType.ReloadFinished);
             }
@@ -517,21 +539,39 @@ namespace FrontierDepths.Combat
 
         private DamageInfo CreateDamageInfo(Vector3 hitPoint, Vector3 hitNormal)
         {
+            float critChance = GetCritChance();
+            bool isCritical = critChance > 0f && RollCriticalHit(critChance);
+            float amount = GetBaseDamage() * Mathf.Max(0.01f, pendingShotDamageMultiplier);
+            GameplayTag[] tags = isCritical ? new[] { GameplayTag.OnCrit } : Array.Empty<GameplayTag>();
+            if (isCritical)
+            {
+                amount *= RunStatAggregator.CriticalHitMultiplier;
+            }
+
             return new DamageInfo
             {
-                amount = GetBaseDamage(),
+                amount = amount,
                 source = gameObject,
                 weaponId = GetWeaponId(),
                 hitPoint = hitPoint,
                 hitNormal = hitNormal,
                 damageType = GetDamageType(),
                 deliveryType = GetDeliveryType(),
-                tags = Array.Empty<GameplayTag>(),
-                canCrit = GetCritChance() > 0f,
-                isCritical = false,
+                tags = tags,
+                canCrit = critChance > 0f,
+                isCritical = isCritical,
                 knockbackForce = GetKnockbackForce(),
                 statusChance = GetStatusChance()
             };
+        }
+
+        internal DamageInfo CreateDamageInfoForTests(Vector3 hitPoint, Vector3 hitNormal, float shotMultiplier = 1f)
+        {
+            float previousMultiplier = pendingShotDamageMultiplier;
+            pendingShotDamageMultiplier = shotMultiplier;
+            DamageInfo damageInfo = CreateDamageInfo(hitPoint, hitNormal);
+            pendingShotDamageMultiplier = previousMultiplier;
+            return damageInfo;
         }
 
         private void ResolveWeaponCamera()
@@ -1059,7 +1099,10 @@ namespace FrontierDepths.Combat
 
         private float GetBaseDamage()
         {
-            return weaponDefinition != null && weaponDefinition.baseDamage > 0f ? weaponDefinition.baseDamage : DefaultDamage;
+            float baseDamage = weaponDefinition != null && weaponDefinition.baseDamage > 0f ? weaponDefinition.baseDamage : DefaultDamage;
+            return GetWeaponArchetype() == WeaponArchetype.Revolver
+                ? baseDamage * RunStatAggregator.Current.RevolverDamageMultiplier
+                : baseDamage;
         }
 
         private float GetFireCooldown()
@@ -1075,7 +1118,8 @@ namespace FrontierDepths.Combat
 
         private float GetReloadDuration()
         {
-            return weaponDefinition != null && weaponDefinition.reloadDuration > 0f ? weaponDefinition.reloadDuration : DefaultReloadDuration;
+            float baseDuration = weaponDefinition != null && weaponDefinition.reloadDuration > 0f ? weaponDefinition.reloadDuration : DefaultReloadDuration;
+            return baseDuration / Mathf.Max(0.1f, RunStatAggregator.Current.ReloadSpeedMultiplier);
         }
 
         private float GetRange()
@@ -1100,7 +1144,14 @@ namespace FrontierDepths.Combat
 
         private float GetCritChance()
         {
-            return weaponDefinition != null ? Mathf.Max(0f, weaponDefinition.critChance) : 0f;
+            float baseCritChance = weaponDefinition != null ? Mathf.Max(0f, weaponDefinition.critChance) : 0f;
+            return Mathf.Clamp01(baseCritChance + RunStatAggregator.Current.CritChanceBonus);
+        }
+
+        private static bool RollCriticalHit(float critChance)
+        {
+            float roll = CritRollProviderForTests != null ? CritRollProviderForTests.Invoke() : UnityEngine.Random.value;
+            return roll < Mathf.Clamp01(critChance);
         }
 
         private float GetKnockbackForce()
@@ -1149,6 +1200,121 @@ namespace FrontierDepths.Combat
             GameplayEvent damageEvent = CreateGameplayEvent(GameplayEventType.DamageDealt, damageInfo, result, targetObject);
             GameplayEventBus.Publish(hitEvent);
             GameplayEventBus.Publish(damageEvent);
+            if (damageInfo.isCritical)
+            {
+                GameplayEventBus.Publish(CreateGameplayEvent(GameplayEventType.CriticalHit, damageInfo, result, targetObject));
+            }
+
+            TryApplyChainHit(damageInfo, result, targetObject);
+        }
+
+        private void HandleGameplayEvent(GameplayEvent gameplayEvent)
+        {
+            playerHealth ??= GetComponent<PlayerHealth>();
+            if (gameplayEvent.eventType != GameplayEventType.EnemyKilled ||
+                gameplayEvent.sourceObject == null ||
+                playerHealth == null ||
+                playerHealth.IsDead)
+            {
+                return;
+            }
+
+            PlayerWeaponController sourceWeapon = gameplayEvent.sourceObject.GetComponentInParent<PlayerWeaponController>();
+            if (sourceWeapon != this)
+            {
+                return;
+            }
+
+            int healAmount = RunStatAggregator.Current.KillHealAmount;
+            if (healAmount > 0)
+            {
+                playerHealth.Heal(healAmount);
+            }
+        }
+
+        internal void HandleGameplayEventForTests(GameplayEvent gameplayEvent)
+        {
+            HandleGameplayEvent(gameplayEvent);
+        }
+
+        internal bool TryApplyChainHit(DamageInfo damageInfo, DamageResult result, GameObject targetObject)
+        {
+            if (applyingChainHit || !result.applied || targetObject == null)
+            {
+                return false;
+            }
+
+            EnemyHealth originalEnemy = targetObject.GetComponentInParent<EnemyHealth>();
+            if (originalEnemy == null)
+            {
+                return false;
+            }
+
+            RunStatSnapshot stats = RunStatAggregator.Current;
+            if (!stats.HasChainHit)
+            {
+                return false;
+            }
+
+            runUpgradeWeaponHitCounter++;
+            if (runUpgradeWeaponHitCounter % stats.chainEveryNthHit != 0)
+            {
+                return false;
+            }
+
+            EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, 12f);
+            if (chainTarget == null)
+            {
+                return false;
+            }
+
+            applyingChainHit = true;
+            DamageInfo chainDamage = new DamageInfo
+            {
+                amount = Mathf.Max(0f, result.damageApplied * stats.chainDamageFraction),
+                source = gameObject,
+                weaponId = GetWeaponId(),
+                hitPoint = chainTarget.transform.position + Vector3.up,
+                hitNormal = Vector3.up,
+                damageType = DamageType.Shock,
+                deliveryType = DamageDeliveryType.Area,
+                tags = new[] { GameplayTag.Shock, GameplayTag.OnHit },
+                canCrit = false,
+                isCritical = false
+            };
+
+            DamageResult chainResult = chainTarget.ApplyDamage(chainDamage);
+            if (chainResult.applied)
+            {
+                GameplayEventBus.Publish(CreateGameplayEvent(GameplayEventType.DamageDealt, chainDamage, chainResult, chainTarget.gameObject));
+            }
+
+            applyingChainHit = false;
+            return chainResult.applied;
+        }
+
+        private static EnemyHealth FindNearestChainTarget(EnemyHealth originalEnemy, Vector3 origin, float radius)
+        {
+            EnemyHealth[] enemies = FindObjectsOfType<EnemyHealth>();
+            EnemyHealth nearest = null;
+            float nearestDistanceSquared = radius * radius;
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                EnemyHealth candidate = enemies[i];
+                if (candidate == null || candidate == originalEnemy || candidate.IsDead)
+                {
+                    continue;
+                }
+
+                float distanceSquared = (candidate.transform.position - origin).sqrMagnitude;
+                if (distanceSquared <= nearestDistanceSquared)
+                {
+                    nearestDistanceSquared = distanceSquared;
+                    nearest = candidate;
+                }
+            }
+
+            return nearest;
         }
 
         private GameplayEvent CreateGameplayEvent(GameplayEventType eventType, DamageInfo damageInfo, DamageResult result, GameObject targetObject)
