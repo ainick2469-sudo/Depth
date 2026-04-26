@@ -29,6 +29,8 @@ namespace FrontierDepths.Tests.EditMode
             Assert.AreEqual(126f, brute.maxHealth);
             Assert.Greater(bat.moveSpeed, slime.moveSpeed);
             Assert.Greater(brute.attackDamage, grunt.attackDamage);
+            Assert.Greater(brute.attackWindupDuration, grunt.attackWindupDuration);
+            Assert.Greater(grunt.attackWindupDuration, bat.attackWindupDuration);
             Assert.IsTrue(slime.IsEligibleForFloor(1));
             Assert.IsFalse(brute.IsEligibleForFloor(1));
             Assert.IsTrue(brute.IsEligibleForFloor(3));
@@ -72,6 +74,7 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.AreEqual(definition.moveSpeed, melee.MoveSpeed);
                 Assert.AreEqual(definition.attackDamage, melee.AttackDamage);
                 Assert.AreEqual(definition.attackRange, melee.AttackRange);
+                Assert.AreEqual(definition.attackWindupDuration, melee.AttackWindupDuration);
                 Assert.AreEqual(definition.hearingRadiusMultiplier, melee.HearingRadiusMultiplier);
                 Assert.AreEqual(definition.groupAlertRadius, melee.GroupAlertRadius);
                 Assert.AreEqual(definition.visualScale, enemy.transform.localScale);
@@ -91,15 +94,61 @@ namespace FrontierDepths.Tests.EditMode
 
             DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, new[] { new Vector3(40f, 3.5f, 18f) }, 12345);
 
-            Assert.GreaterOrEqual(plan.spawnedCount, 5);
-            Assert.LessOrEqual(plan.spawnedCount, 8);
+            Assert.GreaterOrEqual(plan.spawnedCount, 6);
+            Assert.LessOrEqual(plan.spawnedCount, 10);
             Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.GoblinBrute));
-            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount >= 2));
+            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 2));
+            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
+            Assert.GreaterOrEqual(plan.groupFightCount, 2);
+            Assert.LessOrEqual(plan.soloRoomCount, 1);
+            Assert.GreaterOrEqual(plan.emptyEligibleRoomCount, 1);
             Assert.IsFalse(plan.assignments.Exists(assignment =>
                 assignment.roomType == DungeonNodeKind.EntryHub ||
                 assignment.roomType == DungeonNodeKind.TransitUp ||
                 assignment.roomType == DungeonNodeKind.TransitDown));
             Assert.Less(plan.assignments.Count, CountEligibleRooms(build));
+        }
+
+        [Test]
+        public void EncounterDirector_FloorOneBatCapsPreventMosquitoHell()
+        {
+            DungeonBuildResult build = CreateEncounterBuild(1);
+
+            DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 5678);
+
+            plan.archetypeCounts.TryGetValue(EnemyArchetype.Bat, out int totalBats);
+            Assert.LessOrEqual(totalBats, 3);
+            Assert.IsFalse(plan.archetypeCounts.Count == 1 && plan.archetypeCounts.ContainsKey(EnemyArchetype.Bat));
+            for (int i = 0; i < plan.assignments.Count; i++)
+            {
+                Assert.LessOrEqual(CountArchetypes(plan.assignments[i], EnemyArchetype.Bat), 2);
+            }
+        }
+
+        [Test]
+        public void EncounterDirector_FloorTwoOrHigherIncludesThreePackWhenSafe()
+        {
+            DungeonBuildResult build = CreateEncounterBuild(2);
+
+            DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 2468);
+
+            Assert.GreaterOrEqual(plan.spawnedCount, 8);
+            Assert.LessOrEqual(plan.spawnedCount, 12);
+            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
+            Assert.GreaterOrEqual(plan.groupFightCount, 2);
+        }
+
+        [Test]
+        public void EncounterDirector_LandmarkRoomsPreferGroupFights()
+        {
+            DungeonBuildResult build = CreateEncounterBuild(1);
+
+            DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 12345);
+            DungeonEncounterRoomAssignment landmark = plan.assignments.Find(assignment => assignment.roomType == DungeonNodeKind.Landmark);
+
+            Assert.NotNull(landmark);
+            Assert.GreaterOrEqual(landmark.plannedCount, 2);
+            Assert.AreEqual(DungeonEncounterRoomRole.LandmarkFight, landmark.role);
         }
 
         [Test]
@@ -141,6 +190,118 @@ namespace FrontierDepths.Tests.EditMode
 
             Assert.AreEqual(1, plan.spawnedCount);
             Assert.IsTrue(plan.warning.Contains("underfilled"));
+        }
+
+        [Test]
+        public void EncounterDirector_GroupTemplatesRespectBudgetCapacityAndSpacing()
+        {
+            DungeonBuildResult build = CreateEncounterBuild(1);
+
+            DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 12345);
+
+            Assert.LessOrEqual(plan.spawnedCount, plan.requestedBudget);
+            for (int assignmentIndex = 0; assignmentIndex < plan.assignments.Count; assignmentIndex++)
+            {
+                DungeonEncounterRoomAssignment assignment = plan.assignments[assignmentIndex];
+                Assert.LessOrEqual(assignment.plannedCount, assignment.roomCapacity);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(assignment.templateId));
+
+                List<DungeonEncounterSpawn> roomSpawns = plan.spawns.FindAll(spawn => spawn.roomId == assignment.roomId);
+                for (int i = 0; i < roomSpawns.Count; i++)
+                {
+                    for (int j = i + 1; j < roomSpawns.Count; j++)
+                    {
+                        Assert.GreaterOrEqual(Vector3.Distance(roomSpawns[i].position, roomSpawns[j].position), 14f);
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void EncounterDirector_BrutesDoNotSpawnInSmallRooms()
+        {
+            DungeonBuildResult build = new DungeonBuildResult
+            {
+                floorIndex = 3,
+                seed = 77,
+                playerSpawn = Vector3.zero,
+                playerSpawnNodeId = "entry"
+            };
+            build.rooms.Add(new DungeonRoomBuildRecord { nodeId = "entry", roomType = DungeonNodeKind.EntryHub });
+            AddEncounterRoom(build, "small_a", DungeonNodeKind.Ordinary, 36f, 700f, 3);
+            AddEncounterRoom(build, "small_b", DungeonNodeKind.Ordinary, 76f, 700f, 3);
+            AddEncounterRoom(build, "small_c", DungeonNodeKind.Ordinary, 116f, 700f, 3);
+
+            DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 77);
+
+            for (int i = 0; i < plan.assignments.Count; i++)
+            {
+                if (plan.assignments[i].archetypes.Contains(EnemyArchetype.GoblinBrute))
+                {
+                    Assert.GreaterOrEqual(plan.assignments[i].roomCapacity, 2);
+                    Assert.Fail("Brute spawned in a small-room assignment.");
+                }
+            }
+        }
+
+        [Test]
+        public void SimpleMeleeEnemy_AttackWindupDelaysDamageAndAppliesOnce()
+        {
+            GameObject player = new GameObject("WindupPlayer");
+            GameObject enemy = new GameObject("WindupEnemy");
+            try
+            {
+                player.transform.position = Vector3.forward * 1.5f;
+                PlayerHealth playerHealth = player.AddComponent<PlayerHealth>();
+                enemy.AddComponent<CharacterController>();
+                enemy.AddComponent<EnemyHealth>().Configure(50f, Color.red);
+                SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
+
+                Assert.IsTrue(melee.TryStartAttackWindup(playerHealth, 1f));
+                Assert.IsTrue(melee.IsAttackWindingUp);
+                Assert.AreEqual(playerHealth.MaxHealth, playerHealth.CurrentHealth);
+                Assert.IsFalse(melee.TickAttackWindup(1f + melee.AttackWindupDuration * 0.5f));
+                Assert.AreEqual(playerHealth.MaxHealth, playerHealth.CurrentHealth);
+                Assert.IsTrue(melee.TickAttackWindup(1f + melee.AttackWindupDuration + 0.01f));
+                Assert.IsFalse(melee.IsAttackWindingUp);
+                Assert.AreEqual(90f, playerHealth.CurrentHealth);
+                Assert.IsFalse(melee.TickAttackWindup(1f + melee.AttackWindupDuration + 0.02f));
+                Assert.AreEqual(90f, playerHealth.CurrentHealth);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(enemy);
+            }
+        }
+
+        [Test]
+        public void SimpleMeleeEnemy_AttackWindupCancelsOnRangeExitAndKeepsCooldown()
+        {
+            GameObject player = new GameObject("WindupExitPlayer");
+            GameObject enemy = new GameObject("WindupExitEnemy");
+            try
+            {
+                player.transform.position = Vector3.forward * 1.5f;
+                PlayerHealth playerHealth = player.AddComponent<PlayerHealth>();
+                enemy.AddComponent<CharacterController>();
+                enemy.AddComponent<EnemyHealth>().Configure(50f, Color.red);
+                SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
+
+                Assert.IsTrue(melee.TryStartAttackWindup(playerHealth, 2f));
+                player.transform.position = Vector3.forward * 9f;
+
+                Assert.IsFalse(melee.TickAttackWindup(2f + melee.AttackWindupDuration + 0.01f));
+                Assert.IsFalse(melee.IsAttackWindingUp);
+                Assert.AreEqual(playerHealth.MaxHealth, playerHealth.CurrentHealth);
+                Assert.Greater(melee.NextAttackTime, 2f + melee.AttackWindupDuration);
+                Assert.IsFalse(melee.CanAttack(playerHealth, 2f + melee.AttackWindupDuration + 0.02f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(enemy);
+            }
         }
 
         [Test]
@@ -305,6 +466,20 @@ namespace FrontierDepths.Tests.EditMode
             {
                 if (!DungeonEncounterDirector.IsSafeRoomType(build.rooms[i].roomType) &&
                     build.GetSpawnPoints(build.rooms[i].nodeId, DungeonSpawnPointCategory.EnemyMelee).Count > 0)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int CountArchetypes(DungeonEncounterRoomAssignment assignment, EnemyArchetype archetype)
+        {
+            int count = 0;
+            for (int i = 0; i < assignment.archetypes.Count; i++)
+            {
+                if (assignment.archetypes[i] == archetype)
                 {
                     count++;
                 }

@@ -22,6 +22,7 @@ namespace FrontierDepths.Combat
         public float attackDamage = 10f;
         public float attackRange = 2.2f;
         public float attackCooldown = 1.2f;
+        public float attackWindupDuration = 0.25f;
         public float detectionRange = 45f;
         public float hearingRadiusMultiplier = 1f;
         public float groupAlertRadius = 30f;

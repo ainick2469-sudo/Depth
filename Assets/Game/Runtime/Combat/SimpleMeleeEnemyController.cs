@@ -10,6 +10,7 @@ namespace FrontierDepths.Combat
     {
         private static readonly Color AttackColor = new Color(1f, 0.12f, 0.08f, 1f);
         private const float LastKnownPositionStopDistance = 1.2f;
+        private const float AttackRangeForgiveness = 0.35f;
         private static readonly List<SimpleMeleeEnemyController> ActiveEnemies = new List<SimpleMeleeEnemyController>();
 
         [SerializeField] private float moveSpeed = 4.6f;
@@ -17,6 +18,7 @@ namespace FrontierDepths.Combat
         [SerializeField] private float attackRange = 2.2f;
         [SerializeField] private float attackDamage = 10f;
         [SerializeField] private float attackCooldown = 1.2f;
+        [SerializeField] private float attackWindupDuration = 0.25f;
         [SerializeField] private float alertMemoryDuration = 8f;
         [SerializeField] private float groupAlertRadius = 30f;
         [SerializeField] private float gravity = -20f;
@@ -27,6 +29,7 @@ namespace FrontierDepths.Combat
         private EnemyHealth health;
         private PlayerHealth target;
         private float nextAttackTime;
+        private float attackWindupCompleteTime;
         private float verticalVelocity;
         private float nextTargetResolveTime;
         private float alertUntilTime;
@@ -36,8 +39,11 @@ namespace FrontierDepths.Combat
         private bool subscribedToGameplayEvents;
         private bool registeredActive;
         private bool hasLastKnownTargetPosition;
+        private bool isAttackWindingUp;
         private Color baseBodyColor = new Color(0.72f, 0.28f, 0.22f, 1f);
         private float hearingRadiusMultiplier = 1f;
+        private EnemyArchetype archetype = EnemyArchetype.GoblinGrunt;
+        private PlayerHealth windupTarget;
 
         public SimpleMeleeEnemyState State => state;
         public float NextAttackTime => nextAttackTime;
@@ -46,6 +52,9 @@ namespace FrontierDepths.Combat
         public float AttackDamage => attackDamage;
         public float AttackRange => attackRange;
         public float AttackCooldown => attackCooldown;
+        public float AttackWindupDuration => attackWindupDuration;
+        public bool IsAttackWindingUp => isAttackWindingUp;
+        public float AttackWindupCompleteTime => attackWindupCompleteTime;
         public float DetectionRange => detectionRange;
         public float HearingRadiusMultiplier => hearingRadiusMultiplier;
         public float GroupAlertRadius => groupAlertRadius;
@@ -62,9 +71,11 @@ namespace FrontierDepths.Combat
             attackRange = Mathf.Max(0.1f, definition.attackRange);
             attackDamage = Mathf.Max(0f, definition.attackDamage);
             attackCooldown = Mathf.Max(0.05f, definition.attackCooldown);
+            attackWindupDuration = Mathf.Max(0f, definition.attackWindupDuration);
             hearingRadiusMultiplier = Mathf.Max(0f, definition.hearingRadiusMultiplier);
             groupAlertRadius = Mathf.Max(0f, definition.groupAlertRadius);
             baseBodyColor = definition.bodyColor;
+            archetype = definition.archetype;
             SetState(state);
             ApplyStateColor(state);
         }
@@ -83,6 +94,7 @@ namespace FrontierDepths.Combat
 
         private void OnDisable()
         {
+            CancelAttackWindup();
             UnregisterActiveEnemy();
             UnsubscribeGameplayEvents();
             UnsubscribeHealthEvents();
@@ -99,7 +111,15 @@ namespace FrontierDepths.Combat
             EnsureComponents();
             if (health == null || health.IsDead)
             {
+                CancelAttackWindup();
                 SetState(SimpleMeleeEnemyState.Dead);
+                return;
+            }
+
+            TickAttackWindup(currentTime);
+            if (isAttackWindingUp)
+            {
+                ApplyGravityOnly();
                 return;
             }
 
@@ -143,7 +163,7 @@ namespace FrontierDepths.Combat
             if (distance <= attackRange && HasLineOfSightTo(target))
             {
                 SetState(SimpleMeleeEnemyState.Attack);
-                TryApplyAttack(target, currentTime);
+                TryStartAttackWindup(target, currentTime);
                 ApplyGravityOnly();
                 return;
             }
@@ -177,17 +197,66 @@ namespace FrontierDepths.Combat
             return result.applied;
         }
 
-        internal bool CanAttack(PlayerHealth playerHealth, float currentTime)
+        internal bool TryStartAttackWindup(PlayerHealth playerHealth, float currentTime)
         {
             EnsureComponents();
-            if (health == null || health.IsDead || playerHealth == null || playerHealth.IsDead)
+            if (!CanAttack(playerHealth, currentTime))
             {
                 return false;
             }
 
-            Vector3 toTarget = playerHealth.transform.position - transform.position;
-            toTarget.y = 0f;
-            return toTarget.magnitude <= attackRange && currentTime >= nextAttackTime && HasLineOfSightTo(playerHealth);
+            nextAttackTime = currentTime + Mathf.Max(0.05f, attackCooldown);
+            if (attackWindupDuration <= 0.001f)
+            {
+                return ApplyWindupDamage(playerHealth, currentTime);
+            }
+
+            windupTarget = playerHealth;
+            isAttackWindingUp = true;
+            attackWindupCompleteTime = currentTime + attackWindupDuration;
+            SetState(SimpleMeleeEnemyState.Attack);
+            health?.Flash(GetWindupColor(), Mathf.Max(0.12f, Mathf.Min(attackWindupDuration, 0.35f)));
+            return true;
+        }
+
+        internal bool TickAttackWindup(float currentTime)
+        {
+            if (!isAttackWindingUp)
+            {
+                return false;
+            }
+
+            if (health == null || health.IsDead || windupTarget == null || windupTarget.IsDead)
+            {
+                CancelAttackWindup();
+                return false;
+            }
+
+            if (!IsTargetInAttackRange(windupTarget, AttackRangeForgiveness) || !HasLineOfSightTo(windupTarget))
+            {
+                CancelAttackWindup();
+                return false;
+            }
+
+            if (currentTime < attackWindupCompleteTime)
+            {
+                return false;
+            }
+
+            PlayerHealth resolvedTarget = windupTarget;
+            CancelAttackWindup();
+            return ApplyWindupDamage(resolvedTarget, currentTime);
+        }
+
+        internal bool CanAttack(PlayerHealth playerHealth, float currentTime)
+        {
+            EnsureComponents();
+            if (isAttackWindingUp || health == null || health.IsDead || playerHealth == null || playerHealth.IsDead)
+            {
+                return false;
+            }
+
+            return IsTargetInAttackRange(playerHealth, 0f) && currentTime >= nextAttackTime && HasLineOfSightTo(playerHealth);
         }
 
         internal bool IsAlertedAt(float currentTime)
@@ -361,6 +430,53 @@ namespace FrontierDepths.Combat
             controller.Move(Vector3.up * verticalVelocity * Time.deltaTime);
         }
 
+        private bool ApplyWindupDamage(PlayerHealth playerHealth, float currentTime)
+        {
+            if (health == null || health.IsDead || playerHealth == null || playerHealth.IsDead)
+            {
+                return false;
+            }
+
+            if (!IsTargetInAttackRange(playerHealth, AttackRangeForgiveness) || !HasLineOfSightTo(playerHealth))
+            {
+                return false;
+            }
+
+            health?.Flash(AttackColor, 0.12f);
+            DamageInfo damageInfo = new DamageInfo
+            {
+                amount = attackDamage,
+                source = gameObject,
+                hitPoint = playerHealth.transform.position,
+                hitNormal = (playerHealth.transform.position - transform.position).normalized,
+                damageType = DamageType.Physical,
+                deliveryType = DamageDeliveryType.Melee,
+                tags = new[] { GameplayTag.Melee, GameplayTag.OnHit }
+            };
+
+            DamageResult result = playerHealth.ApplyDamage(damageInfo, currentTime);
+            return result.applied;
+        }
+
+        private bool IsTargetInAttackRange(PlayerHealth playerHealth, float forgiveness)
+        {
+            if (playerHealth == null)
+            {
+                return false;
+            }
+
+            Vector3 toTarget = playerHealth.transform.position - transform.position;
+            toTarget.y = 0f;
+            return toTarget.magnitude <= attackRange + Mathf.Max(0f, forgiveness);
+        }
+
+        private void CancelAttackWindup()
+        {
+            isAttackWindingUp = false;
+            attackWindupCompleteTime = 0f;
+            windupTarget = null;
+        }
+
         private bool HasLineOfSightTo(PlayerHealth playerHealth)
         {
             if (!requireLineOfSightToAttack || playerHealth == null)
@@ -442,8 +558,20 @@ namespace FrontierDepths.Combat
             return Color.Lerp(baseBodyColor, new Color(1f, 0.48f, 0.16f, 1f), 0.35f);
         }
 
+        private Color GetWindupColor()
+        {
+            return archetype switch
+            {
+                EnemyArchetype.Slime => Color.Lerp(baseBodyColor, new Color(0.75f, 1f, 0.42f, 1f), 0.55f),
+                EnemyArchetype.Bat => Color.Lerp(baseBodyColor, Color.white, 0.62f),
+                EnemyArchetype.GoblinBrute => Color.Lerp(baseBodyColor, new Color(1f, 0.05f, 0.02f, 1f), 0.78f),
+                _ => Color.Lerp(baseBodyColor, new Color(1f, 0.28f, 0.04f, 1f), 0.65f)
+            };
+        }
+
         private void HandleDied(EnemyHealth enemyHealth)
         {
+            CancelAttackWindup();
             target = null;
             alertUntilTime = 0f;
             hasLastKnownTargetPosition = false;

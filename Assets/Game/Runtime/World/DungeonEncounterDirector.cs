@@ -10,6 +10,8 @@ namespace FrontierDepths.World
     {
         public const string EncounterEnemiesRootName = "EncounterEnemies";
         public const string SpawnSourceEncounterDirector = "EncounterDirectorLite";
+        private const int FloorOneBatCap = 3;
+        private const float BruteMinimumRoomFootprint = 1600f;
 
         private readonly Transform runtimeRoot;
         private readonly EncounterDropService dropService;
@@ -115,14 +117,16 @@ namespace FrontierDepths.World
             plan.requestedBudget = budget.requested;
             Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom = CollectSafeSpawns(buildResult, occupiedPositions);
             List<DungeonEncounterRoomCandidate> candidates = BuildRoomCandidates(buildResult, safeSpawnsByRoom);
+            plan.eligibleRoomCount = candidates.Count;
             if (candidates.Count == 0)
             {
                 plan.warning = "Encounter Director underfilled: no safe EnemyMelee spawn points were available.";
                 return plan;
             }
 
-            AllocateRooms(plan, candidates, budget.requested, random);
             List<EnemyDefinition> definitions = EnemyCatalog.CreateDefinitionsForFloor(buildResult.floorIndex);
+            AllocateRooms(plan, candidates, budget, definitions, random);
+            plan.emptyEligibleRoomCount = Mathf.Max(0, candidates.Count - plan.assignments.Count);
             for (int assignmentIndex = 0; assignmentIndex < plan.assignments.Count; assignmentIndex++)
             {
                 DungeonEncounterRoomAssignment assignment = plan.assignments[assignmentIndex];
@@ -132,22 +136,27 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                int spawnCount = Mathf.Min(assignment.plannedCount, candidate.safeSpawns.Count);
-                List<EnemyDefinition> groupDefinitions = ChooseArchetypesForGroup(definitions, buildResult.floorIndex, spawnCount, random);
-                if (groupDefinitions.Count == 0)
+                int spawnCount = Mathf.Min(assignment.plannedCount, Mathf.Min(candidate.safeSpawns.Count, assignment.archetypes.Count));
+                List<DungeonSpawnPointRecord> spreadSpawns = SelectSpreadSpawns(candidate.safeSpawns, spawnCount);
+                if (spreadSpawns.Count == 0)
                 {
                     continue;
                 }
 
                 for (int spawnIndex = 0; spawnIndex < spawnCount; spawnIndex++)
                 {
-                    EnemyDefinition definition = groupDefinitions[Mathf.Min(spawnIndex, groupDefinitions.Count - 1)];
-                    DungeonSpawnPointRecord spawnPoint = candidate.safeSpawns[spawnIndex];
+                    EnemyDefinition definition = FindDefinition(definitions, assignment.archetypes[spawnIndex]);
+                    if (definition == null)
+                    {
+                        continue;
+                    }
+
+                    DungeonSpawnPointRecord spawnPoint = spreadSpawns[spawnIndex];
                     assignment.spawnedCount++;
-                    assignment.archetypes.Add(definition.archetype);
                     plan.spawns.Add(new DungeonEncounterSpawn
                     {
                         roomId = assignment.roomId,
+                        templateId = assignment.templateId,
                         role = assignment.role,
                         position = spawnPoint.position,
                         definition = definition
@@ -159,7 +168,7 @@ namespace FrontierDepths.World
             plan.spawnedCount = plan.spawns.Count;
             if (plan.spawnedCount < budget.min)
             {
-                plan.warning = $"Encounter Director underfilled floor {buildResult.floorIndex}: spawned {plan.spawnedCount}/{budget.requested}.";
+                AppendWarning(plan, $"Encounter Director underfilled floor {buildResult.floorIndex}: spawned {plan.spawnedCount}/{budget.requested}.");
             }
 
             return plan;
@@ -269,26 +278,105 @@ namespace FrontierDepths.World
         private static void AllocateRooms(
             DungeonEncounterPlan plan,
             List<DungeonEncounterRoomCandidate> candidates,
-            int requestedBudget,
+            EncounterBudget budget,
+            List<EnemyDefinition> definitions,
             System.Random random)
         {
-            int remaining = requestedBudget;
+            int remaining = budget.requested;
             if (remaining <= 0)
             {
                 return;
             }
 
-            DungeonEncounterRoomCandidate firstGroup = candidates.Find(candidate =>
-                candidate.capacity >= 2 &&
-                candidate.room.roomType != DungeonNodeKind.Secret);
-            if (plan.floorIndex == 1 && firstGroup != null && remaining >= 2)
+            HashSet<string> usedRooms = new HashSet<string>();
+            int floorOneBatCount = 0;
+            int soloCount = 0;
+            int emptyRoomReserve = GetEmptyRoomReserve(candidates.Count);
+            int targetPopulatedRooms = Mathf.Max(1, candidates.Count - emptyRoomReserve);
+
+            if (plan.floorIndex == 1)
             {
-                AddAssignment(plan, firstGroup, 2);
-                remaining -= 2;
+                DungeonEncounterRoomCandidate firstLight = FindFirstCombatCandidate(candidates, usedRooms);
+                if (firstLight != null)
+                {
+                    EncounterTemplate firstTemplate = FindBestTemplate(
+                        firstLight,
+                        definitions,
+                        plan.floorIndex,
+                        remaining,
+                        1,
+                        2,
+                        floorOneBatCount,
+                        false,
+                        random);
+                    if (TryAddTemplateAssignment(plan, firstLight, firstTemplate, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount))
+                    {
+                        // Floor 1 gets a readable first fight before heavier groups claim budget.
+                    }
+                }
+
+                TryAssignLandmarkGroup(plan, candidates, definitions, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount, random);
+
+                bool hasThreePack = plan.assignments.Exists(assignment => assignment.plannedCount >= 3);
+                if (!hasThreePack)
+                {
+                    bool addedThreePack = TryAssignRequiredGroup(
+                        plan,
+                        candidates,
+                        definitions,
+                        usedRooms,
+                        ref remaining,
+                        ref floorOneBatCount,
+                        ref soloCount,
+                        3,
+                        random);
+                    if (!addedThreePack)
+                    {
+                        AppendWarning(plan, "Floor 1 3-pack underfilled: no safe room capacity or budget remained.");
+                    }
+                }
+
+                bool hasTwoPack = plan.assignments.Exists(assignment => assignment.plannedCount == 2);
+                if (!hasTwoPack)
+                {
+                    bool addedTwoPack = TryAssignRequiredGroup(
+                        plan,
+                        candidates,
+                        definitions,
+                        usedRooms,
+                        ref remaining,
+                        ref floorOneBatCount,
+                        ref soloCount,
+                        2,
+                        random);
+                    if (!addedTwoPack)
+                    {
+                        AppendWarning(plan, "Floor 1 2-pack underfilled: no safe room capacity or budget remained.");
+                    }
+                }
+            }
+            else
+            {
+                TryAssignLandmarkGroup(plan, candidates, definitions, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount, random);
+
+                bool addedThreePack = TryAssignRequiredGroup(
+                    plan,
+                    candidates,
+                    definitions,
+                    usedRooms,
+                    ref remaining,
+                    ref floorOneBatCount,
+                    ref soloCount,
+                    3,
+                    random);
+                if (!addedThreePack)
+                {
+                    AppendWarning(plan, $"Floor {plan.floorIndex} 3-pack underfilled: no safe room capacity or budget remained.");
+                }
             }
 
-            List<DungeonEncounterRoomCandidate> sorted = new List<DungeonEncounterRoomCandidate>(candidates);
-            sorted.Sort((left, right) =>
+            List<DungeonEncounterRoomCandidate> fillOrder = new List<DungeonEncounterRoomCandidate>(candidates);
+            fillOrder.Sort((left, right) =>
             {
                 int capacityCompare = right.capacity.CompareTo(left.capacity);
                 if (capacityCompare != 0)
@@ -296,63 +384,423 @@ namespace FrontierDepths.World
                     return capacityCompare;
                 }
 
+                int typeCompare = GetRoomPriority(left.room).CompareTo(GetRoomPriority(right.room));
+                if (typeCompare != 0)
+                {
+                    return typeCompare;
+                }
+
                 return left.distanceFromPlayer.CompareTo(right.distanceFromPlayer);
             });
 
-            for (int i = 0; i < sorted.Count && remaining > 0; i++)
+            for (int i = 0; i < fillOrder.Count && remaining > 0; i++)
             {
-                DungeonEncounterRoomCandidate candidate = sorted[i];
-                DungeonEncounterRoomAssignment existing = plan.assignments.Find(item => item.roomId == candidate.room.nodeId);
-                int existingCount = existing != null ? existing.plannedCount : 0;
-                int capacityLeft = candidate.capacity - existingCount;
-                if (capacityLeft <= 0)
+                if (usedRooms.Contains(fillOrder[i].room.nodeId))
                 {
                     continue;
                 }
 
-                int groupTarget = candidate.room.roomType == DungeonNodeKind.Landmark ? Mathf.Min(4, capacityLeft) : Mathf.Min(3, capacityLeft);
-                if (remaining == 1 && existing != null)
+                if (usedRooms.Count >= targetPopulatedRooms && plan.spawnedCount >= budget.min)
                 {
-                    groupTarget = 1;
-                }
-                else if (remaining >= 2 && groupTarget > 1)
-                {
-                    groupTarget = Mathf.Min(groupTarget, random.Next(2, groupTarget + 1));
-                }
-                else
-                {
-                    groupTarget = 1;
+                    break;
                 }
 
-                int addCount = Mathf.Min(remaining, groupTarget);
-                if (addCount <= 0)
+                int minSize = remaining >= 2 ? 2 : 1;
+                EncounterTemplate template = FindBestTemplate(
+                    fillOrder[i],
+                    definitions,
+                    plan.floorIndex,
+                    remaining,
+                    minSize,
+                    fillOrder[i].capacity,
+                    floorOneBatCount,
+                    false,
+                    random);
+                if (template == null &&
+                    (remaining == 1 || plan.spawnedCount < budget.min) &&
+                    soloCount < GetSoloLimit(plan.floorIndex, targetPopulatedRooms))
+                {
+                    template = FindBestTemplate(
+                        fillOrder[i],
+                        definitions,
+                        plan.floorIndex,
+                        remaining,
+                        1,
+                        1,
+                        floorOneBatCount,
+                        true,
+                        random);
+                }
+
+                if (TryAddTemplateAssignment(plan, fillOrder[i], template, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount))
                 {
                     continue;
                 }
-
-                if (existing != null)
-                {
-                    existing.plannedCount += addCount;
-                }
-                else
-                {
-                    AddAssignment(plan, candidate, addCount);
-                }
-
-                remaining -= addCount;
             }
         }
 
-        private static void AddAssignment(DungeonEncounterPlan plan, DungeonEncounterRoomCandidate candidate, int count)
+        private static bool TryAssignRequiredGroup(
+            DungeonEncounterPlan plan,
+            List<DungeonEncounterRoomCandidate> candidates,
+            List<EnemyDefinition> definitions,
+            HashSet<string> usedRooms,
+            ref int remaining,
+            ref int floorOneBatCount,
+            ref int soloCount,
+            int groupSize,
+            System.Random random)
         {
-            plan.assignments.Add(new DungeonEncounterRoomAssignment
+            List<DungeonEncounterRoomCandidate> sorted = new List<DungeonEncounterRoomCandidate>(candidates);
+            sorted.Sort((left, right) =>
+            {
+                int landmarkCompare = (right.room.roomType == DungeonNodeKind.Landmark ? 1 : 0).CompareTo(left.room.roomType == DungeonNodeKind.Landmark ? 1 : 0);
+                if (landmarkCompare != 0)
+                {
+                    return landmarkCompare;
+                }
+
+                int capacityCompare = right.capacity.CompareTo(left.capacity);
+                if (capacityCompare != 0)
+                {
+                    return capacityCompare;
+                }
+
+                return right.distanceFromPlayer.CompareTo(left.distanceFromPlayer);
+            });
+
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                DungeonEncounterRoomCandidate candidate = sorted[i];
+                if (usedRooms.Contains(candidate.room.nodeId) || candidate.capacity < groupSize || remaining < groupSize)
+                {
+                    continue;
+                }
+
+                EncounterTemplate template = FindBestTemplate(
+                    candidate,
+                    definitions,
+                    plan.floorIndex,
+                    remaining,
+                    groupSize,
+                    groupSize,
+                    floorOneBatCount,
+                    false,
+                    random);
+                if (TryAddTemplateAssignment(plan, candidate, template, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void TryAssignLandmarkGroup(
+            DungeonEncounterPlan plan,
+            List<DungeonEncounterRoomCandidate> candidates,
+            List<EnemyDefinition> definitions,
+            HashSet<string> usedRooms,
+            ref int remaining,
+            ref int floorOneBatCount,
+            ref int soloCount,
+            System.Random random)
+        {
+            DungeonEncounterRoomCandidate landmark = candidates.Find(candidate =>
+                candidate.room.roomType == DungeonNodeKind.Landmark &&
+                !usedRooms.Contains(candidate.room.nodeId) &&
+                candidate.capacity >= 2);
+            if (landmark == null || remaining < 2)
+            {
+                return;
+            }
+
+            EncounterTemplate template = FindBestTemplate(
+                landmark,
+                definitions,
+                plan.floorIndex,
+                remaining,
+                2,
+                Mathf.Min(landmark.capacity, 4),
+                floorOneBatCount,
+                false,
+                random);
+            TryAddTemplateAssignment(plan, landmark, template, usedRooms, ref remaining, ref floorOneBatCount, ref soloCount);
+        }
+
+        private static bool TryAddTemplateAssignment(
+            DungeonEncounterPlan plan,
+            DungeonEncounterRoomCandidate candidate,
+            EncounterTemplate template,
+            HashSet<string> usedRooms,
+            ref int remaining,
+            ref int floorOneBatCount,
+            ref int soloCount)
+        {
+            if (template == null ||
+                candidate == null ||
+                usedRooms.Contains(candidate.room.nodeId) ||
+                template.Count <= 0 ||
+                template.Count > remaining ||
+                template.Count > candidate.capacity)
+            {
+                return false;
+            }
+
+            int batCount = template.CountArchetype(EnemyArchetype.Bat);
+            if (plan.floorIndex == 1 && (batCount > 2 || floorOneBatCount + batCount > FloorOneBatCap))
+            {
+                return false;
+            }
+
+            DungeonEncounterRoomAssignment assignment = new DungeonEncounterRoomAssignment
             {
                 roomId = candidate.room.nodeId,
                 roomType = candidate.room.roomType,
-                role = GetRole(candidate.room, count),
-                plannedCount = count,
-                roomCapacity = candidate.capacity
+                role = GetRole(candidate.room, template.Count),
+                plannedCount = template.Count,
+                roomCapacity = candidate.capacity,
+                templateId = template.id
+            };
+            assignment.archetypes.AddRange(template.archetypes);
+            plan.assignments.Add(assignment);
+            plan.AddTemplate(template.id);
+            if (template.Count == 1)
+            {
+                plan.soloRoomCount++;
+                soloCount++;
+            }
+            else
+            {
+                plan.groupFightCount++;
+            }
+
+            usedRooms.Add(candidate.room.nodeId);
+            floorOneBatCount += batCount;
+            remaining -= template.Count;
+            plan.spawnedCount += template.Count;
+            return true;
+        }
+
+        private static DungeonEncounterRoomCandidate FindFirstCombatCandidate(List<DungeonEncounterRoomCandidate> candidates, HashSet<string> usedRooms)
+        {
+            DungeonEncounterRoomCandidate best = null;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                DungeonEncounterRoomCandidate candidate = candidates[i];
+                if (candidate.room.roomType != DungeonNodeKind.Ordinary || usedRooms.Contains(candidate.room.nodeId))
+                {
+                    continue;
+                }
+
+                if (best == null || candidate.distanceFromPlayer < best.distanceFromPlayer)
+                {
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        private static EncounterTemplate FindBestTemplate(
+            DungeonEncounterRoomCandidate candidate,
+            List<EnemyDefinition> definitions,
+            int floorIndex,
+            int remainingBudget,
+            int minSize,
+            int maxSize,
+            int floorOneBatCount,
+            bool allowSolo,
+            System.Random random)
+        {
+            List<EncounterTemplate> templates = CreateEncounterTemplates();
+            List<EncounterTemplate> valid = new List<EncounterTemplate>();
+            int safeMaxSize = Mathf.Min(maxSize, Mathf.Min(candidate.capacity, remainingBudget));
+            for (int i = 0; i < templates.Count; i++)
+            {
+                EncounterTemplate template = templates[i];
+                if (!allowSolo && template.Count == 1)
+                {
+                    continue;
+                }
+
+                if (template.Count < minSize || template.Count > safeMaxSize)
+                {
+                    continue;
+                }
+
+                if (!IsTemplateValidForRoom(template, candidate, definitions, floorIndex, floorOneBatCount))
+                {
+                    continue;
+                }
+
+                valid.Add(template);
+            }
+
+            if (valid.Count == 0)
+            {
+                return null;
+            }
+
+            valid.Sort((left, right) =>
+            {
+                int countCompare = right.Count.CompareTo(left.Count);
+                if (countCompare != 0)
+                {
+                    return countCompare;
+                }
+
+                int weightCompare = right.weight.CompareTo(left.weight);
+                if (weightCompare != 0)
+                {
+                    return weightCompare;
+                }
+
+                return string.CompareOrdinal(left.id, right.id);
             });
+
+            int largestCount = valid[0].Count;
+            List<EncounterTemplate> largestValid = valid.FindAll(template => template.Count == largestCount);
+            int topCount = Mathf.Min(3, largestValid.Count);
+            return largestValid[Mathf.Clamp(random.Next(0, topCount), 0, largestValid.Count - 1)];
+        }
+
+        private static bool IsTemplateValidForRoom(
+            EncounterTemplate template,
+            DungeonEncounterRoomCandidate candidate,
+            List<EnemyDefinition> definitions,
+            int floorIndex,
+            int floorOneBatCount)
+        {
+            if (template == null || candidate == null || !template.IsEligibleForFloor(floorIndex))
+            {
+                return false;
+            }
+
+            if (template.Count > candidate.capacity)
+            {
+                return false;
+            }
+
+            int bats = template.CountArchetype(EnemyArchetype.Bat);
+            if (floorIndex == 1 && (bats > 2 || floorOneBatCount + bats > FloorOneBatCap))
+            {
+                return false;
+            }
+
+            bool hasBrute = template.Contains(EnemyArchetype.GoblinBrute);
+            if (hasBrute && (candidate.capacity < 2 || candidate.room.footprintArea < BruteMinimumRoomFootprint))
+            {
+                return false;
+            }
+
+            if (candidate.room.roomType == DungeonNodeKind.Secret && template.Count > 1)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < template.archetypes.Length; i++)
+            {
+                EnemyDefinition definition = FindDefinition(definitions, template.archetypes[i]);
+                if (definition == null || !definition.IsEligibleForFloor(floorIndex))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static List<EncounterTemplate> CreateEncounterTemplates()
+        {
+            return new List<EncounterTemplate>
+            {
+                new EncounterTemplate("SoloSlime", 1, 3, 1, EnemyArchetype.Slime),
+                new EncounterTemplate("SoloBat", 1, 4, 1, EnemyArchetype.Bat),
+                new EncounterTemplate("SoloGoblinGrunt", 1, 5, 1, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("Easy_2Slimes", 1, 3, 7, EnemyArchetype.Slime, EnemyArchetype.Slime),
+                new EncounterTemplate("Easy_SlimeBat", 1, 4, 7, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Medium_GoblinSlime", 1, 5, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime),
+                new EncounterTemplate("Medium_2BatsSlime", 1, 4, 4, EnemyArchetype.Bat, EnemyArchetype.Bat, EnemyArchetype.Slime),
+                new EncounterTemplate("Medium_2SlimesBat", 1, 4, 5, EnemyArchetype.Slime, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Hard_2GoblinGrunts", 2, 5, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("Hard_Goblin2Slimes", 2, 5, 5, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime, EnemyArchetype.Slime),
+                new EncounterTemplate("Depth_BruteBat", 3, 0, 4, EnemyArchetype.GoblinBrute, EnemyArchetype.Bat),
+                new EncounterTemplate("Depth_Brute2Slimes", 3, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.Slime, EnemyArchetype.Slime)
+            };
+        }
+
+        private static EnemyDefinition FindDefinition(List<EnemyDefinition> definitions, EnemyArchetype archetype)
+        {
+            return definitions != null ? definitions.Find(definition => definition != null && definition.archetype == archetype) : null;
+        }
+
+        private static List<DungeonSpawnPointRecord> SelectSpreadSpawns(List<DungeonSpawnPointRecord> safeSpawns, int count)
+        {
+            List<DungeonSpawnPointRecord> result = new List<DungeonSpawnPointRecord>();
+            if (safeSpawns == null || safeSpawns.Count == 0 || count <= 0)
+            {
+                return result;
+            }
+
+            List<DungeonSpawnPointRecord> remaining = new List<DungeonSpawnPointRecord>(safeSpawns);
+            remaining.Sort((left, right) => right.score.CompareTo(left.score));
+            result.Add(remaining[0]);
+            remaining.RemoveAt(0);
+            while (result.Count < count && remaining.Count > 0)
+            {
+                int bestIndex = 0;
+                float bestDistance = -1f;
+                for (int i = 0; i < remaining.Count; i++)
+                {
+                    float nearestDistance = float.MaxValue;
+                    for (int selectedIndex = 0; selectedIndex < result.Count; selectedIndex++)
+                    {
+                        float distance = (remaining[i].position - result[selectedIndex].position).sqrMagnitude;
+                        if (distance < nearestDistance)
+                        {
+                            nearestDistance = distance;
+                        }
+                    }
+
+                    if (nearestDistance > bestDistance)
+                    {
+                        bestDistance = nearestDistance;
+                        bestIndex = i;
+                    }
+                }
+
+                result.Add(remaining[bestIndex]);
+                remaining.RemoveAt(bestIndex);
+            }
+
+            return result;
+        }
+
+        private static int GetEmptyRoomReserve(int eligibleRoomCount)
+        {
+            return eligibleRoomCount >= 4 ? Mathf.Max(1, Mathf.RoundToInt(eligibleRoomCount * 0.25f)) : 0;
+        }
+
+        private static int GetSoloLimit(int floorIndex, int targetPopulatedRooms)
+        {
+            if (floorIndex <= 1)
+            {
+                return 1;
+            }
+
+            return Mathf.Max(1, Mathf.FloorToInt(Mathf.Max(1, targetPopulatedRooms) * 0.25f));
+        }
+
+        private static void AppendWarning(DungeonEncounterPlan plan, string message)
+        {
+            if (plan == null || string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            plan.warning = string.IsNullOrWhiteSpace(plan.warning)
+                ? message
+                : $"{plan.warning} {message}";
         }
 
         private static List<EnemyDefinition> ChooseArchetypesForGroup(
@@ -442,23 +890,23 @@ namespace FrontierDepths.World
             int max;
             if (floorIndex <= 1)
             {
-                min = 5;
-                max = 8;
-            }
-            else if (floorIndex == 2)
-            {
-                min = 7;
+                min = 6;
                 max = 10;
             }
-            else if (floorIndex == 3)
+            else if (floorIndex == 2)
             {
                 min = 8;
                 max = 12;
             }
-            else
+            else if (floorIndex == 3)
             {
                 min = 10;
-                max = 15;
+                max = 14;
+            }
+            else
+            {
+                min = 12;
+                max = 18;
             }
 
             return new EncounterBudget
@@ -487,7 +935,12 @@ namespace FrontierDepths.World
                 return DungeonEncounterRoomRole.OptionalDanger;
             }
 
-            if (room.roomType == DungeonNodeKind.Landmark || count >= 3)
+            if (room.roomType == DungeonNodeKind.Landmark)
+            {
+                return DungeonEncounterRoomRole.LandmarkFight;
+            }
+
+            if (count >= 3)
             {
                 return DungeonEncounterRoomRole.HeavyCombat;
             }
@@ -581,6 +1034,60 @@ namespace FrontierDepths.World
             public float distanceFromPlayer;
         }
 
+        private sealed class EncounterTemplate
+        {
+            public readonly string id;
+            public readonly int minFloor;
+            public readonly int maxFloor;
+            public readonly int weight;
+            public readonly EnemyArchetype[] archetypes;
+
+            public EncounterTemplate(string id, int minFloor, int maxFloor, int weight, params EnemyArchetype[] archetypes)
+            {
+                this.id = id;
+                this.minFloor = minFloor;
+                this.maxFloor = maxFloor;
+                this.weight = weight;
+                this.archetypes = archetypes ?? System.Array.Empty<EnemyArchetype>();
+            }
+
+            public int Count => archetypes.Length;
+
+            public bool IsEligibleForFloor(int floorIndex)
+            {
+                int clampedFloor = Mathf.Max(1, floorIndex);
+                return clampedFloor >= Mathf.Max(1, minFloor) &&
+                       (maxFloor <= 0 || clampedFloor <= maxFloor);
+            }
+
+            public bool Contains(EnemyArchetype archetype)
+            {
+                for (int i = 0; i < archetypes.Length; i++)
+                {
+                    if (archetypes[i] == archetype)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            public int CountArchetype(EnemyArchetype archetype)
+            {
+                int count = 0;
+                for (int i = 0; i < archetypes.Length; i++)
+                {
+                    if (archetypes[i] == archetype)
+                    {
+                        count++;
+                    }
+                }
+
+                return count;
+            }
+        }
+
         private struct EncounterBudget
         {
             public int min;
@@ -591,10 +1098,12 @@ namespace FrontierDepths.World
 
     public enum DungeonEncounterRoomRole
     {
+        Empty,
         SafeStart,
         LightCombat,
         StandardCombat,
         HeavyCombat,
+        LandmarkFight,
         OptionalDanger,
         FutureStairGuardian
     }
@@ -604,16 +1113,32 @@ namespace FrontierDepths.World
         public int floorIndex;
         public int requestedBudget;
         public int spawnedCount;
+        public int eligibleRoomCount;
+        public int emptyEligibleRoomCount;
+        public int soloRoomCount;
+        public int groupFightCount;
         public string spawnSource = string.Empty;
         public string warning = string.Empty;
         public readonly List<DungeonEncounterRoomAssignment> assignments = new List<DungeonEncounterRoomAssignment>();
         public readonly List<DungeonEncounterSpawn> spawns = new List<DungeonEncounterSpawn>();
         public readonly Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
+        public readonly Dictionary<string, int> templateCounts = new Dictionary<string, int>();
 
         public void AddArchetype(EnemyArchetype archetype)
         {
             archetypeCounts.TryGetValue(archetype, out int count);
             archetypeCounts[archetype] = count + 1;
+        }
+
+        public void AddTemplate(string templateId)
+        {
+            if (string.IsNullOrWhiteSpace(templateId))
+            {
+                return;
+            }
+
+            templateCounts.TryGetValue(templateId, out int count);
+            templateCounts[templateId] = count + 1;
         }
 
         public DungeonEncounterSummary ToSummary()
@@ -624,10 +1149,15 @@ namespace FrontierDepths.World
                 requestedBudget = requestedBudget,
                 spawnedEnemyCount = spawnedCount,
                 livingEnemyCount = spawnedCount,
+                eligibleRoomCount = eligibleRoomCount,
+                emptyEligibleRoomCount = emptyEligibleRoomCount,
+                soloRoomCount = soloRoomCount,
+                groupFightCount = groupFightCount,
                 spawnSource = spawnSource,
                 warning = warning,
                 roomAssignments = new List<DungeonEncounterRoomAssignment>(assignments),
-                archetypeCounts = new Dictionary<EnemyArchetype, int>(archetypeCounts)
+                archetypeCounts = new Dictionary<EnemyArchetype, int>(archetypeCounts),
+                templateCounts = new Dictionary<string, int>(templateCounts)
             };
         }
     }
@@ -635,6 +1165,7 @@ namespace FrontierDepths.World
     public sealed class DungeonEncounterSpawn
     {
         public string roomId;
+        public string templateId;
         public DungeonEncounterRoomRole role;
         public Vector3 position;
         public EnemyDefinition definition;
@@ -648,6 +1179,7 @@ namespace FrontierDepths.World
         public int plannedCount;
         public int spawnedCount;
         public int roomCapacity;
+        public string templateId = string.Empty;
         public readonly List<EnemyArchetype> archetypes = new List<EnemyArchetype>();
     }
 
@@ -662,17 +1194,23 @@ namespace FrontierDepths.World
         public int requestedBudget;
         public int spawnedEnemyCount;
         public int livingEnemyCount;
+        public int eligibleRoomCount;
+        public int emptyEligibleRoomCount;
+        public int soloRoomCount;
+        public int groupFightCount;
         public string spawnSource = string.Empty;
         public string warning = string.Empty;
         public List<DungeonEncounterRoomAssignment> roomAssignments = new List<DungeonEncounterRoomAssignment>();
         public Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
+        public Dictionary<string, int> templateCounts = new Dictionary<string, int>();
 
         public string ToDebugString()
         {
             return
                 $"Encounter Director Lite | Floor {floorIndex} | Source {spawnSource} | " +
                 $"Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | " +
-                $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}" +
+                $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}/{eligibleRoomCount} | " +
+                $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Templates {FormatTemplates()}" +
                 (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
         }
 
@@ -685,6 +1223,22 @@ namespace FrontierDepths.World
 
             List<string> parts = new List<string>();
             foreach (KeyValuePair<EnemyArchetype, int> pair in archetypeCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatTemplates()
+        {
+            if (templateCounts == null || templateCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<string, int> pair in templateCounts)
             {
                 parts.Add($"{pair.Key}:{pair.Value}");
             }
