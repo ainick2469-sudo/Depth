@@ -34,15 +34,67 @@ namespace FrontierDepths.Tests.EditMode
             DungeonBuildResult build = CreateMapBuildResult();
 
             MinimapCoordinateMapping mapping = DungeonMinimapController.CalculateCoordinateMapping(build, new Vector2(200f, 200f), 10f);
-            Vector2 left = mapping.WorldToMap(new Vector3(-20f, 0f, 0f));
-            Vector2 right = mapping.WorldToMap(new Vector3(80f, 0f, 0f));
+            Vector2 left = mapping.WorldToMap(new Vector3(-10f, 0f, 0f));
+            Vector2 right = mapping.WorldToMap(new Vector3(72f, 0f, 0f));
             Vector2 up = mapping.WorldToMap(new Vector3(0f, 0f, 40f));
 
             Assert.Greater(right.x, left.x);
             Assert.AreEqual(mapping.WorldToMap(new Vector3(0f, 25f, 0f)).x, mapping.WorldToMap(new Vector3(0f, -10f, 0f)).x, 0.001f);
+            Assert.AreEqual(mapping.WorldToMap(new Vector3(0f, 25f, 0f)).y, mapping.WorldToMap(new Vector3(0f, -10f, 0f)).y, 0.001f);
             Assert.Greater(up.y, mapping.WorldToMap(Vector3.zero).y);
+            Assert.Greater(mapping.WorldToMap(new Vector3(20f, 0f, 0f)).x, mapping.WorldToMap(Vector3.zero).x);
             Assert.LessOrEqual(Mathf.Abs(left.x), 100f);
             Assert.LessOrEqual(Mathf.Abs(right.x), 100f);
+        }
+
+        [TestCase(0f, 90f)]
+        [TestCase(90f, 0f)]
+        [TestCase(180f, -90f)]
+        [TestCase(270f, -180f)]
+        public void Minimap_NorthUpArrowRotation_UsesRightFacingGlyphBasis(float yaw, float expectedArrowZ)
+        {
+            Assert.AreEqual(
+                expectedArrowZ,
+                NormalizeSignedDegrees(DungeonMinimapController.GetNorthUpPlayerArrowZ(yaw)),
+                0.001f);
+        }
+
+        [Test]
+        public void Minimap_RotateWithPlayer_KeepsArrowForwardAndRotatesContentOnlyOnce()
+        {
+            Assert.AreEqual(90f, DungeonMinimapController.PlayerArrowIconOffsetDegrees, 0.001f);
+            Assert.AreEqual(90f, DungeonMinimapController.GetRotatingMapContentZ(90f), 0.001f);
+            Assert.AreEqual(90f, DungeonMinimapController.GetRotatingMapPlayerArrowZ(90f), 0.001f);
+
+            Vector2 rotatedEastPoint = DungeonMinimapController.RotateMapPointForContent(new Vector2(12f, 0f), 90f);
+            Assert.AreEqual(0f, rotatedEastPoint.x, 0.001f);
+            Assert.AreEqual(12f, rotatedEastPoint.y, 0.001f);
+        }
+
+        [Test]
+        public void Minimap_ReconfigurePreservesArrowBasisAcrossFloorTransition()
+        {
+            GameObject hud = new GameObject("Hud");
+            GameObject player = new GameObject("Player");
+            try
+            {
+                player.transform.eulerAngles = new Vector3(0f, 90f, 0f);
+                DungeonMinimapController minimap = hud.AddComponent<DungeonMinimapController>();
+                minimap.Configure(CreateMapBuildResult(), player.transform);
+                float before = NormalizeSignedDegrees(minimap.CurrentPlayerArrowRotationZ);
+
+                DungeonBuildResult nextFloor = CreateMapBuildResult();
+                nextFloor.floorIndex = 2;
+                minimap.Configure(nextFloor, player.transform);
+
+                Assert.AreEqual(before, NormalizeSignedDegrees(minimap.CurrentPlayerArrowRotationZ), 0.001f);
+                Assert.AreEqual(0f, NormalizeSignedDegrees(minimap.CurrentContentRotationZ), 0.001f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(player);
+            }
         }
 
         [Test]
@@ -184,7 +236,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void CorridorVisualFloor_TrimsEndpointOverlapButKeepsSeamOverlap()
+        public void CorridorVisualFloor_TrimsEndpointOverlapToNearZeroButKeepsLogicalOverlap()
         {
             Vector3 start = new Vector3(5.25f, 0f, 0f);
             Vector3 end = new Vector3(14.75f, 0f, 0f);
@@ -192,8 +244,26 @@ namespace FrontierDepths.Tests.EditMode
             DungeonSceneController.GetVisualCorridorFloor(start, end, true, true, out Vector3 midpoint, out float length);
 
             Assert.AreEqual(10f, midpoint.x, 0.001f);
-            Assert.Less(length, 9.5f);
+            Assert.AreEqual(8.04f, length, 0.01f);
+            Assert.AreEqual(0.75f, DungeonSceneController.CorridorRoomOverlap, 0.001f);
+            Assert.AreEqual(0.02f, DungeonSceneController.CorridorVisualRoomOverlap, 0.001f);
             Assert.Greater(length, 8f);
+        }
+
+        [Test]
+        public void CorridorSeamDebugSummary_DistinguishesLogicalVisualAndYOffset()
+        {
+            string summary = DungeonSceneController.BuildCorridorSeamDebugSummary(
+                new Vector3(5.25f, 0f, 0f),
+                new Vector3(14.75f, 0f, 0f),
+                true,
+                true);
+
+            StringAssert.Contains("LogicalOverlap=0.75", summary);
+            StringAssert.Contains("VisualOverlap=0.02", summary);
+            StringAssert.Contains("VisualYOffset=-0.015", summary);
+            Assert.Less(DungeonSceneController.CorridorVisualFloorYOffset, 0f);
+            Assert.Greater(DungeonSceneController.CorridorVisualFloorYOffset, -0.03f);
         }
 
         private static DungeonBuildResult CreateMapBuildResult()
@@ -259,6 +329,11 @@ namespace FrontierDepths.Tests.EditMode
             };
             run.Normalize();
             return run;
+        }
+
+        private static float NormalizeSignedDegrees(float degrees)
+        {
+            return Mathf.Repeat(degrees + 180f, 360f) - 180f;
         }
 
         private static void DestroyRuntimeFeedbackRoot()

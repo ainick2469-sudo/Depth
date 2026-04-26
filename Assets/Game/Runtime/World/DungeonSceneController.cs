@@ -18,8 +18,9 @@ namespace FrontierDepths.World
         private const float RoomBoundsHeight = WallHeight + FloorThickness;
         private const float CorridorZoneHeight = 6f;
         private const float DoorwayClearance = 0.25f;
-        private const float CorridorRoomOverlap = 0.75f;
-        private const float CorridorVisualRoomOverlap = 0.15f;
+        internal const float CorridorRoomOverlap = 0.75f;
+        internal const float CorridorVisualRoomOverlap = 0.02f;
+        internal const float CorridorVisualFloorYOffset = -0.015f;
         private const float DoorwayAlignmentEpsilon = 0.05f;
         private const float PlayerSpawnHeight = 3.5f;
         private const float SpawnWallMargin = 6f;
@@ -1582,16 +1583,34 @@ namespace FrontierDepths.World
             GameObject segmentRoot = new GameObject($"Corridor_{fromNodeId}_To_{toNodeId}_Segment_{segmentIndex}");
             segmentRoot.transform.SetParent(corridorRoot, false);
 
-            Vector3 floorScale = horizontal
+            Vector3 visualFloorScale = horizontal
                 ? new Vector3(visualLength, FloorThickness, corridorWidth)
                 : new Vector3(corridorWidth, FloorThickness, visualLength);
+            Vector3 collisionFloorScale = horizontal
+                ? new Vector3(corridorLength, FloorThickness, corridorWidth)
+                : new Vector3(corridorWidth, FloorThickness, corridorLength);
             float corridorOuterWidth = GetCorridorOuterWidth(corridorWidth);
             Vector3 outerBoundsSize = horizontal
                 ? new Vector3(corridorLength, WallHeight, corridorOuterWidth)
                 : new Vector3(corridorOuterWidth, WallHeight, corridorLength);
             Vector3 outerBoundsCenter = midpoint + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f);
 
-            GameObject floor = CreatePrimitive("Floor", segmentRoot.transform, visualMidpoint + Vector3.down * (FloorThickness * 0.5f), floorScale, new Color(0.19f, 0.18f, 0.17f));
+            GameObject visualFloor = CreatePrimitive(
+                "Floor",
+                segmentRoot.transform,
+                visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
+                visualFloorScale,
+                new Color(0.19f, 0.18f, 0.17f));
+            SetColliderEnabled(visualFloor, false);
+
+            GameObject collisionFloor = CreatePrimitive(
+                "FloorCollision",
+                segmentRoot.transform,
+                midpoint + Vector3.down * (FloorThickness * 0.5f),
+                collisionFloorScale,
+                new Color(0.19f, 0.18f, 0.17f));
+            SetRendererEnabled(collisionFloor, false);
+            Bounds collisionBounds = GetBounds(collisionFloor.transform.position, collisionFloorScale);
             activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
             {
                 edgeKey = edgeKey,
@@ -1600,7 +1619,7 @@ namespace FrontierDepths.World
                 segmentIndex = segmentIndex,
                 start = start,
                 end = end,
-                bounds = GetBounds(floor.transform.position, floorScale),
+                bounds = collisionBounds,
                 outerBounds = GetBounds(outerBoundsCenter, outerBoundsSize),
                 horizontal = horizontal,
                 length = corridorLength,
@@ -1611,7 +1630,7 @@ namespace FrontierDepths.World
             {
                 ownerId = edgeKey,
                 kind = "Corridor",
-                bounds = GetBounds(midpoint + Vector3.up * (CorridorZoneHeight * 0.5f), new Vector3(floorScale.x, CorridorZoneHeight, floorScale.z))
+                bounds = GetBounds(midpoint + Vector3.up * (CorridorZoneHeight * 0.5f), new Vector3(collisionFloorScale.x, CorridorZoneHeight, collisionFloorScale.z))
             });
 
             CreateCorridorWalls(segmentRoot.transform, edgeKey, midpoint, corridorLength, corridorWidth, horizontal);
@@ -2264,6 +2283,21 @@ namespace FrontierDepths.World
             Vector3 visualEnd = end - direction * endTrim;
             midpoint = (visualStart + visualEnd) * 0.5f;
             length = Mathf.Max(CellSize * 0.9f, horizontal ? Mathf.Abs(visualEnd.x - visualStart.x) : Mathf.Abs(visualEnd.z - visualStart.z));
+        }
+
+        internal static string BuildCorridorSeamDebugSummary(Vector3 start, Vector3 end, bool trimStart, bool trimEnd)
+        {
+            GetVisualCorridorFloor(start, end, trimStart, trimEnd, out Vector3 visualMidpoint, out float visualLength);
+            float logicalLength = Mathf.Abs(end.x - start.x) >= Mathf.Abs(end.z - start.z)
+                ? Mathf.Abs(end.x - start.x)
+                : Mathf.Abs(end.z - start.z);
+            return
+                $"Corridor seam | LogicalOverlap={CorridorRoomOverlap:0.###} " +
+                $"VisualOverlap={CorridorVisualRoomOverlap:0.###} " +
+                $"VisualYOffset={CorridorVisualFloorYOffset:0.###} " +
+                $"LogicalLength={logicalLength:0.###} " +
+                $"VisualLength={visualLength:0.###} " +
+                $"VisualMidpoint={visualMidpoint}";
         }
 
         private static void AddRoutePoint(List<Vector3> points, Vector3 point)
@@ -3039,6 +3073,24 @@ namespace FrontierDepths.World
             primitive.transform.localScale = localScale;
             ApplyColor(primitive.GetComponent<Renderer>(), color);
             return primitive;
+        }
+
+        private static void SetColliderEnabled(GameObject target, bool enabled)
+        {
+            Collider collider = target != null ? target.GetComponent<Collider>() : null;
+            if (collider != null)
+            {
+                collider.enabled = enabled;
+            }
+        }
+
+        private static void SetRendererEnabled(GameObject target, bool enabled)
+        {
+            Renderer renderer = target != null ? target.GetComponent<Renderer>() : null;
+            if (renderer != null)
+            {
+                renderer.enabled = enabled;
+            }
         }
 
         private static void ApplyColor(Renderer renderer, Color color)

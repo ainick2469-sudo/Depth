@@ -10,6 +10,7 @@ namespace FrontierDepths.UI
         private const string PanelName = "DungeonMinimap";
         private const float DefaultSize = 190f;
         private const float DefaultPadding = 14f;
+        public const float PlayerArrowIconOffsetDegrees = 90f; // The current ">" glyph points right at 0 degrees.
 
         private readonly Dictionary<string, RoomElement> roomElements = new Dictionary<string, RoomElement>();
         private readonly List<CorridorElement> corridorElements = new List<CorridorElement>();
@@ -46,6 +47,9 @@ namespace FrontierDepths.UI
         public float MinimapOpacity => minimapOpacity;
         public float MinimapZoom => minimapZoom;
         public MinimapCoordinateMapping Mapping => mapping;
+        public float CurrentContentRotationZ => contentRect != null ? contentRect.localEulerAngles.z : 0f;
+        public float CurrentPlayerArrowRotationZ => playerArrow != null ? playerArrow.rectTransform.localEulerAngles.z : 0f;
+        public Vector2 CurrentPlayerArrowPosition => playerArrow != null ? playerArrow.rectTransform.anchoredPosition : Vector2.zero;
 
         private void Awake()
         {
@@ -223,6 +227,31 @@ namespace FrontierDepths.UI
             return hasBounds ? bounds : new Bounds(Vector3.zero, Vector3.one);
         }
 
+        public static float GetNorthUpPlayerArrowZ(float playerYawDegrees)
+        {
+            return PlayerArrowIconOffsetDegrees - playerYawDegrees;
+        }
+
+        public static float GetRotatingMapContentZ(float playerYawDegrees)
+        {
+            return playerYawDegrees;
+        }
+
+        public static float GetRotatingMapPlayerArrowZ(float playerYawDegrees)
+        {
+            return PlayerArrowIconOffsetDegrees;
+        }
+
+        public static Vector2 RotateMapPointForContent(Vector2 mapPoint, float contentRotationZ)
+        {
+            float radians = contentRotationZ * Mathf.Deg2Rad;
+            float sin = Mathf.Sin(radians);
+            float cos = Mathf.Cos(radians);
+            return new Vector2(
+                mapPoint.x * cos - mapPoint.y * sin,
+                mapPoint.x * sin + mapPoint.y * cos);
+        }
+
         private void EnsureUi()
         {
             if (panelRect != null)
@@ -328,11 +357,13 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            playerArrow.rectTransform.anchoredPosition = mapping.WorldToMap(player.position);
+            Vector2 mapPosition = mapping.WorldToMap(player.position);
             if (rotateWithPlayer && contentRect != null)
             {
-                contentRect.localEulerAngles = new Vector3(0f, 0f, player.eulerAngles.y);
-                playerArrow.rectTransform.localEulerAngles = Vector3.zero;
+                float contentRotation = GetRotatingMapContentZ(player.eulerAngles.y);
+                contentRect.localEulerAngles = new Vector3(0f, 0f, contentRotation);
+                playerArrow.rectTransform.anchoredPosition = RotateMapPointForContent(mapPosition, contentRotation);
+                playerArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, GetRotatingMapPlayerArrowZ(player.eulerAngles.y));
             }
             else
             {
@@ -341,7 +372,8 @@ namespace FrontierDepths.UI
                     contentRect.localEulerAngles = Vector3.zero;
                 }
 
-                playerArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -player.eulerAngles.y);
+                playerArrow.rectTransform.anchoredPosition = mapPosition;
+                playerArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, GetNorthUpPlayerArrowZ(player.eulerAngles.y));
             }
         }
 
