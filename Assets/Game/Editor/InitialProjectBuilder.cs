@@ -179,11 +179,13 @@ namespace FrontierDepths.Editor
                     asset.displayName = "Frontier Revolver";
                     asset.description = "Starter sidearm for the first descent.";
                     asset.weaponArchetype = WeaponArchetype.Revolver;
-                asset.baseDamage = 18f;
+                    asset.baseDamage = 18f;
                     asset.fireRate = 2.857f;
                     asset.magazineSize = 6;
                     asset.reloadDuration = 1.4f;
-                    asset.maxRange = 100f;
+                    asset.maxRange = 55f;
+                    asset.fullDamageRange = 30f;
+                    asset.damageMultiplierAtMaxRange = 0.65f;
                     asset.damageType = DamageType.Physical;
                     asset.deliveryType = DamageDeliveryType.Raycast;
                     asset.critChance = 0f;

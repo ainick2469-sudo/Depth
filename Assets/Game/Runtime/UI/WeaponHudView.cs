@@ -110,14 +110,18 @@ namespace FrontierDepths.UI
             }
 
             hitMarkerVisibleUntil = Time.unscaledTime + 0.18f;
-            hitMarkerColor = feedback.kind switch
+            hitMarkerColor = feedback.isChain
+                ? new Color(0.42f, 0.85f, 1f, 0.98f)
+                : feedback.kind switch
             {
                 WeaponHitFeedbackKind.Reduced => new Color(1f, 0.56f, 0.18f, 0.98f),
                 WeaponHitFeedbackKind.Kill => new Color(1f, 0.22f, 0.18f, 1f),
                 _ => new Color(1f, 0.95f, 0.62f, 0.95f)
             };
-            hitMarkerSize = feedback.kind == WeaponHitFeedbackKind.Kill
+            hitMarkerSize = feedback.kind == WeaponHitFeedbackKind.Kill || feedback.isCritical
                 ? new Vector2(34f, 34f)
+                : feedback.isChain
+                    ? new Vector2(30f, 30f)
                 : new Vector2(22f, 22f);
         }
 

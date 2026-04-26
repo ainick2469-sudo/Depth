@@ -135,8 +135,9 @@ namespace FrontierDepths.Combat
                             chainEveryNthHit = chainEveryNthHit == 0
                                 ? definition.triggerEveryNthHit
                                 : Mathf.Min(chainEveryNthHit, definition.triggerEveryNthHit);
-                            chainDamageFraction = Mathf.Max(chainDamageFraction, definition.chainDamageFraction);
-                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ChainHit, 0f, definition.chainDamageFraction, stackCount));
+                            float stackedChainFraction = RunUpgradeCatalog.GetChainDamageFractionForStack(stackCount);
+                            chainDamageFraction = Mathf.Max(chainDamageFraction, stackedChainFraction);
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ChainHit, 0f, stackedChainFraction, stackCount));
                             break;
                     }
                 }

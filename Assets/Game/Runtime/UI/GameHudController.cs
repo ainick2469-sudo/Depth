@@ -26,6 +26,9 @@ namespace FrontierDepths.UI
         private FirstPersonController playerController;
         private TownHubController townHub;
         private DungeonSceneController dungeonScene;
+        private DungeonMinimapController minimapController;
+        private RunInfoPanelController runInfoPanelController;
+        private DungeonBuildResult configuredMinimapBuild;
 
         private void Awake()
         {
@@ -54,6 +57,8 @@ namespace FrontierDepths.UI
 
         private void Update()
         {
+            RefreshDungeonHudBindings();
+            HandleOverlayInput();
             HandleEscapeAndResume();
             RefreshStatusAndPanel();
             RefreshPromptAndCrosshair();
@@ -65,6 +70,8 @@ namespace FrontierDepths.UI
             EnsureHudElements();
             HidePanel();
             HidePrompt();
+            runInfoPanelController?.SetVisible(false);
+            configuredMinimapBuild = null;
         }
 
         private void HandleEscapeAndResume()
@@ -74,8 +81,19 @@ namespace FrontierDepths.UI
                 return;
             }
 
+            if (DungeonRewardChoiceController.IsRewardChoiceActive)
+            {
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                if (runInfoPanelController != null && runInfoPanelController.IsVisible)
+                {
+                    SetRunInfoVisible(false);
+                    return;
+                }
+
                 if (townHub != null && townHub.IsPanelOpen)
                 {
                     return;
@@ -206,6 +224,8 @@ namespace FrontierDepths.UI
             EnsureCrosshairVisuals();
             EnsureWeaponHudView();
             EnsurePlayerHealthHudView();
+            EnsureDungeonMinimapController();
+            EnsureRunInfoPanelController();
         }
 
         private void EnsureWeaponHudView()
@@ -221,6 +241,24 @@ namespace FrontierDepths.UI
             if (GetComponent<PlayerHealthHudView>() == null)
             {
                 gameObject.AddComponent<PlayerHealthHudView>();
+            }
+        }
+
+        private void EnsureDungeonMinimapController()
+        {
+            minimapController = GetComponent<DungeonMinimapController>();
+            if (minimapController == null)
+            {
+                minimapController = gameObject.AddComponent<DungeonMinimapController>();
+            }
+        }
+
+        private void EnsureRunInfoPanelController()
+        {
+            runInfoPanelController = GetComponent<RunInfoPanelController>();
+            if (runInfoPanelController == null)
+            {
+                runInfoPanelController = gameObject.AddComponent<RunInfoPanelController>();
             }
         }
 
@@ -300,6 +338,109 @@ namespace FrontierDepths.UI
             interactor = playerController != null ? playerController.Interactor : FindAnyObjectByType<PlayerInteractor>();
             townHub = FindAnyObjectByType<TownHubController>();
             dungeonScene = FindAnyObjectByType<DungeonSceneController>();
+            configuredMinimapBuild = null;
+            RefreshDungeonHudBindings();
+        }
+
+        private void RefreshDungeonHudBindings()
+        {
+            EnsureDungeonMinimapController();
+            EnsureRunInfoPanelController();
+            if (dungeonScene == null)
+            {
+                dungeonScene = FindAnyObjectByType<DungeonSceneController>();
+            }
+
+            if (playerController == null)
+            {
+                playerController = FindAnyObjectByType<FirstPersonController>();
+            }
+
+            DungeonBuildResult build = dungeonScene != null ? dungeonScene.CurrentBuildResult : null;
+            if (build != null && build != configuredMinimapBuild)
+            {
+                configuredMinimapBuild = build;
+                minimapController.Configure(build, playerController != null ? playerController.transform : null);
+            }
+            else if (build == null && configuredMinimapBuild != null)
+            {
+                configuredMinimapBuild = null;
+                minimapController.Configure(null, null);
+            }
+            else if (build == null && minimapController != null && minimapController.IsConfigured)
+            {
+                minimapController.Configure(null, null);
+            }
+        }
+
+        private void HandleOverlayInput()
+        {
+            if (InputFrameGuard.WasTownServiceInputConsumedThisFrame || !CanToggleGameplayOverlay())
+            {
+                return;
+            }
+
+            if (runInfoPanelController != null && runInfoPanelController.IsVisible)
+            {
+                if (Input.GetKeyDown(KeyCode.G))
+                {
+                    SetRunInfoVisible(false);
+                }
+
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.M))
+            {
+                minimapController?.ToggleVisibility();
+            }
+
+            if (Input.GetKeyDown(KeyCode.G))
+            {
+                SetRunInfoVisible(true);
+            }
+        }
+
+        private bool CanToggleGameplayOverlay()
+        {
+            if (DungeonRewardChoiceController.IsRewardChoiceActive)
+            {
+                CloseRunInfoIfOpen();
+                return false;
+            }
+
+            if (townHub != null && townHub.IsPanelOpen)
+            {
+                CloseRunInfoIfOpen();
+                return false;
+            }
+
+            if (playerController != null && playerController.IsManualPauseActive)
+            {
+                CloseRunInfoIfOpen();
+                return false;
+            }
+
+            return true;
+        }
+
+        private void SetRunInfoVisible(bool visible)
+        {
+            if (runInfoPanelController == null)
+            {
+                return;
+            }
+
+            runInfoPanelController.SetVisible(visible);
+            playerController?.SetUiCaptured(visible);
+        }
+
+        private void CloseRunInfoIfOpen()
+        {
+            if (runInfoPanelController != null && runInfoPanelController.IsVisible)
+            {
+                runInfoPanelController.SetVisible(false);
+            }
         }
 
         private T FindNamedComponent<T>(string objectName) where T : Component

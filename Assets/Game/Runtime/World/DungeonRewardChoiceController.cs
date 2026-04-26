@@ -154,7 +154,7 @@ namespace FrontierDepths.World
             for (int i = 0; i < choices.Count; i++)
             {
                 RunUpgradeDefinition choice = choices[i];
-                if (GUILayout.Button($"{i + 1}. {choice.displayName}\n{choice.description}", GUILayout.Height(68f)))
+                if (GUILayout.Button($"{i + 1}. {BuildChoiceLabel(choice)}", GUILayout.Height(82f)))
                 {
                     SelectChoice(i);
                 }
@@ -206,6 +206,8 @@ namespace FrontierDepths.World
                 bootstrap.RunService.AddRunUpgrade(selected.upgradeId);
                 bootstrap.RunService.MarkCurrentFloorRewardGranted();
                 playerController?.GetComponent<PlayerHealth>()?.RefreshRunStatBonuses();
+                int stackCount = bootstrap.RunService.Current.GetUpgradeStackCount(selected.upgradeId);
+                Debug.Log($"{selected.displayName} upgraded to Lv. {Mathf.Max(1, stackCount)}.");
             }
             catch (Exception exception)
             {
@@ -227,6 +229,13 @@ namespace FrontierDepths.World
             Action callback = descendAfterReward;
             descendAfterReward = null;
             callback?.Invoke();
+        }
+
+        private string BuildChoiceLabel(RunUpgradeDefinition choice)
+        {
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            RunState run = bootstrap != null && bootstrap.RunService != null ? bootstrap.RunService.Current : null;
+            return RunUpgradeCatalog.BuildRewardChoiceLabel(run, choice);
         }
 
         private static GUIStyle CreateHeaderStyle()

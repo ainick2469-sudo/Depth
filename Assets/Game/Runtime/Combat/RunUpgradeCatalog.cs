@@ -15,6 +15,10 @@ namespace FrontierDepths.Combat
         public const string FirstShotAfterReloadUpgradeId = "upgrade.run.first_shot";
         public const string AmmoPickupUpgradeId = "upgrade.run.ammo_scavenger";
         public const string ChainHitUpgradeId = "upgrade.run.chain_spark";
+        public const float ChainHitBaseDamageFraction = 0.35f;
+        public const float ChainHitDamageFractionPerExtraStack = 0.10f;
+        public const float ChainHitMaxDamageFraction = 0.75f;
+        public const float ChainHitSearchRadius = 14f;
 
         private static readonly RunUpgradeDefinition[] Definitions =
         {
@@ -81,7 +85,7 @@ namespace FrontierDepths.Combat
                 description = "Every 6th weapon hit chains 35% damage to one nearby enemy.",
                 effectKind = RunUpgradeEffectKind.EveryNthHitChain,
                 triggerEveryNthHit = 6,
-                chainDamageFraction = 0.35f
+                chainDamageFraction = ChainHitBaseDamageFraction
             }
         };
 
@@ -148,6 +152,89 @@ namespace FrontierDepths.Combat
             }
 
             return choices;
+        }
+
+        public static float GetChainDamageFractionForStack(int stackCount)
+        {
+            int clampedStack = Mathf.Max(1, stackCount);
+            return Mathf.Min(
+                ChainHitMaxDamageFraction,
+                ChainHitBaseDamageFraction + (clampedStack - 1) * ChainHitDamageFractionPerExtraStack);
+        }
+
+        public static string BuildRewardChoiceLabel(RunState run, RunUpgradeDefinition definition)
+        {
+            if (definition == null)
+            {
+                return "Unknown upgrade";
+            }
+
+            int currentStack = run != null ? run.GetUpgradeStackCount(definition.upgradeId) : 0;
+            int nextStack = Mathf.Max(1, currentStack + 1);
+            string header = currentStack > 0
+                ? $"{definition.displayName} Lv. {currentStack} -> Lv. {nextStack}"
+                : $"{definition.displayName} Lv. 1\nNew upgrade";
+            return $"{header}\n{BuildStackPreview(definition, currentStack, nextStack)}";
+        }
+
+        public static string BuildOwnedUpgradeSummary(RunUpgradeRecord record)
+        {
+            if (!TryGet(record.upgradeId, out RunUpgradeDefinition definition))
+            {
+                return $"{record.upgradeId} x{Mathf.Max(1, record.stackCount)}";
+            }
+
+            int stackCount = Mathf.Max(1, record.stackCount);
+            return $"{definition.displayName} Lv. {stackCount}: {BuildCurrentEffectSummary(definition, stackCount)}";
+        }
+
+        private static string BuildStackPreview(RunUpgradeDefinition definition, int currentStack, int nextStack)
+        {
+            return definition.effectKind switch
+            {
+                RunUpgradeEffectKind.RevolverDamagePercent => BuildPercentPreview("Revolver damage", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.ReloadSpeedPercent => BuildPercentPreview("Reload speed", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.MaxHealthFlat => BuildFlatPreview("Max health", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.CritChanceFlat => BuildPercentPreview("Crit chance", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.KillHealFlat => BuildFlatPreview("Kill heal", definition.value, currentStack, nextStack, " HP"),
+                RunUpgradeEffectKind.FirstShotAfterReloadPercent => BuildPercentPreview("First shot after reload", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.AmmoPickupPercent => BuildPercentPreview("Ammo pickup refill", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.EveryNthHitChain => BuildChainPreview(currentStack, nextStack),
+                _ => definition.description ?? string.Empty
+            };
+        }
+
+        private static string BuildCurrentEffectSummary(RunUpgradeDefinition definition, int stackCount)
+        {
+            return definition.effectKind switch
+            {
+                RunUpgradeEffectKind.RevolverDamagePercent => $"+{definition.value * stackCount * 100f:0.#}% revolver damage",
+                RunUpgradeEffectKind.ReloadSpeedPercent => $"+{definition.value * stackCount * 100f:0.#}% reload speed",
+                RunUpgradeEffectKind.MaxHealthFlat => $"+{definition.value * stackCount:0.#} max health",
+                RunUpgradeEffectKind.CritChanceFlat => $"+{definition.value * stackCount * 100f:0.#}% crit chance",
+                RunUpgradeEffectKind.KillHealFlat => $"kills heal {definition.value * stackCount:0.#} HP",
+                RunUpgradeEffectKind.FirstShotAfterReloadPercent => $"+{definition.value * stackCount * 100f:0.#}% first shot after reload",
+                RunUpgradeEffectKind.AmmoPickupPercent => $"+{definition.value * stackCount * 100f:0.#}% ammo pickup refill",
+                RunUpgradeEffectKind.EveryNthHitChain => $"every {Mathf.Max(1, definition.triggerEveryNthHit)}th hit chains {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
+                _ => definition.description ?? string.Empty
+            };
+        }
+
+        private static string BuildPercentPreview(string label, float value, int currentStack, int nextStack)
+        {
+            return $"{label}: +{value * currentStack * 100f:0.#}% -> +{value * nextStack * 100f:0.#}%";
+        }
+
+        private static string BuildFlatPreview(string label, float value, int currentStack, int nextStack, string suffix = "")
+        {
+            return $"{label}: +{value * currentStack:0.#}{suffix} -> +{value * nextStack:0.#}{suffix}";
+        }
+
+        private static string BuildChainPreview(int currentStack, int nextStack)
+        {
+            float current = currentStack <= 0 ? 0f : GetChainDamageFractionForStack(currentStack);
+            float next = GetChainDamageFractionForStack(nextStack);
+            return $"Chain damage: {current * 100f:0.#}% -> {next * 100f:0.#}%";
         }
 
         private static void Shuffle(List<RunUpgradeDefinition> values, int seed)

@@ -8,7 +8,8 @@ namespace FrontierDepths.Combat
         Normal,
         Reduced,
         Kill,
-        Environment
+        Environment,
+        Chain
     }
 
     internal enum WeaponShotHitKind
@@ -43,6 +44,7 @@ namespace FrontierDepths.Combat
         public int raycastHitCount;
         public int ignoredHitCount;
         public float maxRange;
+        public float hitDistance;
 
         public bool HasHit => kind != WeaponShotHitKind.None && hitCollider != null;
     }
@@ -65,8 +67,12 @@ namespace FrontierDepths.Combat
         public GameObject targetObject;
         public Vector3 hitPoint;
         public Vector3 hitNormal;
+        public Vector3 secondaryPoint;
         public float requestedDamage;
         public float finalDamage;
+        public bool isCritical;
+        public bool isChain;
+        public string label;
 
         public bool IsDamageHit => damageResult.applied;
     }

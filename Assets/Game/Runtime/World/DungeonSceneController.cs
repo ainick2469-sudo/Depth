@@ -19,6 +19,7 @@ namespace FrontierDepths.World
         private const float CorridorZoneHeight = 6f;
         private const float DoorwayClearance = 0.25f;
         private const float CorridorRoomOverlap = 0.75f;
+        private const float CorridorVisualRoomOverlap = 0.15f;
         private const float DoorwayAlignmentEpsilon = 0.05f;
         private const float PlayerSpawnHeight = 3.5f;
         private const float SpawnWallMargin = 6f;
@@ -94,6 +95,8 @@ namespace FrontierDepths.World
         private DungeonBuildResult emergencyDebugBuildResult;
         private bool debugOverlayVisible;
         private string statusMessage = string.Empty;
+
+        public DungeonBuildResult CurrentBuildResult => GetVisibleBuildResult();
 
         public string GetStatusLine()
         {
@@ -1552,7 +1555,9 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                CreateCorridorSegment(corridorRoot.transform, edgeKey, a.nodeId, b.nodeId, segmentIndex++, corridorWidth, segmentStart, segmentEnd);
+                bool trimStart = i == 1;
+                bool trimEnd = i == routePoints.Count - 1;
+                CreateCorridorSegment(corridorRoot.transform, edgeKey, a.nodeId, b.nodeId, segmentIndex++, corridorWidth, segmentStart, segmentEnd, trimStart, trimEnd);
             }
         }
 
@@ -1564,26 +1569,29 @@ namespace FrontierDepths.World
             int segmentIndex,
             float corridorWidth,
             Vector3 start,
-            Vector3 end)
+            Vector3 end,
+            bool trimVisualStart,
+            bool trimVisualEnd)
         {
             Vector3 midpoint = (start + end) * 0.5f;
             Vector3 delta = end - start;
             bool horizontal = Mathf.Abs(delta.x) >= Mathf.Abs(delta.z);
             float corridorLength = Mathf.Max(CellSize * 0.9f, horizontal ? Mathf.Abs(delta.x) : Mathf.Abs(delta.z));
+            GetVisualCorridorFloor(start, end, trimVisualStart, trimVisualEnd, out Vector3 visualMidpoint, out float visualLength);
 
             GameObject segmentRoot = new GameObject($"Corridor_{fromNodeId}_To_{toNodeId}_Segment_{segmentIndex}");
             segmentRoot.transform.SetParent(corridorRoot, false);
 
             Vector3 floorScale = horizontal
-                ? new Vector3(corridorLength, FloorThickness, corridorWidth)
-                : new Vector3(corridorWidth, FloorThickness, corridorLength);
+                ? new Vector3(visualLength, FloorThickness, corridorWidth)
+                : new Vector3(corridorWidth, FloorThickness, visualLength);
             float corridorOuterWidth = GetCorridorOuterWidth(corridorWidth);
             Vector3 outerBoundsSize = horizontal
                 ? new Vector3(corridorLength, WallHeight, corridorOuterWidth)
                 : new Vector3(corridorOuterWidth, WallHeight, corridorLength);
             Vector3 outerBoundsCenter = midpoint + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f);
 
-            GameObject floor = CreatePrimitive("Floor", segmentRoot.transform, midpoint + Vector3.down * (FloorThickness * 0.5f), floorScale, new Color(0.19f, 0.18f, 0.17f));
+            GameObject floor = CreatePrimitive("Floor", segmentRoot.transform, visualMidpoint + Vector3.down * (FloorThickness * 0.5f), floorScale, new Color(0.19f, 0.18f, 0.17f));
             activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
             {
                 edgeKey = edgeKey,
@@ -2238,6 +2246,24 @@ namespace FrontierDepths.World
             expanded[0] -= primaryDirection * overlap;
             expanded[expanded.Count - 1] += primaryDirection * overlap;
             return expanded;
+        }
+
+        internal static void GetVisualCorridorFloor(Vector3 start, Vector3 end, bool trimStart, bool trimEnd, out Vector3 midpoint, out float length)
+        {
+            Vector3 delta = end - start;
+            bool horizontal = Mathf.Abs(delta.x) >= Mathf.Abs(delta.z);
+            float rawLength = horizontal ? Mathf.Abs(delta.x) : Mathf.Abs(delta.z);
+            Vector3 direction = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector3.forward;
+            float trimDistance = Mathf.Max(0f, CorridorRoomOverlap - CorridorVisualRoomOverlap);
+            float totalTrim = (trimStart ? trimDistance : 0f) + (trimEnd ? trimDistance : 0f);
+            float safeLength = Mathf.Max(CellSize * 0.9f, rawLength - totalTrim);
+            float appliedTrim = Mathf.Min(totalTrim, Mathf.Max(0f, rawLength - safeLength));
+            float startTrim = trimStart && totalTrim > 0f ? appliedTrim * ((trimDistance) / totalTrim) : 0f;
+            float endTrim = trimEnd && totalTrim > 0f ? appliedTrim * ((trimDistance) / totalTrim) : 0f;
+            Vector3 visualStart = start + direction * startTrim;
+            Vector3 visualEnd = end - direction * endTrim;
+            midpoint = (visualStart + visualEnd) * 0.5f;
+            length = Mathf.Max(CellSize * 0.9f, horizontal ? Mathf.Abs(visualEnd.x - visualStart.x) : Mathf.Abs(visualEnd.z - visualStart.z));
         }
 
         private static void AddRoutePoint(List<Vector3> points, Vector3 point)
@@ -3039,10 +3065,15 @@ namespace FrontierDepths.World
 
         private static Color GetFloorColor(DungeonNodeKind kind)
         {
+            return GetGameplayRoomFloorColor(kind);
+        }
+
+        internal static Color GetGameplayRoomFloorColor(DungeonNodeKind kind)
+        {
             return kind switch
             {
-                DungeonNodeKind.EntryHub => new Color(0.31f, 0.46f, 0.66f),
-                DungeonNodeKind.TransitUp => new Color(0.29f, 0.58f, 0.68f),
+                DungeonNodeKind.EntryHub => new Color(0.36f, 0.43f, 0.52f),
+                DungeonNodeKind.TransitUp => new Color(0.32f, 0.52f, 0.62f),
                 DungeonNodeKind.TransitDown => new Color(0.8f, 0.66f, 0.22f),
                 DungeonNodeKind.Landmark => new Color(0.38f, 0.63f, 0.5f),
                 DungeonNodeKind.Secret => new Color(0.56f, 0.42f, 0.72f),

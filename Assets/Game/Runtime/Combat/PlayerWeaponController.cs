@@ -13,7 +13,9 @@ namespace FrontierDepths.Combat
         private const float DefaultFireRate = 2.857f;
         private const int DefaultMagazineSize = 6;
         private const float DefaultReloadDuration = 1.4f;
-        private const float DefaultRange = 100f;
+        private const float DefaultRange = 55f;
+        private const float DefaultFullDamageRange = 30f;
+        private const float DefaultDamageMultiplierAtMaxRange = 0.65f;
         private const float DefaultRevolverHearingRadius = 55f;
         private const int ImpactPoolSize = 12;
         private const int DamageNumberPoolSize = 12;
@@ -73,6 +75,14 @@ namespace FrontierDepths.Combat
 
         public string WeaponId => GetWeaponId();
         public string WeaponName => GetWeaponName();
+        public float BaseDamage => GetBaseWeaponDamage();
+        public float EffectiveDamage => GetBaseDamage();
+        public float MaxRange => GetRange();
+        public float FullDamageRange => GetFullDamageRange();
+        public float DamageMultiplierAtMaxRange => GetDamageMultiplierAtMaxRange();
+        public float EffectiveReloadDuration => GetReloadDuration();
+        public float BaseReloadDuration => GetBaseReloadDuration();
+        public float CritChance => GetCritChance();
         public int CurrentAmmo => weaponState != null ? weaponState.CurrentAmmo : GetMagazineSize();
         public int MagazineSize => weaponState != null ? weaponState.MagazineSize : GetMagazineSize();
         public bool IsReloading => weaponState != null && weaponState.IsReloading;
@@ -96,7 +106,7 @@ namespace FrontierDepths.Combat
         {
             SceneManager.sceneLoaded -= HandleSceneLoaded;
             GameplayEventBus.Unsubscribe(HandleGameplayEvent);
-            HideAllTracers();
+            HideAllFeedback();
         }
 
         private void SubscribeGameplayEvents()
@@ -409,6 +419,7 @@ namespace FrontierDepths.Combat
                 hitPoint = aimRay.origin + aimRay.direction * range,
                 hitNormal = -aimRay.direction,
                 maxRange = range,
+                hitDistance = range,
                 raycastHitCount = hits != null ? hits.Length : 0
             };
 
@@ -422,6 +433,7 @@ namespace FrontierDepths.Combat
                 resolution.finalTracerEnd = hit.point;
                 resolution.hitPoint = hit.point;
                 resolution.hitNormal = hit.normal;
+                resolution.hitDistance = hit.distance;
             }
 
             resolution.ignoredHitCount = ignoredHitCount;
@@ -435,6 +447,7 @@ namespace FrontierDepths.Combat
                 resolution.finalTracerEnd = obstruction.point;
                 resolution.hitPoint = obstruction.point;
                 resolution.hitNormal = obstruction.normal;
+                resolution.hitDistance = obstruction.distance;
             }
 
             return resolution;
@@ -457,7 +470,12 @@ namespace FrontierDepths.Combat
 
             if (resolution.damageable != null)
             {
-                DamageInfo damageInfo = CreateDamageInfo(resolution.hitPoint, resolution.hitNormal);
+                float rangeMultiplier = CalculateRangeDamageMultiplier(
+                    resolution.hitDistance,
+                    GetFullDamageRange(),
+                    GetRange(),
+                    GetDamageMultiplierAtMaxRange());
+                DamageInfo damageInfo = CreateDamageInfo(resolution.hitPoint, resolution.hitNormal, rangeMultiplier);
                 DamageResult result = resolution.damageable.ApplyDamage(damageInfo);
                 LogShotDebug($"damageable={resolution.hitCollider.name}; applied={result.applied}; damage={result.damageApplied:0.##}; recoilAppliedAfterResolution=true");
 
@@ -475,12 +493,14 @@ namespace FrontierDepths.Combat
                         hitPoint = resolution.hitPoint,
                         hitNormal = resolution.hitNormal,
                         requestedDamage = damageInfo.amount,
-                        finalDamage = result.damageApplied
+                        finalDamage = result.damageApplied,
+                        isCritical = damageInfo.isCritical,
+                        label = damageInfo.isCritical ? "CRIT" : string.Empty
                     };
                     DamageHitConfirmed?.Invoke(result);
                     HitFeedbackReceived?.Invoke(feedback);
                     ShowImpactMarker(resolution.hitPoint, resolution.hitNormal, impactColor);
-                    ShowDamageNumber(resolution.hitPoint, result.damageApplied, impactColor, result.killedTarget);
+                    ShowDamageNumber(resolution.hitPoint, result.damageApplied, impactColor, result.killedTarget, damageInfo.isCritical ? "CRIT" : string.Empty);
                     ShowTracer(resolution.muzzleStart, resolution.finalTracerEnd, impactColor);
                     DrawShotRay(resolution.aimRay.origin, resolution.cameraTargetPoint, Color.green);
                     DrawShotRay(resolution.muzzleStart, resolution.finalTracerEnd, impactColor);
@@ -537,11 +557,13 @@ namespace FrontierDepths.Combat
             return false;
         }
 
-        private DamageInfo CreateDamageInfo(Vector3 hitPoint, Vector3 hitNormal)
+        private DamageInfo CreateDamageInfo(Vector3 hitPoint, Vector3 hitNormal, float rangeDamageMultiplier = 1f)
         {
             float critChance = GetCritChance();
             bool isCritical = critChance > 0f && RollCriticalHit(critChance);
-            float amount = GetBaseDamage() * Mathf.Max(0.01f, pendingShotDamageMultiplier);
+            float amount = GetBaseDamage() *
+                           Mathf.Max(0.01f, pendingShotDamageMultiplier) *
+                           Mathf.Clamp01(rangeDamageMultiplier);
             GameplayTag[] tags = isCritical ? new[] { GameplayTag.OnCrit } : Array.Empty<GameplayTag>();
             if (isCritical)
             {
@@ -565,11 +587,11 @@ namespace FrontierDepths.Combat
             };
         }
 
-        internal DamageInfo CreateDamageInfoForTests(Vector3 hitPoint, Vector3 hitNormal, float shotMultiplier = 1f)
+        internal DamageInfo CreateDamageInfoForTests(Vector3 hitPoint, Vector3 hitNormal, float shotMultiplier = 1f, float rangeDamageMultiplier = 1f)
         {
             float previousMultiplier = pendingShotDamageMultiplier;
             pendingShotDamageMultiplier = shotMultiplier;
-            DamageInfo damageInfo = CreateDamageInfo(hitPoint, hitNormal);
+            DamageInfo damageInfo = CreateDamageInfo(hitPoint, hitNormal, rangeDamageMultiplier);
             pendingShotDamageMultiplier = previousMultiplier;
             return damageInfo;
         }
@@ -627,7 +649,7 @@ namespace FrontierDepths.Combat
 
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            HideAllTracers();
+            HideAllFeedback();
             ResolveWeaponCamera();
             ResolveWeaponDefinition();
         }
@@ -1011,7 +1033,7 @@ namespace FrontierDepths.Combat
             marker.Show(point + normal.normalized * 0.04f, Time.time + impactMarkerDuration, color);
         }
 
-        private void ShowDamageNumber(Vector3 point, float amount, Color color, bool killedTarget)
+        private void ShowDamageNumber(Vector3 point, float amount, Color color, bool killedTarget, string label = "")
         {
             if (damageNumbers.Length == 0)
             {
@@ -1020,7 +1042,7 @@ namespace FrontierDepths.Combat
 
             DamageNumberMarker number = damageNumbers[nextDamageNumber];
             nextDamageNumber = (nextDamageNumber + 1) % damageNumbers.Length;
-            number.Show(point + Vector3.up * 1.25f, Time.time + damageNumberDuration, amount, color, killedTarget);
+            number?.Show(point + Vector3.up * 1.25f, Time.time + damageNumberDuration, amount, color, killedTarget, label);
         }
 
         private void ShowTracer(Vector3 start, Vector3 end, Color color)
@@ -1041,6 +1063,20 @@ namespace FrontierDepths.Combat
             for (int i = 0; i < tracers.Length; i++)
             {
                 tracers[i]?.Hide();
+            }
+        }
+
+        private void HideAllFeedback()
+        {
+            HideAllTracers();
+            for (int i = 0; i < impactMarkers.Length; i++)
+            {
+                impactMarkers[i]?.Hide();
+            }
+
+            for (int i = 0; i < damageNumbers.Length; i++)
+            {
+                damageNumbers[i]?.Hide();
             }
         }
 
@@ -1099,10 +1135,15 @@ namespace FrontierDepths.Combat
 
         private float GetBaseDamage()
         {
-            float baseDamage = weaponDefinition != null && weaponDefinition.baseDamage > 0f ? weaponDefinition.baseDamage : DefaultDamage;
+            float baseDamage = GetBaseWeaponDamage();
             return GetWeaponArchetype() == WeaponArchetype.Revolver
                 ? baseDamage * RunStatAggregator.Current.RevolverDamageMultiplier
                 : baseDamage;
+        }
+
+        private float GetBaseWeaponDamage()
+        {
+            return weaponDefinition != null && weaponDefinition.baseDamage > 0f ? weaponDefinition.baseDamage : DefaultDamage;
         }
 
         private float GetFireCooldown()
@@ -1118,13 +1159,52 @@ namespace FrontierDepths.Combat
 
         private float GetReloadDuration()
         {
-            float baseDuration = weaponDefinition != null && weaponDefinition.reloadDuration > 0f ? weaponDefinition.reloadDuration : DefaultReloadDuration;
-            return baseDuration / Mathf.Max(0.1f, RunStatAggregator.Current.ReloadSpeedMultiplier);
+            return GetBaseReloadDuration() / Mathf.Max(0.1f, RunStatAggregator.Current.ReloadSpeedMultiplier);
+        }
+
+        private float GetBaseReloadDuration()
+        {
+            return weaponDefinition != null && weaponDefinition.reloadDuration > 0f ? weaponDefinition.reloadDuration : DefaultReloadDuration;
         }
 
         private float GetRange()
         {
             return weaponDefinition != null && weaponDefinition.maxRange > 0f ? weaponDefinition.maxRange : DefaultRange;
+        }
+
+        private float GetFullDamageRange()
+        {
+            float range = GetRange();
+            float configured = weaponDefinition != null && weaponDefinition.fullDamageRange > 0f
+                ? weaponDefinition.fullDamageRange
+                : DefaultFullDamageRange;
+            return Mathf.Clamp(configured, 0f, range);
+        }
+
+        private float GetDamageMultiplierAtMaxRange()
+        {
+            float configured = weaponDefinition != null && weaponDefinition.damageMultiplierAtMaxRange > 0f
+                ? weaponDefinition.damageMultiplierAtMaxRange
+                : DefaultDamageMultiplierAtMaxRange;
+            return Mathf.Clamp01(configured);
+        }
+
+        internal static float CalculateRangeDamageMultiplier(float distance, float fullDamageRange, float maxRange, float multiplierAtMaxRange)
+        {
+            float clampedMaxRange = Mathf.Max(0.01f, maxRange);
+            if (distance > clampedMaxRange)
+            {
+                return 0f;
+            }
+
+            float clampedFullRange = Mathf.Clamp(fullDamageRange, 0f, clampedMaxRange);
+            if (distance <= clampedFullRange)
+            {
+                return 1f;
+            }
+
+            float t = Mathf.InverseLerp(clampedFullRange, clampedMaxRange, distance);
+            return Mathf.Lerp(1f, Mathf.Clamp01(multiplierAtMaxRange), t);
         }
 
         private DamageType GetDamageType()
@@ -1262,7 +1342,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, 12f);
+            EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, RunUpgradeCatalog.ChainHitSearchRadius);
             if (chainTarget == null)
             {
                 return false;
@@ -1286,6 +1366,26 @@ namespace FrontierDepths.Combat
             DamageResult chainResult = chainTarget.ApplyDamage(chainDamage);
             if (chainResult.applied)
             {
+                Color chainColor = new Color(0.42f, 0.85f, 1f, 1f);
+                if (runtimeReady)
+                {
+                    ShowTracer(damageInfo.hitPoint, chainDamage.hitPoint, chainColor);
+                    ShowDamageNumber(chainDamage.hitPoint, chainResult.damageApplied, chainColor, chainResult.killedTarget, "CHAIN");
+                }
+
+                HitFeedbackReceived?.Invoke(new WeaponHitFeedback
+                {
+                    kind = WeaponHitFeedbackKind.Chain,
+                    damageResult = chainResult,
+                    targetObject = chainTarget.gameObject,
+                    hitPoint = damageInfo.hitPoint,
+                    hitNormal = Vector3.up,
+                    secondaryPoint = chainDamage.hitPoint,
+                    requestedDamage = chainDamage.amount,
+                    finalDamage = chainResult.damageApplied,
+                    isChain = true,
+                    label = "CHAIN"
+                });
                 GameplayEventBus.Publish(CreateGameplayEvent(GameplayEventType.DamageDealt, chainDamage, chainResult, chainTarget.gameObject));
             }
 
@@ -1435,6 +1535,16 @@ namespace FrontierDepths.Combat
                     markerObject.SetActive(false);
                 }
             }
+
+            public void Hide()
+            {
+                if (markerObject != null)
+                {
+                    markerObject.SetActive(false);
+                }
+
+                hideTime = 0f;
+            }
         }
 
         internal sealed class TracerMarker
@@ -1510,7 +1620,7 @@ namespace FrontierDepths.Combat
                 this.text = text;
             }
 
-            public void Show(Vector3 position, float hideTime, float amount, Color color, bool killedTarget)
+            public void Show(Vector3 position, float hideTime, float amount, Color color, bool killedTarget, string label)
             {
                 if (markerObject == null || text == null)
                 {
@@ -1521,7 +1631,15 @@ namespace FrontierDepths.Combat
                 showTime = Time.time;
                 this.hideTime = hideTime;
                 markerObject.transform.position = position;
-                text.text = killedTarget ? $"{amount:0}\nDOWN" : amount.ToString("0");
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    text.text = killedTarget ? $"{amount:0}\n{label}\nDOWN" : $"{amount:0}\n{label}";
+                }
+                else
+                {
+                    text.text = killedTarget ? $"{amount:0}\nDOWN" : amount.ToString("0");
+                }
+
                 text.color = color;
                 markerObject.SetActive(true);
             }
@@ -1553,6 +1671,16 @@ namespace FrontierDepths.Combat
                 Color color = text.color;
                 color.a = 1f - t;
                 text.color = color;
+            }
+
+            public void Hide()
+            {
+                if (markerObject != null)
+                {
+                    markerObject.SetActive(false);
+                }
+
+                hideTime = 0f;
             }
         }
     }

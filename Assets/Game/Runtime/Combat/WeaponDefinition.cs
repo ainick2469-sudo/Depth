@@ -24,7 +24,9 @@ namespace FrontierDepths.Combat
         public float fireRate = 2.857f;
         public int magazineSize = 6;
         public float reloadDuration = 1.4f;
-        public float maxRange = 100f;
+        public float maxRange = 55f;
+        public float fullDamageRange = 30f;
+        [Range(0f, 1f)] public float damageMultiplierAtMaxRange = 0.65f;
         public DamageType damageType = DamageType.Physical;
         public DamageDeliveryType deliveryType = DamageDeliveryType.Raycast;
         public float critChance;
