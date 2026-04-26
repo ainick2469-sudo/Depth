@@ -1187,7 +1187,8 @@ namespace FrontierDepths.World
 
             EnemyHealth health = enemy.AddComponent<EnemyHealth>();
             health.Configure(50f, new Color(0.72f, 0.28f, 0.22f, 1f));
-            enemy.AddComponent<SimpleMeleeEnemyController>();
+            SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
+            melee.ConfigureHomeRoom(string.Empty, new Bounds(position, new Vector3(12f, 4f, 12f)), new[] { position });
 
             int defaultLayer = LayerMask.NameToLayer("Default");
             SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);

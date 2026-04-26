@@ -239,6 +239,7 @@ namespace FrontierDepths.Tests.EditMode
         {
             GameObject player = new GameObject("GunfirePlayer");
             GameObject enemy = new GameObject("GunfireEnemy");
+            GameObject wall = null;
             try
             {
                 player.AddComponent<PlayerHealth>();
@@ -246,6 +247,12 @@ namespace FrontierDepths.Tests.EditMode
                 enemy.AddComponent<CharacterController>();
                 enemy.AddComponent<EnemyHealth>().Configure(50f, Color.red);
                 SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
+
+                wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wall.name = "Gunfire_LOS_Blocker";
+                wall.transform.position = new Vector3(20f, 0.85f, 0f);
+                wall.transform.localScale = new Vector3(1f, 3f, 8f);
+                Physics.SyncTransforms();
 
                 bool alerted = melee.HandleWeaponFiredForTests(new GameplayEvent
                 {
@@ -256,13 +263,17 @@ namespace FrontierDepths.Tests.EditMode
                 }, 2f);
 
                 Assert.IsTrue(alerted);
-                Assert.AreEqual(SimpleMeleeEnemyState.Chase, melee.State);
+                Assert.AreEqual(SimpleMeleeEnemyState.Investigate, melee.State);
                 Assert.IsTrue(melee.IsAlertedAt(9.9f));
             }
             finally
             {
                 Object.DestroyImmediate(player);
                 Object.DestroyImmediate(enemy);
+                if (wall != null)
+                {
+                    Object.DestroyImmediate(wall);
+                }
             }
         }
 

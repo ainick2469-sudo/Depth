@@ -9,8 +9,16 @@ namespace FrontierDepths.Combat
     public sealed class SimpleMeleeEnemyController : MonoBehaviour
     {
         private static readonly Color AttackColor = new Color(1f, 0.12f, 0.08f, 1f);
+        private static readonly Color InvestigateColor = new Color(1f, 0.72f, 0.18f, 1f);
+        private static readonly Color ReturnColor = new Color(0.58f, 0.68f, 1f, 1f);
         private const float LastKnownPositionStopDistance = 1.2f;
         private const float AttackRangeForgiveness = 0.35f;
+        private const float PatrolTargetStopDistance = 0.8f;
+        private const float HomeBoundsInset = 3f;
+        private const float PerceptionIntervalIdle = 0.18f;
+        private const float PerceptionIntervalChase = 0.08f;
+        private const float StuckProgressEpsilon = 0.035f;
+        private const float DoorwayEdgeInset = 4f;
         private static readonly List<SimpleMeleeEnemyController> ActiveEnemies = new List<SimpleMeleeEnemyController>();
 
         [SerializeField] private float moveSpeed = 4.6f;
@@ -24,7 +32,19 @@ namespace FrontierDepths.Combat
         [SerializeField] private float gravity = -20f;
         [SerializeField] private bool requireLineOfSightToAttack = true;
         [SerializeField] private LayerMask lineOfSightMask = -1;
+        [SerializeField] private EnemyAmbientBehavior ambientBehavior = EnemyAmbientBehavior.Idle;
+        [SerializeField] private float visionConeAngle = 120f;
+        [SerializeField] private float idleMoveSpeedMultiplier = 0.55f;
+        [SerializeField] private float patrolWaitSeconds = 1.1f;
+        [SerializeField] private float investigateDuration = 4f;
+        [SerializeField] private float lostSightGraceDuration = 1f;
+        [SerializeField] private float searchDuration = 3f;
+        [SerializeField] private float homeReturnStopDistance = 1.1f;
+        [SerializeField] private float stuckRecoverySeconds = 1.4f;
+        [SerializeField] private bool debugStateLabelsVisible;
+        [SerializeField] private bool enableDebugStuckSnapRecovery;
 
+        private readonly List<Vector3> patrolPoints = new List<Vector3>();
         private CharacterController controller;
         private EnemyHealth health;
         private PlayerHealth target;
@@ -32,18 +52,32 @@ namespace FrontierDepths.Combat
         private float attackWindupCompleteTime;
         private float verticalVelocity;
         private float nextTargetResolveTime;
+        private float nextPerceptionTime;
         private float alertUntilTime;
+        private float lastSeenTargetTime = -999f;
+        private float investigateUntilTime;
+        private float patrolWaitUntilTime;
+        private float stuckTimer;
         private Vector3 lastKnownTargetPosition;
-        private SimpleMeleeEnemyState state;
+        private Vector3 lastHeardPosition;
+        private Vector3 currentMoveTarget;
+        private Vector3 lastMoveSamplePosition;
+        private Bounds homeRoomBounds;
+        private SimpleMeleeEnemyState state = SimpleMeleeEnemyState.Idle;
         private bool subscribedToHealth;
         private bool subscribedToGameplayEvents;
         private bool registeredActive;
         private bool hasLastKnownTargetPosition;
+        private bool hasLastHeardPosition;
+        private bool hasMoveTarget;
+        private bool hasHomeRoom;
         private bool isAttackWindingUp;
         private Color baseBodyColor = new Color(0.72f, 0.28f, 0.22f, 1f);
         private float hearingRadiusMultiplier = 1f;
         private EnemyArchetype archetype = EnemyArchetype.GoblinGrunt;
         private PlayerHealth windupTarget;
+        private int patrolCursor;
+        private int stuckRecoveryCount;
 
         public SimpleMeleeEnemyState State => state;
         public float NextAttackTime => nextAttackTime;
@@ -58,6 +92,14 @@ namespace FrontierDepths.Combat
         public float DetectionRange => detectionRange;
         public float HearingRadiusMultiplier => hearingRadiusMultiplier;
         public float GroupAlertRadius => groupAlertRadius;
+        public EnemyAmbientBehavior AmbientBehavior => ambientBehavior;
+        public string HomeRoomId { get; private set; } = string.Empty;
+        public Bounds HomeRoomBounds => homeRoomBounds;
+        public bool HasHomeRoom => hasHomeRoom;
+        public Vector3 LastKnownTargetPosition => lastKnownTargetPosition;
+        public Vector3 LastHeardPosition => lastHeardPosition;
+        public bool IsInvestigating => state == SimpleMeleeEnemyState.Investigate;
+        public int StuckRecoveryCount => stuckRecoveryCount;
 
         public void Configure(EnemyDefinition definition)
         {
@@ -74,10 +116,81 @@ namespace FrontierDepths.Combat
             attackWindupDuration = Mathf.Max(0f, definition.attackWindupDuration);
             hearingRadiusMultiplier = Mathf.Max(0f, definition.hearingRadiusMultiplier);
             groupAlertRadius = Mathf.Max(0f, definition.groupAlertRadius);
+            ambientBehavior = definition.ambientBehavior;
+            visionConeAngle = Mathf.Clamp(definition.visionConeAngle, 1f, 360f);
+            idleMoveSpeedMultiplier = Mathf.Clamp(definition.idleMoveSpeedMultiplier, 0.05f, 1f);
+            patrolWaitSeconds = Mathf.Max(0f, definition.patrolWaitSeconds);
+            investigateDuration = Mathf.Max(0.1f, definition.investigateDuration);
+            lostSightGraceDuration = Mathf.Max(0f, definition.lostSightGraceDuration);
+            searchDuration = Mathf.Max(0.1f, definition.searchDuration);
+            homeReturnStopDistance = Mathf.Max(0.2f, definition.homeReturnStopDistance);
+            stuckRecoverySeconds = Mathf.Max(0.25f, definition.stuckRecoverySeconds);
             baseBodyColor = definition.bodyColor;
             archetype = definition.archetype;
-            SetState(state);
+
+            if (!IsCombatState(state) && state != SimpleMeleeEnemyState.Dead)
+            {
+                SetState(GetAmbientState());
+            }
+
             ApplyStateColor(state);
+        }
+
+        public void ConfigureHomeRoom(string roomId, Bounds bounds, IReadOnlyList<Vector3> roomPatrolPoints)
+        {
+            HomeRoomId = roomId ?? string.Empty;
+            homeRoomBounds = bounds;
+            hasHomeRoom = bounds.size.sqrMagnitude > 0.01f;
+            patrolPoints.Clear();
+
+            if (hasHomeRoom)
+            {
+                AddPatrolPoint(bounds.center);
+                if (roomPatrolPoints != null)
+                {
+                    for (int i = 0; i < roomPatrolPoints.Count; i++)
+                    {
+                        AddPatrolPoint(roomPatrolPoints[i]);
+                    }
+                }
+
+                AddPatrolPoint(new Vector3(bounds.min.x + HomeBoundsInset, bounds.center.y, bounds.min.z + HomeBoundsInset));
+                AddPatrolPoint(new Vector3(bounds.max.x - HomeBoundsInset, bounds.center.y, bounds.min.z + HomeBoundsInset));
+                AddPatrolPoint(new Vector3(bounds.min.x + HomeBoundsInset, bounds.center.y, bounds.max.z - HomeBoundsInset));
+                AddPatrolPoint(new Vector3(bounds.max.x - HomeBoundsInset, bounds.center.y, bounds.max.z - HomeBoundsInset));
+            }
+            else
+            {
+                AddPatrolPoint(transform.position);
+            }
+
+            patrolCursor = Mathf.Clamp(patrolCursor, 0, Mathf.Max(0, patrolPoints.Count - 1));
+            hasMoveTarget = false;
+        }
+
+        internal void SetHomeRoomForTests(string roomId, Bounds bounds, IReadOnlyList<Vector3> roomPatrolPoints)
+        {
+            ConfigureHomeRoom(roomId, bounds, roomPatrolPoints);
+        }
+
+        internal IReadOnlyList<Vector3> GetPatrolPointsForTests()
+        {
+            return new List<Vector3>(patrolPoints);
+        }
+
+        internal void TickForTests(float currentTime, float deltaTime)
+        {
+            Tick(currentTime, Mathf.Max(0f, deltaTime), false);
+        }
+
+        internal bool CanSeePlayerForTests(PlayerHealth playerHealth)
+        {
+            return CanSeePlayer(playerHealth, Time.time, true);
+        }
+
+        internal bool IsPointInsideHomeForTests(Vector3 point)
+        {
+            return IsInsideHomeRoom(point, 0f);
         }
 
         private void Awake()
@@ -94,7 +207,7 @@ namespace FrontierDepths.Combat
 
         private void OnDisable()
         {
-            CancelAttackWindup();
+            CancelAttackWindup(false);
             UnregisterActiveEnemy();
             UnsubscribeGameplayEvents();
             UnsubscribeHealthEvents();
@@ -107,69 +220,72 @@ namespace FrontierDepths.Combat
 
         private void Update()
         {
-            float currentTime = Time.time;
+            if (Time.timeScale <= 0f)
+            {
+                return;
+            }
+
+            Tick(Time.time, Time.deltaTime, true);
+        }
+
+        private void Tick(float currentTime, float deltaTime, bool resolveTarget)
+        {
             EnsureComponents();
             if (health == null || health.IsDead)
             {
-                CancelAttackWindup();
+                CancelAttackWindup(false);
                 SetState(SimpleMeleeEnemyState.Dead);
                 return;
             }
 
-            TickAttackWindup(currentTime);
+            if (TickAttackWindup(currentTime))
+            {
+                return;
+            }
+
             if (isAttackWindingUp)
             {
-                ApplyGravityOnly();
+                ApplyGravityOnly(deltaTime);
                 return;
             }
 
-            ResolveTarget();
-            if (target == null || target.IsDead)
+            if (resolveTarget)
             {
-                if (IsAlertedAt(currentTime) && hasLastKnownTargetPosition)
-                {
-                    Vector3 toLastKnown = lastKnownTargetPosition - transform.position;
-                    toLastKnown.y = 0f;
-                    if (toLastKnown.magnitude > LastKnownPositionStopDistance)
+                ResolveTarget();
+            }
+
+            TickPerception(currentTime, resolveTarget);
+
+            switch (state)
+            {
+                case SimpleMeleeEnemyState.Chase:
+                    TickChase(currentTime, deltaTime);
+                    break;
+                case SimpleMeleeEnemyState.Investigate:
+                    TickInvestigate(currentTime, deltaTime);
+                    break;
+                case SimpleMeleeEnemyState.ReturnToRoom:
+                    TickReturnToRoom(deltaTime);
+                    break;
+                case SimpleMeleeEnemyState.Sleep:
+                    ApplyGravityOnly(deltaTime);
+                    break;
+                case SimpleMeleeEnemyState.Patrol:
+                    TickPatrol(currentTime, deltaTime);
+                    break;
+                case SimpleMeleeEnemyState.AttackRecover:
+                    ApplyGravityOnly(deltaTime);
+                    if (currentTime >= nextAttackTime)
                     {
-                        SetState(SimpleMeleeEnemyState.Chase);
-                        MoveToward(toLastKnown);
-                        return;
+                        SetState(IsAlertedAt(currentTime) ? SimpleMeleeEnemyState.Chase : GetAmbientState());
                     }
-                }
-
-                SetState(SimpleMeleeEnemyState.Idle);
-                ApplyGravityOnly();
-                return;
+                    break;
+                case SimpleMeleeEnemyState.Dead:
+                    break;
+                default:
+                    TickIdle(deltaTime);
+                    break;
             }
-
-            Vector3 toTarget = target.transform.position - transform.position;
-            toTarget.y = 0f;
-            float distance = toTarget.magnitude;
-            bool alerted = IsAlertedAt(currentTime);
-            if (!alerted)
-            {
-                lastKnownTargetPosition = target.transform.position;
-                hasLastKnownTargetPosition = true;
-            }
-
-            if (distance > detectionRange && !alerted)
-            {
-                SetState(SimpleMeleeEnemyState.Idle);
-                ApplyGravityOnly();
-                return;
-            }
-
-            if (distance <= attackRange && HasLineOfSightTo(target))
-            {
-                SetState(SimpleMeleeEnemyState.Attack);
-                TryStartAttackWindup(target, currentTime);
-                ApplyGravityOnly();
-                return;
-            }
-
-            SetState(SimpleMeleeEnemyState.Chase);
-            MoveToward(toTarget);
         }
 
         internal bool TryApplyAttack(PlayerHealth playerHealth, float currentTime)
@@ -182,18 +298,9 @@ namespace FrontierDepths.Combat
 
             nextAttackTime = currentTime + Mathf.Max(0.05f, attackCooldown);
             health?.Flash(AttackColor, 0.16f);
-            DamageInfo damageInfo = new DamageInfo
-            {
-                amount = attackDamage,
-                source = gameObject,
-                hitPoint = playerHealth.transform.position,
-                hitNormal = (playerHealth.transform.position - transform.position).normalized,
-                damageType = DamageType.Physical,
-                deliveryType = DamageDeliveryType.Melee,
-                tags = new[] { GameplayTag.Melee, GameplayTag.OnHit }
-            };
-
+            DamageInfo damageInfo = CreateMeleeDamageInfo(playerHealth);
             DamageResult result = playerHealth.ApplyDamage(damageInfo, currentTime);
+            SetState(SimpleMeleeEnemyState.AttackRecover);
             return result.applied;
         }
 
@@ -214,7 +321,7 @@ namespace FrontierDepths.Combat
             windupTarget = playerHealth;
             isAttackWindingUp = true;
             attackWindupCompleteTime = currentTime + attackWindupDuration;
-            SetState(SimpleMeleeEnemyState.Attack);
+            SetState(SimpleMeleeEnemyState.AttackWindup);
             health?.Flash(GetWindupColor(), Mathf.Max(0.12f, Mathf.Min(attackWindupDuration, 0.35f)));
             return true;
         }
@@ -228,13 +335,13 @@ namespace FrontierDepths.Combat
 
             if (health == null || health.IsDead || windupTarget == null || windupTarget.IsDead)
             {
-                CancelAttackWindup();
+                CancelAttackWindup(false);
                 return false;
             }
 
             if (!IsTargetInAttackRange(windupTarget, AttackRangeForgiveness) || !HasLineOfSightTo(windupTarget))
             {
-                CancelAttackWindup();
+                CancelAttackWindup(true);
                 return false;
             }
 
@@ -244,7 +351,7 @@ namespace FrontierDepths.Combat
             }
 
             PlayerHealth resolvedTarget = windupTarget;
-            CancelAttackWindup();
+            CancelAttackWindup(false);
             return ApplyWindupDamage(resolvedTarget, currentTime);
         }
 
@@ -261,7 +368,7 @@ namespace FrontierDepths.Combat
 
         internal bool IsAlertedAt(float currentTime)
         {
-            return currentTime <= alertUntilTime;
+            return alertUntilTime > 0f && currentTime <= alertUntilTime;
         }
 
         internal void Alert(PlayerHealth playerHealth, Vector3 knownPosition, float currentTime)
@@ -275,7 +382,9 @@ namespace FrontierDepths.Combat
             target = playerHealth != null && !playerHealth.IsDead ? playerHealth : target;
             lastKnownTargetPosition = target != null ? target.transform.position : knownPosition;
             hasLastKnownTargetPosition = true;
+            lastSeenTargetTime = currentTime;
             alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
+            hasMoveTarget = false;
             SetState(SimpleMeleeEnemyState.Chase);
         }
 
@@ -287,6 +396,25 @@ namespace FrontierDepths.Combat
         internal bool HandleWeaponFiredForTests(GameplayEvent gameplayEvent, float currentTime)
         {
             return HandleWeaponFired(gameplayEvent, currentTime);
+        }
+
+        internal static Dictionary<SimpleMeleeEnemyState, int> GetActiveStateCounts()
+        {
+            Dictionary<SimpleMeleeEnemyState, int> counts = new Dictionary<SimpleMeleeEnemyState, int>();
+            List<SimpleMeleeEnemyController> snapshot = new List<SimpleMeleeEnemyController>(ActiveEnemies);
+            for (int i = snapshot.Count - 1; i >= 0; i--)
+            {
+                SimpleMeleeEnemyController enemy = snapshot[i];
+                if (enemy == null || enemy.health == null || enemy.health.IsDead)
+                {
+                    continue;
+                }
+
+                counts.TryGetValue(enemy.state, out int count);
+                counts[enemy.state] = count + 1;
+            }
+
+            return counts;
         }
 
         private void EnsureComponents()
@@ -330,6 +458,162 @@ namespace FrontierDepths.Combat
 
             target = FindAnyObjectByType<PlayerHealth>();
             nextTargetResolveTime = Time.unscaledTime + 0.35f;
+        }
+
+        private void TickPerception(float currentTime, bool resolveTarget)
+        {
+            if (health == null || health.IsDead || state == SimpleMeleeEnemyState.Dead || isAttackWindingUp)
+            {
+                return;
+            }
+
+            if (currentTime < nextPerceptionTime)
+            {
+                return;
+            }
+
+            float interval = state == SimpleMeleeEnemyState.Chase || state == SimpleMeleeEnemyState.Investigate
+                ? PerceptionIntervalChase
+                : PerceptionIntervalIdle;
+            nextPerceptionTime = currentTime + interval;
+
+            if (resolveTarget)
+            {
+                ResolveTarget();
+            }
+
+            if (target == null || target.IsDead)
+            {
+                return;
+            }
+
+            bool useCone = state == SimpleMeleeEnemyState.Sleep ||
+                           state == SimpleMeleeEnemyState.Idle ||
+                           state == SimpleMeleeEnemyState.Patrol;
+            if (!CanSeePlayer(target, currentTime, useCone))
+            {
+                return;
+            }
+
+            lastKnownTargetPosition = target.transform.position;
+            hasLastKnownTargetPosition = true;
+            lastSeenTargetTime = currentTime;
+            alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
+            if (!IsAttackState(state))
+            {
+                SetState(SimpleMeleeEnemyState.Chase);
+            }
+        }
+
+        private void TickChase(float currentTime, float deltaTime)
+        {
+            if (target == null || target.IsDead)
+            {
+                StartSearchOrReturn(currentTime);
+                return;
+            }
+
+            bool canSee = CanSeePlayer(target, currentTime, false);
+            if (canSee)
+            {
+                lastKnownTargetPosition = target.transform.position;
+                hasLastKnownTargetPosition = true;
+                lastSeenTargetTime = currentTime;
+                alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
+                if (IsTargetInAttackRange(target, 0f) && HasLineOfSightTo(target))
+                {
+                    TryStartAttackWindup(target, currentTime);
+                    ApplyGravityOnly(deltaTime);
+                    return;
+                }
+            }
+            else if (currentTime - lastSeenTargetTime > lostSightGraceDuration)
+            {
+                StartInvestigatingPosition(lastKnownTargetPosition, currentTime, searchDuration);
+                return;
+            }
+
+            Vector3 chaseTarget = hasLastKnownTargetPosition ? lastKnownTargetPosition : target.transform.position;
+            MoveTowardPoint(chaseTarget, moveSpeed, deltaTime, false, true);
+        }
+
+        private void TickInvestigate(float currentTime, float deltaTime)
+        {
+            if (target != null && !target.IsDead && CanSeePlayer(target, currentTime, false))
+            {
+                Alert(target, target.transform.position, currentTime);
+                return;
+            }
+
+            if (currentTime >= investigateUntilTime)
+            {
+                StartReturnToRoom();
+                return;
+            }
+
+            Vector3 destination = hasMoveTarget ? currentMoveTarget : (hasLastHeardPosition ? lastHeardPosition : lastKnownTargetPosition);
+            if (Vector3.Distance(Planar(transform.position), Planar(destination)) <= LastKnownPositionStopDistance)
+            {
+                ApplyGravityOnly(deltaTime);
+                return;
+            }
+
+            MoveTowardPoint(destination, moveSpeed * Mathf.Lerp(idleMoveSpeedMultiplier, 1f, 0.55f), deltaTime, true, true);
+        }
+
+        private void TickReturnToRoom(float deltaTime)
+        {
+            Vector3 destination = GetNearestHomePoint(transform.position);
+            if (!hasHomeRoom || Vector3.Distance(Planar(transform.position), Planar(destination)) <= homeReturnStopDistance)
+            {
+                hasMoveTarget = false;
+                SetState(GetAmbientState());
+                ApplyGravityOnly(deltaTime);
+                return;
+            }
+
+            MoveTowardPoint(destination, moveSpeed * Mathf.Max(0.25f, idleMoveSpeedMultiplier), deltaTime, true, true);
+        }
+
+        private void TickIdle(float deltaTime)
+        {
+            if (ambientBehavior == EnemyAmbientBehavior.Wander || ambientBehavior == EnemyAmbientBehavior.Patrol)
+            {
+                SetState(SimpleMeleeEnemyState.Patrol);
+                TickPatrol(Time.time, deltaTime);
+                return;
+            }
+
+            ApplyGravityOnly(deltaTime);
+        }
+
+        private void TickPatrol(float currentTime, float deltaTime)
+        {
+            if (patrolPoints.Count == 0)
+            {
+                AddPatrolPoint(hasHomeRoom ? homeRoomBounds.center : transform.position);
+            }
+
+            if (currentTime < patrolWaitUntilTime)
+            {
+                ApplyGravityOnly(deltaTime);
+                return;
+            }
+
+            if (!hasMoveTarget || !IsSafeRoomLocalTarget(currentMoveTarget))
+            {
+                ChooseNextPatrolTarget();
+            }
+
+            if (Vector3.Distance(Planar(transform.position), Planar(currentMoveTarget)) <= PatrolTargetStopDistance)
+            {
+                patrolWaitUntilTime = currentTime + patrolWaitSeconds;
+                ChooseNextPatrolTarget();
+                ApplyGravityOnly(deltaTime);
+                return;
+            }
+
+            MoveTowardPoint(currentMoveTarget, moveSpeed * Mathf.Max(0.05f, idleMoveSpeedMultiplier), deltaTime, true, true);
         }
 
         private void HandleDamaged(EnemyHealth enemyHealth, DamageInfo damageInfo, DamageResult result)
@@ -387,17 +671,31 @@ namespace FrontierDepths.Combat
             }
 
             PlayerHealth sourcePlayer = ResolvePlayerFromSource(gameplayEvent.sourceObject);
-            Alert(sourcePlayer, eventPosition, currentTime);
+            if (sourcePlayer != null && !sourcePlayer.IsDead && CanSeePlayer(sourcePlayer, currentTime, false))
+            {
+                Alert(sourcePlayer, sourcePlayer.transform.position, currentTime);
+                return true;
+            }
+
+            StartInvestigatingPosition(eventPosition, currentTime, investigateDuration);
             return true;
         }
 
-        private void MoveToward(Vector3 planarDirection)
+        private void MoveTowardPoint(Vector3 worldTarget, float speed, float deltaTime, bool restrictToHomeRoom, bool allowStuckRecovery)
         {
-            if (controller == null)
+            if (controller == null || deltaTime <= 0f)
             {
                 return;
             }
 
+            if (restrictToHomeRoom && !IsSafeRoomLocalTarget(worldTarget))
+            {
+                worldTarget = GetNearestHomePoint(worldTarget);
+            }
+
+            Vector3 before = transform.position;
+            Vector3 planarDirection = worldTarget - before;
+            planarDirection.y = 0f;
             Vector3 direction = planarDirection.sqrMagnitude > 0.001f ? planarDirection.normalized : Vector3.zero;
             if (direction.sqrMagnitude > 0.001f)
             {
@@ -409,14 +707,22 @@ namespace FrontierDepths.Combat
                 verticalVelocity = -1f;
             }
 
-            verticalVelocity += gravity * Time.deltaTime;
-            Vector3 velocity = direction * moveSpeed + Vector3.up * verticalVelocity;
-            controller.Move(velocity * Time.deltaTime);
+            verticalVelocity += gravity * deltaTime;
+            Vector3 velocity = direction * Mathf.Max(0f, speed) + Vector3.up * verticalVelocity;
+            controller.Move(velocity * deltaTime);
+
+            if (restrictToHomeRoom && hasHomeRoom && !IsInsideHomeRoom(transform.position, 0f))
+            {
+                transform.position = ClampToHomeRoom(transform.position, 0f);
+                ChooseNextPatrolTarget();
+            }
+
+            TrackStuckProgress(before, direction, deltaTime, allowStuckRecovery);
         }
 
-        private void ApplyGravityOnly()
+        private void ApplyGravityOnly(float deltaTime)
         {
-            if (controller == null)
+            if (controller == null || deltaTime <= 0f)
             {
                 return;
             }
@@ -426,8 +732,8 @@ namespace FrontierDepths.Combat
                 verticalVelocity = -1f;
             }
 
-            verticalVelocity += gravity * Time.deltaTime;
-            controller.Move(Vector3.up * verticalVelocity * Time.deltaTime);
+            verticalVelocity += gravity * deltaTime;
+            controller.Move(Vector3.up * verticalVelocity * deltaTime);
         }
 
         private bool ApplyWindupDamage(PlayerHealth playerHealth, float currentTime)
@@ -443,7 +749,15 @@ namespace FrontierDepths.Combat
             }
 
             health?.Flash(AttackColor, 0.12f);
-            DamageInfo damageInfo = new DamageInfo
+            DamageInfo damageInfo = CreateMeleeDamageInfo(playerHealth);
+            DamageResult result = playerHealth.ApplyDamage(damageInfo, currentTime);
+            SetState(SimpleMeleeEnemyState.AttackRecover);
+            return result.applied;
+        }
+
+        private DamageInfo CreateMeleeDamageInfo(PlayerHealth playerHealth)
+        {
+            return new DamageInfo
             {
                 amount = attackDamage,
                 source = gameObject,
@@ -453,9 +767,6 @@ namespace FrontierDepths.Combat
                 deliveryType = DamageDeliveryType.Melee,
                 tags = new[] { GameplayTag.Melee, GameplayTag.OnHit }
             };
-
-            DamageResult result = playerHealth.ApplyDamage(damageInfo, currentTime);
-            return result.applied;
         }
 
         private bool IsTargetInAttackRange(PlayerHealth playerHealth, float forgiveness)
@@ -470,11 +781,57 @@ namespace FrontierDepths.Combat
             return toTarget.magnitude <= attackRange + Mathf.Max(0f, forgiveness);
         }
 
-        private void CancelAttackWindup()
+        private void CancelAttackWindup(bool enterRecover)
         {
+            bool wasWindingUp = isAttackWindingUp;
             isAttackWindingUp = false;
             attackWindupCompleteTime = 0f;
             windupTarget = null;
+            if (wasWindingUp && enterRecover && state == SimpleMeleeEnemyState.AttackWindup)
+            {
+                SetState(SimpleMeleeEnemyState.AttackRecover);
+            }
+        }
+
+        private bool CanSeePlayer(PlayerHealth playerHealth, float currentTime, bool requireCone)
+        {
+            if (playerHealth == null || playerHealth.IsDead)
+            {
+                return false;
+            }
+
+            Vector3 toPlayer = playerHealth.transform.position - transform.position;
+            toPlayer.y = 0f;
+            float rangeMultiplier = state == SimpleMeleeEnemyState.Investigate ? 1.12f : 1f;
+            if (toPlayer.magnitude > detectionRange * rangeMultiplier)
+            {
+                return false;
+            }
+
+            if (requireCone && !IsInsideVisionCone(toPlayer))
+            {
+                return false;
+            }
+
+            return HasLineOfSightTo(playerHealth);
+        }
+
+        private bool IsInsideVisionCone(Vector3 planarDirection)
+        {
+            if (visionConeAngle >= 359f || planarDirection.sqrMagnitude <= 0.001f)
+            {
+                return true;
+            }
+
+            Vector3 forward = transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude <= 0.001f)
+            {
+                return true;
+            }
+
+            float angle = Vector3.Angle(forward.normalized, planarDirection.normalized);
+            return angle <= visionConeAngle * 0.5f;
         }
 
         private bool HasLineOfSightTo(PlayerHealth playerHealth)
@@ -484,8 +841,8 @@ namespace FrontierDepths.Combat
                 return true;
             }
 
-            Vector3 start = transform.position + Vector3.up * 0.65f;
-            Vector3 end = playerHealth.transform.position + Vector3.up * 0.65f;
+            Vector3 start = transform.position + Vector3.up * 0.85f;
+            Vector3 end = playerHealth.transform.position + Vector3.up * 0.85f;
             Vector3 direction = end - start;
             float distance = direction.magnitude;
             if (distance <= 0.01f)
@@ -514,6 +871,202 @@ namespace FrontierDepths.Combat
             return true;
         }
 
+        private void StartInvestigatingPosition(Vector3 position, float currentTime, float duration)
+        {
+            if (health == null || health.IsDead)
+            {
+                return;
+            }
+
+            lastHeardPosition = position;
+            hasLastHeardPosition = true;
+            currentMoveTarget = position;
+            hasMoveTarget = true;
+            investigateUntilTime = currentTime + Mathf.Max(0.1f, duration);
+            alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
+            SetState(SimpleMeleeEnemyState.Investigate);
+        }
+
+        private void StartSearchOrReturn(float currentTime)
+        {
+            if (hasLastKnownTargetPosition)
+            {
+                StartInvestigatingPosition(lastKnownTargetPosition, currentTime, searchDuration);
+                return;
+            }
+
+            StartReturnToRoom();
+        }
+
+        private void StartReturnToRoom()
+        {
+            hasMoveTarget = false;
+            target = null;
+            hasLastHeardPosition = false;
+            alertUntilTime = 0f;
+            SetState(hasHomeRoom ? SimpleMeleeEnemyState.ReturnToRoom : GetAmbientState());
+        }
+
+        private SimpleMeleeEnemyState GetAmbientState()
+        {
+            return ambientBehavior switch
+            {
+                EnemyAmbientBehavior.SleepGuard => SimpleMeleeEnemyState.Sleep,
+                EnemyAmbientBehavior.Wander => SimpleMeleeEnemyState.Patrol,
+                EnemyAmbientBehavior.Patrol => SimpleMeleeEnemyState.Patrol,
+                _ => SimpleMeleeEnemyState.Idle
+            };
+        }
+
+        private void ChooseNextPatrolTarget()
+        {
+            if (patrolPoints.Count == 0)
+            {
+                currentMoveTarget = transform.position;
+                hasMoveTarget = true;
+                return;
+            }
+
+            int attempts = Mathf.Max(1, patrolPoints.Count);
+            for (int i = 0; i < attempts; i++)
+            {
+                patrolCursor = (patrolCursor + 1) % patrolPoints.Count;
+                Vector3 candidate = patrolPoints[patrolCursor];
+                if (IsSafeRoomLocalTarget(candidate))
+                {
+                    currentMoveTarget = candidate;
+                    hasMoveTarget = true;
+                    return;
+                }
+            }
+
+            currentMoveTarget = GetNearestHomePoint(transform.position);
+            hasMoveTarget = true;
+        }
+
+        private void AddPatrolPoint(Vector3 point)
+        {
+            if (hasHomeRoom && !IsSafeRoomLocalTarget(point))
+            {
+                return;
+            }
+
+            for (int i = 0; i < patrolPoints.Count; i++)
+            {
+                if ((Planar(patrolPoints[i]) - Planar(point)).sqrMagnitude < 1f)
+                {
+                    return;
+                }
+            }
+
+            patrolPoints.Add(new Vector3(point.x, transform.position.y, point.z));
+        }
+
+        private bool IsSafeRoomLocalTarget(Vector3 point)
+        {
+            return !hasHomeRoom || IsInsideHomeRoom(point, DoorwayEdgeInset);
+        }
+
+        private bool IsInsideHomeRoom(Vector3 point, float inset)
+        {
+            if (!hasHomeRoom)
+            {
+                return true;
+            }
+
+            float safeInset = Mathf.Max(0f, inset);
+            return point.x >= homeRoomBounds.min.x + safeInset &&
+                   point.x <= homeRoomBounds.max.x - safeInset &&
+                   point.z >= homeRoomBounds.min.z + safeInset &&
+                   point.z <= homeRoomBounds.max.z - safeInset;
+        }
+
+        private Vector3 ClampToHomeRoom(Vector3 point, float inset)
+        {
+            if (!hasHomeRoom)
+            {
+                return point;
+            }
+
+            float safeInset = Mathf.Max(0f, inset);
+            return new Vector3(
+                Mathf.Clamp(point.x, homeRoomBounds.min.x + safeInset, homeRoomBounds.max.x - safeInset),
+                point.y,
+                Mathf.Clamp(point.z, homeRoomBounds.min.z + safeInset, homeRoomBounds.max.z - safeInset));
+        }
+
+        private Vector3 GetNearestHomePoint(Vector3 fromPosition)
+        {
+            if (patrolPoints.Count == 0)
+            {
+                return hasHomeRoom ? ClampToHomeRoom(homeRoomBounds.center, HomeBoundsInset) : fromPosition;
+            }
+
+            Vector3 best = patrolPoints[0];
+            float bestDistance = (Planar(best) - Planar(fromPosition)).sqrMagnitude;
+            for (int i = 1; i < patrolPoints.Count; i++)
+            {
+                float distance = (Planar(patrolPoints[i]) - Planar(fromPosition)).sqrMagnitude;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = patrolPoints[i];
+                }
+            }
+
+            return best;
+        }
+
+        private void TrackStuckProgress(Vector3 before, Vector3 direction, float deltaTime, bool allowStuckRecovery)
+        {
+            if (!allowStuckRecovery || direction.sqrMagnitude <= 0.001f)
+            {
+                stuckTimer = 0f;
+                lastMoveSamplePosition = transform.position;
+                return;
+            }
+
+            float moved = (Planar(transform.position) - Planar(before)).magnitude;
+            if (moved <= StuckProgressEpsilon)
+            {
+                stuckTimer += deltaTime;
+            }
+            else
+            {
+                stuckTimer = 0f;
+            }
+
+            lastMoveSamplePosition = transform.position;
+            if (stuckTimer < stuckRecoverySeconds)
+            {
+                return;
+            }
+
+            stuckTimer = 0f;
+            stuckRecoveryCount++;
+            if (debugStateLabelsVisible)
+            {
+                Debug.Log($"Enemy stuck recovery {name}: State={state} Home={HomeRoomId} Count={stuckRecoveryCount}");
+            }
+
+            if (state == SimpleMeleeEnemyState.Investigate)
+            {
+                currentMoveTarget = hasLastHeardPosition ? lastHeardPosition : GetNearestHomePoint(transform.position);
+                if (hasHomeRoom && !IsInsideHomeRoom(currentMoveTarget, 0f))
+                {
+                    currentMoveTarget = GetNearestHomePoint(transform.position);
+                }
+            }
+            else if (state == SimpleMeleeEnemyState.ReturnToRoom && enableDebugStuckSnapRecovery && hasHomeRoom)
+            {
+                transform.position = GetNearestHomePoint(transform.position);
+            }
+            else
+            {
+                ChooseNextPatrolTarget();
+            }
+        }
+
         private void SetState(SimpleMeleeEnemyState nextState)
         {
             if (state == nextState)
@@ -537,8 +1090,18 @@ namespace FrontierDepths.Combat
                 case SimpleMeleeEnemyState.Chase:
                     health.SetStateColor(GetChaseColor());
                     break;
-                case SimpleMeleeEnemyState.Attack:
+                case SimpleMeleeEnemyState.Investigate:
+                    health.SetStateColor(Color.Lerp(baseBodyColor, InvestigateColor, 0.42f));
+                    break;
+                case SimpleMeleeEnemyState.ReturnToRoom:
+                    health.SetStateColor(Color.Lerp(baseBodyColor, ReturnColor, 0.28f));
+                    break;
+                case SimpleMeleeEnemyState.AttackWindup:
+                case SimpleMeleeEnemyState.AttackRecover:
                     health.SetStateColor(AttackColor);
+                    break;
+                case SimpleMeleeEnemyState.Sleep:
+                    health.SetStateColor(Color.Lerp(baseBodyColor, Color.black, 0.18f));
                     break;
                 case SimpleMeleeEnemyState.Dead:
                     break;
@@ -571,10 +1134,12 @@ namespace FrontierDepths.Combat
 
         private void HandleDied(EnemyHealth enemyHealth)
         {
-            CancelAttackWindup();
+            CancelAttackWindup(false);
             target = null;
             alertUntilTime = 0f;
             hasLastKnownTargetPosition = false;
+            hasLastHeardPosition = false;
+            hasMoveTarget = false;
             SetState(SimpleMeleeEnemyState.Dead);
             UnregisterActiveEnemy();
             UnsubscribeGameplayEvents();
@@ -683,13 +1248,46 @@ namespace FrontierDepths.Combat
                 : null;
             return run == null || run.floorIndex <= 0 || run.floorIndex == gameplayEvent.floorIndex;
         }
+
+        private static bool IsCombatState(SimpleMeleeEnemyState nextState)
+        {
+            return nextState == SimpleMeleeEnemyState.Investigate ||
+                   nextState == SimpleMeleeEnemyState.Chase ||
+                   nextState == SimpleMeleeEnemyState.AttackWindup ||
+                   nextState == SimpleMeleeEnemyState.AttackRecover ||
+                   nextState == SimpleMeleeEnemyState.ReturnToRoom;
+        }
+
+        private static bool IsAttackState(SimpleMeleeEnemyState nextState)
+        {
+            return nextState == SimpleMeleeEnemyState.AttackWindup ||
+                   nextState == SimpleMeleeEnemyState.AttackRecover;
+        }
+
+        private static Vector3 Planar(Vector3 value)
+        {
+            return new Vector3(value.x, 0f, value.z);
+        }
+    }
+
+    public enum EnemyAmbientBehavior
+    {
+        Idle,
+        Wander,
+        Patrol,
+        SleepGuard
     }
 
     public enum SimpleMeleeEnemyState
     {
         Idle,
+        Sleep,
+        Patrol,
+        Investigate,
         Chase,
-        Attack,
+        AttackWindup,
+        AttackRecover,
+        ReturnToRoom,
         Dead
     }
 }

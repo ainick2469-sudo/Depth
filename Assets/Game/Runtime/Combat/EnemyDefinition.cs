@@ -26,6 +26,15 @@ namespace FrontierDepths.Combat
         public float detectionRange = 45f;
         public float hearingRadiusMultiplier = 1f;
         public float groupAlertRadius = 30f;
+        public EnemyAmbientBehavior ambientBehavior = EnemyAmbientBehavior.Patrol;
+        public float visionConeAngle = 120f;
+        public float idleMoveSpeedMultiplier = 0.55f;
+        public float patrolWaitSeconds = 1.1f;
+        public float investigateDuration = 4f;
+        public float lostSightGraceDuration = 1f;
+        public float searchDuration = 3f;
+        public float homeReturnStopDistance = 1.1f;
+        public float stuckRecoverySeconds = 1.4f;
         public Vector3 visualScale = new Vector3(1.25f, 1.55f, 1.25f);
         public Color bodyColor = new Color(0.72f, 0.28f, 0.22f, 1f);
         public float spawnWeight = 1f;

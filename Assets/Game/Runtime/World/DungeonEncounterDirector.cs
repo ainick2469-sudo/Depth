@@ -24,7 +24,14 @@ namespace FrontierDepths.World
             dropService = new EncounterDropService(runtimeRoot);
         }
 
-        public DungeonEncounterSummary Summary => summary;
+        public DungeonEncounterSummary Summary
+        {
+            get
+            {
+                RefreshSummaryStateCounts();
+                return summary;
+            }
+        }
         public EncounterDropService DropService => dropService;
 
         public DungeonEncounterSummary Spawn(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions, bool clearExisting)
@@ -46,7 +53,8 @@ namespace FrontierDepths.World
             for (int i = 0; i < plan.spawns.Count; i++)
             {
                 DungeonEncounterSpawn spawn = plan.spawns[i];
-                GameObject enemy = CreateEnemy(enemyRoot, spawn.position, spawn.definition);
+                DungeonRoomBuildRecord room = buildResult.FindRoom(spawn.roomId);
+                GameObject enemy = CreateEnemy(enemyRoot, spawn.position, spawn.definition, room, BuildRoomPatrolPoints(buildResult, room));
                 EnemyHealth enemyHealth = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
                 if (enemyHealth == null)
                 {
@@ -58,6 +66,7 @@ namespace FrontierDepths.World
             }
 
             summary.livingEnemyCount = livingEnemies.Count;
+            RefreshSummaryStateCounts();
             return summary;
         }
 
@@ -94,6 +103,7 @@ namespace FrontierDepths.World
             dropService.Clear(immediate);
             dropService.SuppressDrops = false;
             summary.livingEnemyCount = 0;
+            summary.enemyStateCounts.Clear();
         }
 
         public static DungeonEncounterPlan BuildPlan(DungeonBuildResult buildResult, IList<Vector3> occupiedPositions, int seed)
@@ -969,6 +979,25 @@ namespace FrontierDepths.World
             }
 
             summary.livingEnemyCount = livingEnemies.Count;
+            RefreshSummaryStateCounts();
+        }
+
+        private void RefreshSummaryStateCounts()
+        {
+            summary.enemyStateCounts.Clear();
+            for (int i = 0; i < livingEnemies.Count; i++)
+            {
+                SimpleMeleeEnemyController melee = livingEnemies[i] != null
+                    ? livingEnemies[i].GetComponent<SimpleMeleeEnemyController>()
+                    : null;
+                if (melee == null)
+                {
+                    continue;
+                }
+
+                summary.enemyStateCounts.TryGetValue(melee.State, out int count);
+                summary.enemyStateCounts[melee.State] = count + 1;
+            }
         }
 
         private static Transform GetOrCreateEnemyRoot(Transform runtimeRoot)
@@ -985,6 +1014,16 @@ namespace FrontierDepths.World
         }
 
         internal static GameObject CreateEnemy(Transform parent, Vector3 position, EnemyDefinition definition)
+        {
+            return CreateEnemy(parent, position, definition, null, null);
+        }
+
+        internal static GameObject CreateEnemy(
+            Transform parent,
+            Vector3 position,
+            EnemyDefinition definition,
+            DungeonRoomBuildRecord homeRoom,
+            IReadOnlyList<Vector3> patrolPoints)
         {
             EnemyDefinition safeDefinition = definition != null
                 ? definition
@@ -1020,10 +1059,39 @@ namespace FrontierDepths.World
             health.Configure(safeDefinition);
             SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
             melee.Configure(safeDefinition);
+            if (homeRoom != null)
+            {
+                melee.ConfigureHomeRoom(homeRoom.nodeId, homeRoom.bounds, patrolPoints);
+            }
+            else
+            {
+                melee.ConfigureHomeRoom(string.Empty, new Bounds(position, new Vector3(12f, 4f, 12f)), new[] { position });
+            }
 
             int defaultLayer = LayerMask.NameToLayer("Default");
             DungeonSceneController.SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
             return enemy;
+        }
+
+        private static List<Vector3> BuildRoomPatrolPoints(DungeonBuildResult buildResult, DungeonRoomBuildRecord room)
+        {
+            List<Vector3> points = new List<Vector3>();
+            if (buildResult == null || room == null)
+            {
+                return points;
+            }
+
+            points.Add(room.bounds.center);
+            for (int i = 0; i < buildResult.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawn = buildResult.spawnPoints[i];
+                if (spawn.nodeId == room.nodeId && spawn.category == DungeonSpawnPointCategory.EnemyMelee)
+                {
+                    points.Add(spawn.position);
+                }
+            }
+
+            return points;
         }
 
         private sealed class DungeonEncounterRoomCandidate
@@ -1157,7 +1225,8 @@ namespace FrontierDepths.World
                 warning = warning,
                 roomAssignments = new List<DungeonEncounterRoomAssignment>(assignments),
                 archetypeCounts = new Dictionary<EnemyArchetype, int>(archetypeCounts),
-                templateCounts = new Dictionary<string, int>(templateCounts)
+                templateCounts = new Dictionary<string, int>(templateCounts),
+                enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>()
             };
         }
     }
@@ -1203,6 +1272,7 @@ namespace FrontierDepths.World
         public List<DungeonEncounterRoomAssignment> roomAssignments = new List<DungeonEncounterRoomAssignment>();
         public Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
         public Dictionary<string, int> templateCounts = new Dictionary<string, int>();
+        public Dictionary<SimpleMeleeEnemyState, int> enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>();
 
         public string ToDebugString()
         {
@@ -1210,7 +1280,7 @@ namespace FrontierDepths.World
                 $"Encounter Director Lite | Floor {floorIndex} | Source {spawnSource} | " +
                 $"Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | " +
                 $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}/{eligibleRoomCount} | " +
-                $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Templates {FormatTemplates()}" +
+                $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Templates {FormatTemplates()} | States {FormatStates()}" +
                 (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
         }
 
@@ -1239,6 +1309,22 @@ namespace FrontierDepths.World
 
             List<string> parts = new List<string>();
             foreach (KeyValuePair<string, int> pair in templateCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatStates()
+        {
+            if (enemyStateCounts == null || enemyStateCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<SimpleMeleeEnemyState, int> pair in enemyStateCounts)
             {
                 parts.Add($"{pair.Key}:{pair.Value}");
             }
