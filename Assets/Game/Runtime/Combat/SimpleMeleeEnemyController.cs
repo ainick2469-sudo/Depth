@@ -294,6 +294,7 @@ namespace FrontierDepths.Combat
 
         internal void TickForTests(float currentTime, float deltaTime)
         {
+            patrolWaitUntilTime = Mathf.Min(patrolWaitUntilTime, currentTime);
             Tick(currentTime, Mathf.Max(0f, deltaTime), false);
         }
 

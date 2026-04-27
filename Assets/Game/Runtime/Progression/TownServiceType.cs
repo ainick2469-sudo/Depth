@@ -6,6 +6,7 @@ namespace FrontierDepths.Progression
         Blacksmith,
         CurioDealer,
         BountyBoard,
-        Stash
+        Stash,
+        Saloon
     }
 }

@@ -31,6 +31,9 @@ namespace FrontierDepths.Progression
         UnlockWeapon,
         AcceptBounty,
         StoreHeirloom,
-        GainCurioDust
+        GainCurioDust,
+        TurnInBounty,
+        RestockAmmo,
+        BuyRumor
     }
 }

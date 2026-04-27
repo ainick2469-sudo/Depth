@@ -165,6 +165,8 @@ namespace FrontierDepths.Combat
             target.enemyId = source.enemyId;
             target.displayName = source.displayName;
             target.archetype = source.archetype;
+            target.attackFamily = source.attackFamily;
+            target.visualProfileId = source.visualProfileId;
             target.tier = source.tier;
             target.maxHealth = source.maxHealth;
             target.moveSpeed = source.moveSpeed;

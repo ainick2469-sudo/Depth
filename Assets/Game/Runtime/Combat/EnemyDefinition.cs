@@ -7,7 +7,35 @@ namespace FrontierDepths.Combat
         Slime,
         Bat,
         GoblinGrunt,
-        GoblinBrute
+        GoblinBrute,
+        CaveRat,
+        DustMite,
+        TrainingSkeleton,
+        Skitter,
+        SpitterSlime,
+        BoneArcher,
+        ShieldGoblin,
+        BombBeetle,
+        OrcGrunt,
+        RiftHound,
+        Stoneback,
+        HexCaster,
+        IronOgre,
+        HexWitch,
+        GraveKnight,
+        RiftStalker
+    }
+
+    public enum EnemyAttackFamily
+    {
+        MeleeRush,
+        FastSkirmisher,
+        RangedSpit,
+        Charger,
+        TankBruiser,
+        CasterSupport,
+        Ambusher,
+        AreaDenial
     }
 
     public enum EnemyMobilityRole
@@ -33,6 +61,8 @@ namespace FrontierDepths.Combat
         public string enemyId = "enemy.mire_hound";
         public string displayName = "Mire Hound";
         public EnemyArchetype archetype = EnemyArchetype.GoblinGrunt;
+        public EnemyAttackFamily attackFamily = EnemyAttackFamily.MeleeRush;
+        public string visualProfileId = "capsule";
         public int tier = 1;
         public float maxHealth = 55f;
         public float moveSpeed = 4.5f;

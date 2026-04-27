@@ -32,6 +32,7 @@ namespace FrontierDepths.Progression
                 return false;
             }
 
+            message = string.Empty;
             bool changed = offer.action switch
             {
                 ShopOfferAction.BuyPortalSigil => BuyPortalSigil(),
@@ -39,13 +40,19 @@ namespace FrontierDepths.Progression
                 ShopOfferAction.AcceptBounty => profileService.AcceptBounty(offer.rewardId),
                 ShopOfferAction.StoreHeirloom => StoreHeirloom(offer.rewardId),
                 ShopOfferAction.GainCurioDust => GainCurioDust(),
+                ShopOfferAction.TurnInBounty => TurnInBounty(offer.rewardId, out message),
+                ShopOfferAction.RestockAmmo => RestockAmmo(),
+                ShopOfferAction.BuyRumor => BuyRumor(),
                 _ => false
             };
 
             if (!changed)
             {
                 profileService.AddGold(offer.cost);
-                message = "Nothing changed.";
+                if (string.IsNullOrWhiteSpace(message))
+                {
+                    message = "Nothing changed.";
+                }
                 return false;
             }
 
@@ -74,6 +81,31 @@ namespace FrontierDepths.Progression
         private bool GainCurioDust()
         {
             profileService.Current.curioDust += 1;
+            profileService.Save();
+            return true;
+        }
+
+        private bool TurnInBounty(string bountyId, out string message)
+        {
+            return profileService.TryTurnInBounty(bountyId, out message);
+        }
+
+        private bool RestockAmmo()
+        {
+            RunState run = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService?.Current : null;
+            if (run == null || run.weaponAmmo == null)
+            {
+                return false;
+            }
+
+            run.weaponAmmo.reserveAmmo = run.weaponAmmo.maxReserveAmmo;
+            GameBootstrap.Instance.RunService.Save();
+            return true;
+        }
+
+        private bool BuyRumor()
+        {
+            profileService.Current.classXp += 15;
             profileService.Save();
             return true;
         }

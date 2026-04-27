@@ -1539,15 +1539,22 @@ namespace FrontierDepths.World
             };
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
+            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(node.nodeKind, activeBuildResult != null ? activeBuildResult.floorIndex : 1, activeBuildResult != null ? activeBuildResult.seed : 0, node.nodeId);
+            if (purpose != null)
+            {
+                roomRecord.purposeId = purpose.purposeId;
+                roomRecord.purposeDisplayName = purpose.displayName;
+                roomRecord.purposeIcon = purpose.minimapIcon;
+            }
             activeBuildResult?.rooms.Add(roomRecord);
 
             Dictionary<Vector2Int, float> doorwayWidths = GetDoorwayWidths(node, graph);
-            CreateMergedFloors(roomRoot.transform, floorCells, GetFloorColor(node.nodeKind));
+            CreateMergedFloors(roomRoot.transform, floorCells, purpose != null ? purpose.color : GetFloorColor(node.nodeKind));
             roomRecord.hasFloor = floorCells.Count > 0;
             CreateRoomWalls(roomRoot.transform, node, graph, floorCells, doorwayWidths, roomRecord);
 
             CreateInteriorFeature(roomRoot.transform, node, floorCells);
-            CreateNodeInteractables(roomRoot.transform, node);
+            CreateNodeInteractables(roomRoot.transform, node, purpose);
         }
 
         private void CreateCorridor(DungeonNode a, DungeonNode b)
@@ -2943,7 +2950,7 @@ namespace FrontierDepths.World
             ApplyColor(ramp.GetComponent<Renderer>(), color);
         }
 
-        private void CreateNodeInteractables(Transform roomRoot, DungeonNode node)
+        private void CreateNodeInteractables(Transform roomRoot, DungeonNode node, RoomPurposeDefinition purpose)
         {
             if (node.nodeKind == DungeonNodeKind.TransitDown)
             {
@@ -2968,35 +2975,22 @@ namespace FrontierDepths.World
                 bool requiredReturnRoute = activeBuildResult != null && activeBuildResult.floorIndex == 1;
                 RecordInteractable(node.nodeId, "ReturnLift", stairs, false, true, requiredReturnRoute);
             }
-            else if (node.nodeKind == DungeonNodeKind.Landmark)
+            else if (purpose != null)
             {
                 CreateRoomPurposeInteractable(
                     roomRoot,
                     node.nodeId,
-                    "green_cache",
-                    "Cache",
-                    "Open Cache",
+                    purpose.purposeId,
+                    purpose.displayName,
+                    purpose.prompt,
                     new Vector3(0f, 1f, 0f),
-                    new Color(0.25f, 0.9f, 0.38f, 1f),
-                    gold: 8,
-                    ammo: 12,
-                    heal: 10f,
-                    healthRisk: 0f);
-            }
-            else if (node.nodeKind == DungeonNodeKind.Secret)
-            {
-                CreateRoomPurposeInteractable(
-                    roomRoot,
-                    node.nodeId,
-                    "purple_shrine",
-                    "Strange Shrine",
-                    "Touch Strange Shrine",
-                    new Vector3(0f, 1f, 0f),
-                    new Color(0.7f, 0.3f, 0.95f, 1f),
-                    gold: 25,
-                    ammo: 10,
-                    heal: 0f,
-                    healthRisk: 8f);
+                    purpose.color,
+                    gold: purpose.gold,
+                    ammo: purpose.ammo,
+                    heal: purpose.heal,
+                    healthRisk: purpose.healthRisk,
+                    resultText: purpose.resultText,
+                    effect: purpose.effect);
             }
         }
 
@@ -3011,7 +3005,9 @@ namespace FrontierDepths.World
             int gold,
             int ammo,
             float heal,
-            float healthRisk)
+            float healthRisk,
+            string resultText,
+            RoomPurposeEffect effect)
         {
             Transform purposeRoot = GetOrCreateRuntimeRootChild("RuntimeRoomPurposeInteractables");
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -3028,7 +3024,7 @@ namespace FrontierDepths.World
             }
 
             string claimId = BuildRoomPurposeClaimId(nodeId, purposeType);
-            marker.AddComponent<RoomPurposeInteractable>().Configure(claimId, displayName, prompt, gold, ammo, heal, healthRisk);
+            marker.AddComponent<RoomPurposeInteractable>().Configure(claimId, displayName, prompt, gold, ammo, heal, healthRisk, resultText, effect);
             CreateFloatingLabel(marker.transform, displayName, color);
             RecordInteractable(nodeId, purposeType, marker, false, false, false);
         }
@@ -3056,16 +3052,7 @@ namespace FrontierDepths.World
 
         private static void CreateFloatingLabel(Transform parent, string label, Color color)
         {
-            GameObject labelObject = new GameObject("PurposeLabel", typeof(TextMesh));
-            labelObject.transform.SetParent(parent, false);
-            labelObject.transform.localPosition = new Vector3(0f, 1.5f, 0f);
-            TextMesh text = labelObject.GetComponent<TextMesh>();
-            text.text = label;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Center;
-            text.characterSize = 0.24f;
-            text.fontSize = 36;
-            text.color = color;
+            FrontierDepths.Core.WorldLabelBillboard.Create(parent, "PurposeLabel", label, new Vector3(0f, 1.5f, 0f), color, 22f, true);
         }
 
         private void CreatePurposePickup(
@@ -3102,6 +3089,7 @@ namespace FrontierDepths.World
                     break;
             }
 
+            pickup.AddComponent<PickupDropLandingController>().BeginLanding(pickup.transform.position);
             RecordInteractable(nodeId, interactableType, pickup, false, false, false);
         }
 

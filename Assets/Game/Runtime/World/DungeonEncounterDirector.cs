@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FrontierDepths.Combat;
+using FrontierDepths.Core;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -68,6 +69,12 @@ namespace FrontierDepths.World
                 if (enemyHealth == null)
                 {
                     continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(spawn.bountyId))
+                {
+                    BountyTargetMarker marker = enemy.AddComponent<BountyTargetMarker>();
+                    marker.Configure(spawn.bountyId, spawn.bountyTitle, spawn.bountyTargetName);
                 }
 
                 RegisterEnemy(enemyHealth);
@@ -220,6 +227,7 @@ namespace FrontierDepths.World
                 }
             }
 
+            InjectBountyTargets(plan, buildResult, safeSpawnsByRoom, definitions, random);
             plan.spawnedCount = plan.spawns.Count;
             if (plan.spawnedCount < budget.min)
             {
@@ -784,11 +792,19 @@ namespace FrontierDepths.World
                 new EncounterTemplate("SoloSlime", 1, 0, 1, EnemyArchetype.Slime),
                 new EncounterTemplate("SoloBat", 1, 0, 1, EnemyArchetype.Bat),
                 new EncounterTemplate("SoloGoblinGrunt", 1, 0, 1, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("SoloCaveRat", 1, 0, 1, EnemyArchetype.CaveRat),
+                new EncounterTemplate("SoloTrainingSkeleton", 1, 0, 1, EnemyArchetype.TrainingSkeleton),
                 new EncounterTemplate("Easy_2Slimes", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Slime),
                 new EncounterTemplate("Easy_SlimeBat", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Easy_RatMite", 1, 0, 5, EnemyArchetype.CaveRat, EnemyArchetype.DustMite),
+                new EncounterTemplate("Easy_SkitterSlime", 2, 0, 5, EnemyArchetype.Skitter, EnemyArchetype.Slime),
                 new EncounterTemplate("Medium_GoblinSlime", 1, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime),
                 new EncounterTemplate("Medium_2BatsSlime", 1, 0, 4, EnemyArchetype.Bat, EnemyArchetype.Bat, EnemyArchetype.Slime),
                 new EncounterTemplate("Medium_2SlimesBat", 1, 0, 5, EnemyArchetype.Slime, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Medium_SpitterEscort", 3, 0, 5, EnemyArchetype.SpitterSlime, EnemyArchetype.Slime),
+                new EncounterTemplate("Medium_BoneArcherGuard", 3, 0, 4, EnemyArchetype.BoneArcher, EnemyArchetype.TrainingSkeleton),
+                new EncounterTemplate("Medium_ShieldGoblinPair", 3, 0, 4, EnemyArchetype.ShieldGoblin, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("Medium_BombBeetleSkitter", 4, 0, 4, EnemyArchetype.BombBeetle, EnemyArchetype.Skitter),
                 new EncounterTemplate("Hard_2GoblinGrunts", 2, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt),
                 new EncounterTemplate("Hard_Goblin2Slimes", 2, 0, 5, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime, EnemyArchetype.Slime),
                 new EncounterTemplate("Depth_BruteBat", 3, 0, 4, EnemyArchetype.GoblinBrute, EnemyArchetype.Bat),
@@ -796,7 +812,13 @@ namespace FrontierDepths.World
                 new EncounterTemplate("Deep_GoblinBatSlime", 4, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
                 new EncounterTemplate("Deep_BruteEscort", 5, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat),
                 new EncounterTemplate("Deep_LargeSkirmish", 6, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Deep_LandmarkPressure", 6, 0, 3, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime)
+                new EncounterTemplate("Deep_LandmarkPressure", 6, 0, 3, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
+                new EncounterTemplate("Deep_OrcRiftHound", 6, 0, 5, EnemyArchetype.OrcGrunt, EnemyArchetype.RiftHound),
+                new EncounterTemplate("Deep_StoneCaster", 7, 0, 4, EnemyArchetype.Stoneback, EnemyArchetype.HexCaster),
+                new EncounterTemplate("Deep_TrapWardenPack", 7, 0, 4, EnemyArchetype.BombBeetle, EnemyArchetype.RiftHound, EnemyArchetype.SpitterSlime),
+                new EncounterTemplate("Late_OgreEscort", 11, 0, 4, EnemyArchetype.IronOgre, EnemyArchetype.HexWitch),
+                new EncounterTemplate("Late_GraveKnights", 11, 0, 3, EnemyArchetype.GraveKnight, EnemyArchetype.GraveKnight),
+                new EncounterTemplate("Late_RiftStalkerHunt", 12, 0, 4, EnemyArchetype.RiftStalker, EnemyArchetype.RiftHound, EnemyArchetype.HexCaster)
             };
         }
 
@@ -965,7 +987,8 @@ namespace FrontierDepths.World
                 EnemyArchetype.Slime => floorIndex <= 1 ? 55f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 18f : 10f)),
                 EnemyArchetype.Bat => floorIndex <= 1 ? 25f : (floorIndex == 2 ? 30f : (floorIndex <= 5 ? 30f : 24f)),
                 EnemyArchetype.GoblinBrute => floorIndex < 3 ? 0f : (floorIndex == 3 ? 10f : (floorIndex <= 5 ? 22f : 30f)),
-                _ => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 45f : 52f))
+                EnemyArchetype.GoblinGrunt => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 45f : 52f)),
+                _ => definition.spawnWeight * GetTierBandMultiplier(definition.tier, floorIndex)
             };
 
             if (currentGroup != null && currentGroup.Count > 0)
@@ -980,6 +1003,307 @@ namespace FrontierDepths.World
             }
 
             return Mathf.Max(0f, weight);
+        }
+
+        private static void InjectBountyTargets(
+            DungeonEncounterPlan plan,
+            DungeonBuildResult buildResult,
+            Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom,
+            List<EnemyDefinition> definitions,
+            System.Random random)
+        {
+            ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
+            ProfileState profile = profileService != null ? profileService.Current : null;
+            if (profile == null || profile.bounties == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < profile.bounties.Count; i++)
+            {
+                BountyRuntimeState state = profile.bounties[i];
+                if (state == null)
+                {
+                    continue;
+                }
+
+                state.Normalize();
+                if (state.state != BountyState.Accepted && state.state != BountyState.Spawned)
+                {
+                    continue;
+                }
+
+                BountyDefinition bounty = BountyCatalog.Get(state.bountyId);
+                if (bounty == null || !bounty.IsEligibleForFloor(buildResult.floorIndex))
+                {
+                    continue;
+                }
+
+                if (state.state == BountyState.Spawned &&
+                    state.spawnedFloorIndex > 0 &&
+                    state.spawnedFloorIndex != buildResult.floorIndex)
+                {
+                    continue;
+                }
+
+                if (HasBountySpawn(plan, bounty.bountyId))
+                {
+                    continue;
+                }
+
+                if (!TryBuildBountySpawn(plan, buildResult, safeSpawnsByRoom, definitions, bounty, state, random, out DungeonEncounterSpawn spawn))
+                {
+                    AppendWarning(plan, $"Bounty target '{bounty.bountyId}' could not find a safe non-transit room on floor {buildResult.floorIndex}.");
+                    continue;
+                }
+
+                plan.spawns.Add(spawn);
+                plan.AddArchetype(spawn.definition.archetype);
+                plan.AddMobilityRole(spawn.mobilityRole);
+                plan.bountyTargetCount++;
+                plan.bountyTargetIds.Add(bounty.bountyId);
+                BountyObjectiveTracker.MarkSpawned(profile, bounty.bountyId, buildResult.floorIndex, spawn.roomId, spawn.bountyTargetName);
+                profileService.Save();
+            }
+        }
+
+        private static bool HasBountySpawn(DungeonEncounterPlan plan, string bountyId)
+        {
+            for (int i = 0; i < plan.spawns.Count; i++)
+            {
+                if (string.Equals(plan.spawns[i].bountyId, bountyId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryBuildBountySpawn(
+            DungeonEncounterPlan plan,
+            DungeonBuildResult buildResult,
+            Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom,
+            List<EnemyDefinition> definitions,
+            BountyDefinition bounty,
+            BountyRuntimeState state,
+            System.Random random,
+            out DungeonEncounterSpawn spawn)
+        {
+            spawn = null;
+            EnemyDefinition baseDefinition = ResolveBountyBaseDefinition(definitions, bounty);
+            if (baseDefinition == null)
+            {
+                return false;
+            }
+
+            DungeonRoomBuildRecord room = SelectBountyRoom(buildResult, safeSpawnsByRoom, state.targetRoomId, random);
+            if (room == null || !safeSpawnsByRoom.TryGetValue(room.nodeId, out List<DungeonSpawnPointRecord> roomSpawns) || roomSpawns.Count == 0)
+            {
+                return false;
+            }
+
+            List<DungeonSpawnPointRecord> spreadSpawns = SelectSpreadSpawns(roomSpawns, Mathf.Min(roomSpawns.Count, 4));
+            DungeonSpawnPointRecord selected = null;
+            for (int i = 0; i < spreadSpawns.Count; i++)
+            {
+                if (!IsNearExistingEncounterSpawn(plan, spreadSpawns[i].position))
+                {
+                    selected = spreadSpawns[i];
+                    break;
+                }
+            }
+
+            selected ??= spreadSpawns.Count > 0 ? spreadSpawns[0] : roomSpawns[0];
+            EnemyDefinition bountyDefinition = CreateBountyDefinition(baseDefinition, bounty);
+            EnemyMobilityRole role = bountyDefinition.attackFamily == EnemyAttackFamily.FastSkirmisher || bountyDefinition.attackFamily == EnemyAttackFamily.Ambusher
+                ? EnemyMobilityRole.Hunter
+                : EnemyMobilityRole.RoomGuard;
+
+            spawn = new DungeonEncounterSpawn
+            {
+                roomId = room.nodeId,
+                templateId = "BountyTarget",
+                role = DungeonEncounterRoomRole.LandmarkFight,
+                position = selected.position,
+                definition = bountyDefinition,
+                mobilityRole = role,
+                variantId = "bounty",
+                roamingRoute = BuildRoamingRoute(buildResult, room, selected.position, role, random),
+                behaviorSeed = BuildEnemyBehaviorSeed(buildResult.seed, buildResult.floorIndex, room.nodeId, 97 + plan.spawns.Count, selected.position, bountyDefinition.archetype),
+                bountyId = bounty.bountyId,
+                bountyTitle = bounty.title,
+                bountyTargetName = bounty.targetName
+            };
+            return true;
+        }
+
+        private static DungeonRoomBuildRecord SelectBountyRoom(
+            DungeonBuildResult buildResult,
+            Dictionary<string, List<DungeonSpawnPointRecord>> safeSpawnsByRoom,
+            string preferredRoomId,
+            System.Random random)
+        {
+            if (!string.IsNullOrWhiteSpace(preferredRoomId))
+            {
+                DungeonRoomBuildRecord existing = buildResult.FindRoom(preferredRoomId);
+                if (IsValidBountyRoom(existing) && safeSpawnsByRoom.ContainsKey(existing.nodeId))
+                {
+                    return existing;
+                }
+            }
+
+            List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = buildResult.rooms[i];
+                if (IsValidBountyRoom(room) && safeSpawnsByRoom.ContainsKey(room.nodeId))
+                {
+                    rooms.Add(room);
+                }
+            }
+
+            rooms.Sort((left, right) =>
+            {
+                int leftScore = GetBountyRoomScore(left);
+                int rightScore = GetBountyRoomScore(right);
+                int scoreCompare = rightScore.CompareTo(leftScore);
+                if (scoreCompare != 0)
+                {
+                    return scoreCompare;
+                }
+
+                return string.CompareOrdinal(left.nodeId, right.nodeId);
+            });
+
+            if (rooms.Count == 0)
+            {
+                return null;
+            }
+
+            int topCount = Mathf.Min(3, rooms.Count);
+            int index = random != null ? random.Next(0, topCount) : 0;
+            return rooms[Mathf.Clamp(index, 0, rooms.Count - 1)];
+        }
+
+        private static bool IsValidBountyRoom(DungeonRoomBuildRecord room)
+        {
+            return room != null &&
+                   !IsSafeRoomType(room.roomType) &&
+                   room.roomType != DungeonNodeKind.Secret;
+        }
+
+        private static int GetBountyRoomScore(DungeonRoomBuildRecord room)
+        {
+            int score = room.roomType == DungeonNodeKind.Landmark ? 50 : 10;
+            if (string.Equals(room.purposeId, "red_elite", StringComparison.Ordinal) ||
+                string.Equals(room.purposeId, "orange_ambush", StringComparison.Ordinal) ||
+                string.Equals(room.purposeId, "black_vault", StringComparison.Ordinal))
+            {
+                score += 35;
+            }
+
+            score += Mathf.RoundToInt(room.footprintArea / 100f);
+            return score;
+        }
+
+        private static bool IsNearExistingEncounterSpawn(DungeonEncounterPlan plan, Vector3 position)
+        {
+            for (int i = 0; i < plan.spawns.Count; i++)
+            {
+                if (Vector3.Distance(plan.spawns[i].position, position) < MinimumEnemySpawnSeparation)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static EnemyDefinition ResolveBountyBaseDefinition(List<EnemyDefinition> definitions, BountyDefinition bounty)
+        {
+            if (bounty == null || !Enum.TryParse(bounty.targetArchetype, out EnemyArchetype archetype))
+            {
+                return null;
+            }
+
+            return FindDefinition(definitions, archetype) ?? EnemyCatalog.CreateDefinition(archetype);
+        }
+
+        private static EnemyDefinition CreateBountyDefinition(EnemyDefinition baseDefinition, BountyDefinition bounty)
+        {
+            EnemyDefinition clone = ScriptableObject.CreateInstance<EnemyDefinition>();
+            clone.enemyId = $"{baseDefinition.enemyId}.{bounty.bountyId}";
+            clone.displayName = bounty.targetName;
+            clone.archetype = baseDefinition.archetype;
+            clone.attackFamily = baseDefinition.attackFamily;
+            clone.visualProfileId = baseDefinition.visualProfileId;
+            clone.tier = Mathf.Max(baseDefinition.tier, 2);
+            clone.maxHealth = baseDefinition.maxHealth * Mathf.Max(1f, bounty.healthMultiplier);
+            clone.moveSpeed = baseDefinition.moveSpeed * Mathf.Max(0.1f, bounty.speedMultiplier);
+            clone.attackDamage = baseDefinition.attackDamage * Mathf.Max(0.1f, bounty.damageMultiplier);
+            clone.attackRange = baseDefinition.attackRange;
+            clone.attackCooldown = baseDefinition.attackCooldown;
+            clone.attackWindupDuration = baseDefinition.attackWindupDuration;
+            clone.detectionRange = baseDefinition.detectionRange + 8f;
+            clone.hearingRadiusMultiplier = baseDefinition.hearingRadiusMultiplier;
+            clone.groupAlertRadius = baseDefinition.groupAlertRadius + 8f;
+            clone.ambientBehavior = EnemyAmbientBehavior.Patrol;
+            clone.defaultMobilityRole = EnemyMobilityRole.RoomGuard;
+            clone.visionConeAngle = Mathf.Max(baseDefinition.visionConeAngle, 140f);
+            clone.idleMoveSpeedMultiplier = baseDefinition.idleMoveSpeedMultiplier;
+            clone.patrolSpeedMultiplier = baseDefinition.patrolSpeedMultiplier;
+            clone.investigateSpeedMultiplier = Mathf.Max(baseDefinition.investigateSpeedMultiplier, 1f);
+            clone.chaseSpeedMultiplier = Mathf.Max(baseDefinition.chaseSpeedMultiplier, 1.12f);
+            clone.returnHomeSpeedMultiplier = baseDefinition.returnHomeSpeedMultiplier;
+            clone.patrolWaitSeconds = baseDefinition.patrolWaitSeconds;
+            clone.investigateDuration = baseDefinition.investigateDuration + 1.5f;
+            clone.lostSightGraceDuration = baseDefinition.lostSightGraceDuration + 0.5f;
+            clone.searchDuration = baseDefinition.searchDuration + 1.5f;
+            clone.homeReturnStopDistance = baseDefinition.homeReturnStopDistance;
+            clone.stuckRecoverySeconds = baseDefinition.stuckRecoverySeconds;
+            clone.visualScale = baseDefinition.visualScale * Mathf.Max(1f, bounty.scaleMultiplier);
+            clone.bodyColor = TryParseHtmlColor(bounty.markerColor, out Color bountyColor)
+                ? Color.Lerp(baseDefinition.bodyColor, bountyColor, 0.65f)
+                : Color.Lerp(baseDefinition.bodyColor, Color.red, 0.35f);
+            clone.spawnWeight = 0f;
+            clone.minFloor = bounty.minFloor;
+            clone.maxFloor = bounty.maxFloor;
+            clone.masteryXpValue = Mathf.Max(baseDefinition.masteryXpValue * 1.75f, 2f);
+            clone.goldDropChance = 1f;
+            clone.goldMin = Mathf.Max(baseDefinition.goldMin, Mathf.Max(6, bounty.goldReward / 10));
+            clone.goldMax = Mathf.Max(clone.goldMin + 1, bounty.goldReward / 5);
+            clone.healthDropChance = baseDefinition.healthDropChance;
+            clone.healthAmount = baseDefinition.healthAmount;
+            clone.ammoDropChance = Mathf.Max(baseDefinition.ammoDropChance, 0.25f);
+            clone.ammoAmount = Mathf.Max(baseDefinition.ammoAmount, 12);
+            return clone;
+        }
+
+        private static bool TryParseHtmlColor(string html, out Color color)
+        {
+            return ColorUtility.TryParseHtmlString(string.IsNullOrWhiteSpace(html) ? "#FFFFFF" : html, out color);
+        }
+
+        private static float GetTierBandMultiplier(int tier, int floorIndex)
+        {
+            int safeTier = Mathf.Clamp(tier, 1, 4);
+            if (floorIndex <= 2)
+            {
+                return safeTier == 1 ? 1f : 0.35f;
+            }
+
+            if (floorIndex <= 5)
+            {
+                return safeTier <= 2 ? 1f : 0.35f;
+            }
+
+            if (floorIndex <= 10)
+            {
+                return safeTier <= 3 ? 1f : 0.55f;
+            }
+
+            return safeTier >= 3 ? 1f : 0.55f;
         }
 
         private static int GetRoamerLimit(int floorIndex)
@@ -1059,7 +1383,9 @@ namespace FrontierDepths.World
                 return EnemyMobilityRole.RoomGuard;
             }
 
-            if (definition.archetype == EnemyArchetype.GoblinBrute)
+            if (definition.defaultMobilityRole == EnemyMobilityRole.Sleeper ||
+                definition.archetype == EnemyArchetype.GoblinBrute ||
+                definition.archetype == EnemyArchetype.IronOgre)
             {
                 return EnemyMobilityRole.Sleeper;
             }
@@ -1079,7 +1405,19 @@ namespace FrontierDepths.World
                     ? EnemyMobilityRole.Hunter
                     : (roll < (floorIndex >= 3 ? 0.48d : 0.25d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard),
                 EnemyArchetype.Slime => floorIndex >= 2 && roll < 0.12d ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
-                _ => EnemyMobilityRole.RoomGuard
+                _ => ChooseMobilityRoleByAttackFamily(definition, floorIndex, roll)
+            };
+        }
+
+        private static EnemyMobilityRole ChooseMobilityRoleByAttackFamily(EnemyDefinition definition, int floorIndex, double roll)
+        {
+            return definition.attackFamily switch
+            {
+                EnemyAttackFamily.FastSkirmisher => roll < (floorIndex >= 3 ? 0.58d : 0.32d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.Charger => roll < (floorIndex >= 6 ? 0.38d : 0.18d) ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.Ambusher => floorIndex >= 6 && roll < 0.55d ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.CasterSupport => roll < 0.12d ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
+                _ => definition.defaultMobilityRole == EnemyMobilityRole.Roamer && roll < 0.35d ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard
             };
         }
 
@@ -1255,6 +1593,17 @@ namespace FrontierDepths.World
         {
             if (enemyHealth != null)
             {
+                BountyTargetMarker bountyTarget = enemyHealth.GetComponent<BountyTargetMarker>();
+                if (bountyTarget != null &&
+                    !string.IsNullOrWhiteSpace(bountyTarget.BountyId) &&
+                    GameBootstrap.Instance != null &&
+                    GameBootstrap.Instance.ProfileService != null &&
+                    BountyObjectiveTracker.MarkKilled(GameBootstrap.Instance.ProfileService.Current, bountyTarget.BountyId))
+                {
+                    GameBootstrap.Instance.ProfileService.Save();
+                    Debug.Log($"Bounty target slain: {bountyTarget.TargetName}");
+                }
+
                 enemyHealth.Died -= HandleEnemyDied;
                 livingEnemies.Remove(enemyHealth);
                 dropService.UnregisterEnemy(enemyHealth);
@@ -1355,6 +1704,8 @@ namespace FrontierDepths.World
                 }
             }
 
+            AddEnemyVisualProfile(enemy.transform, safeDefinition);
+
             CharacterController characterController = enemy.AddComponent<CharacterController>();
             float visualHeight = Mathf.Max(1.1f, safeDefinition.visualScale.y * 2f);
             float visualRadius = Mathf.Clamp(Mathf.Max(safeDefinition.visualScale.x, safeDefinition.visualScale.z) * 0.42f, 0.32f, 0.82f);
@@ -1385,6 +1736,80 @@ namespace FrontierDepths.World
             int defaultLayer = LayerMask.NameToLayer("Default");
             DungeonSceneController.SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
             return enemy;
+        }
+
+        private static void AddEnemyVisualProfile(Transform enemyRoot, EnemyDefinition definition)
+        {
+            if (enemyRoot == null || definition == null)
+            {
+                return;
+            }
+
+            switch (definition.attackFamily)
+            {
+                case EnemyAttackFamily.RangedSpit:
+                    CreateVisualPart(enemyRoot, "RangedSnout", PrimitiveType.Sphere, new Vector3(0f, 0.45f, 0.55f), new Vector3(0.42f, 0.28f, 0.42f), Color.Lerp(definition.bodyColor, Color.cyan, 0.35f));
+                    CreateVisualPart(enemyRoot, "ShoulderMark", PrimitiveType.Cube, new Vector3(0f, 0.85f, -0.25f), new Vector3(0.62f, 0.14f, 0.18f), Color.Lerp(definition.bodyColor, Color.white, 0.2f));
+                    break;
+                case EnemyAttackFamily.Charger:
+                    CreateVisualPart(enemyRoot, "ChargeHornLeft", PrimitiveType.Cube, new Vector3(-0.28f, 0.75f, 0.62f), new Vector3(0.16f, 0.18f, 0.42f), Color.yellow);
+                    CreateVisualPart(enemyRoot, "ChargeHornRight", PrimitiveType.Cube, new Vector3(0.28f, 0.75f, 0.62f), new Vector3(0.16f, 0.18f, 0.42f), Color.yellow);
+                    break;
+                case EnemyAttackFamily.TankBruiser:
+                    CreateVisualPart(enemyRoot, "ArmorPlate", PrimitiveType.Cube, new Vector3(0f, 0.35f, 0.62f), new Vector3(0.95f, 0.7f, 0.16f), Color.Lerp(definition.bodyColor, Color.gray, 0.55f));
+                    CreateVisualPart(enemyRoot, "HeavyHead", PrimitiveType.Cube, new Vector3(0f, 1.12f, 0.1f), new Vector3(0.62f, 0.42f, 0.52f), Color.Lerp(definition.bodyColor, Color.black, 0.18f));
+                    break;
+                case EnemyAttackFamily.CasterSupport:
+                    CreateVisualPart(enemyRoot, "CasterHalo", PrimitiveType.Cylinder, new Vector3(0f, 1.25f, 0f), new Vector3(0.65f, 0.08f, 0.65f), Color.Lerp(definition.bodyColor, Color.magenta, 0.55f));
+                    CreateVisualPart(enemyRoot, "RuneCore", PrimitiveType.Sphere, new Vector3(0f, 0.35f, 0.45f), new Vector3(0.28f, 0.28f, 0.28f), Color.magenta);
+                    break;
+                case EnemyAttackFamily.Ambusher:
+                    CreateVisualPart(enemyRoot, "StalkerCowl", PrimitiveType.Cube, new Vector3(0f, 0.95f, 0f), new Vector3(0.9f, 0.28f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.45f));
+                    CreateVisualPart(enemyRoot, "EyeMark", PrimitiveType.Sphere, new Vector3(0f, 1.0f, 0.62f), new Vector3(0.22f, 0.12f, 0.08f), Color.cyan);
+                    break;
+                case EnemyAttackFamily.FastSkirmisher:
+                    CreateVisualPart(enemyRoot, "SpeedTail", PrimitiveType.Cube, new Vector3(0f, 0.25f, -0.7f), new Vector3(0.22f, 0.22f, 0.72f), Color.Lerp(definition.bodyColor, Color.white, 0.25f));
+                    break;
+            }
+
+            if (definition.visualProfileId.Contains("wing"))
+            {
+                CreateVisualPart(enemyRoot, "LeftWing", PrimitiveType.Cube, new Vector3(-0.58f, 0.42f, 0f), new Vector3(0.74f, 0.08f, 0.3f), Color.Lerp(definition.bodyColor, Color.white, 0.18f));
+                CreateVisualPart(enemyRoot, "RightWing", PrimitiveType.Cube, new Vector3(0.58f, 0.42f, 0f), new Vector3(0.74f, 0.08f, 0.3f), Color.Lerp(definition.bodyColor, Color.white, 0.18f));
+            }
+
+            if (definition.visualProfileId.Contains("low") || definition.visualProfileId.Contains("spider"))
+            {
+                CreateVisualPart(enemyRoot, "LeftLegs", PrimitiveType.Cube, new Vector3(-0.52f, -0.25f, 0f), new Vector3(0.16f, 0.12f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+                CreateVisualPart(enemyRoot, "RightLegs", PrimitiveType.Cube, new Vector3(0.52f, -0.25f, 0f), new Vector3(0.16f, 0.12f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+            }
+        }
+
+        private static void CreateVisualPart(Transform parent, string name, PrimitiveType primitive, Vector3 localPosition, Vector3 localScale, Color color)
+        {
+            GameObject part = GameObject.CreatePrimitive(primitive);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = localPosition;
+            part.transform.localScale = localScale;
+            Collider collider = part.GetComponent<Collider>();
+            if (collider != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Object.Destroy(collider);
+                }
+                else
+                {
+                    Object.DestroyImmediate(collider);
+                }
+            }
+
+            Renderer renderer = part.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = new Material(Shader.Find("Standard")) { color = color };
+            }
         }
 
         private static List<Vector3> BuildRoomPatrolPoints(DungeonBuildResult buildResult, DungeonRoomBuildRecord room)
@@ -1506,10 +1931,12 @@ namespace FrontierDepths.World
         public string warning = string.Empty;
         public readonly List<DungeonEncounterRoomAssignment> assignments = new List<DungeonEncounterRoomAssignment>();
         public readonly List<DungeonEncounterSpawn> spawns = new List<DungeonEncounterSpawn>();
+        public readonly List<string> bountyTargetIds = new List<string>();
         public readonly Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
         public readonly Dictionary<string, int> templateCounts = new Dictionary<string, int>();
         public readonly Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
         public readonly Dictionary<string, int> variantCounts = new Dictionary<string, int>();
+        public int bountyTargetCount;
 
         public void AddArchetype(EnemyArchetype archetype)
         {
@@ -1567,6 +1994,8 @@ namespace FrontierDepths.World
                 templateCounts = new Dictionary<string, int>(templateCounts),
                 mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>(mobilityRoleCounts),
                 variantCounts = new Dictionary<string, int>(variantCounts),
+                bountyTargetCount = bountyTargetCount,
+                bountyTargetIds = new List<string>(bountyTargetIds),
                 enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>()
             };
         }
@@ -1583,6 +2012,9 @@ namespace FrontierDepths.World
         public string variantId = string.Empty;
         public List<Vector3> roamingRoute = new List<Vector3>();
         public int behaviorSeed;
+        public string bountyId = string.Empty;
+        public string bountyTitle = string.Empty;
+        public string bountyTargetName = string.Empty;
     }
 
     public sealed class DungeonEncounterRoomAssignment
@@ -1622,6 +2054,8 @@ namespace FrontierDepths.World
         public Dictionary<string, int> templateCounts = new Dictionary<string, int>();
         public Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
         public Dictionary<string, int> variantCounts = new Dictionary<string, int>();
+        public int bountyTargetCount;
+        public List<string> bountyTargetIds = new List<string>();
         public Dictionary<SimpleMeleeEnemyState, int> enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>();
 
         public string ToDebugString()
@@ -1631,7 +2065,7 @@ namespace FrontierDepths.World
                 $"Band {difficultyBand} | Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | ActiveCap {activeCombatCap} | " +
                 $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}/{eligibleRoomCount} | " +
                 $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Roamers {roamerCount} | " +
-                $"Templates {FormatTemplates()} | Roles {FormatRoles()} | Variants {FormatVariants()} | States {FormatStates()}" +
+                $"Bounties {FormatBounties()} | Templates {FormatTemplates()} | Roles {FormatRoles()} | Variants {FormatVariants()} | States {FormatStates()}" +
                 (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
         }
 
@@ -1713,6 +2147,16 @@ namespace FrontierDepths.World
             }
 
             return string.Join(",", parts);
+        }
+
+        private string FormatBounties()
+        {
+            if (bountyTargetCount <= 0 || bountyTargetIds == null || bountyTargetIds.Count == 0)
+            {
+                return "none";
+            }
+
+            return $"{bountyTargetCount}:{string.Join(",", bountyTargetIds)}";
         }
     }
 }

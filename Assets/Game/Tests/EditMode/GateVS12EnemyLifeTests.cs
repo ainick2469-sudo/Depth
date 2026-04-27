@@ -90,6 +90,7 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Bounds room = new Bounds(Vector3.zero, new Vector3(24f, 6f, 24f));
                 enemy.Controller.SetHomeRoomForTests("room.stuck", room, new[] { new Vector3(8f, 0f, 0f), new Vector3(-8f, 0f, 0f) });
+                enemy.Controller.ConfigureBehaviorSeedForTests(3);
 
                 blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 blocker.name = "Patrol_Stuck_Blocker";

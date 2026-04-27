@@ -89,7 +89,7 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (InputBindingService.GetKeyDown(GameplayInputAction.Pause))
             {
                 if (pauseMenuController != null && pauseMenuController.IsVisible)
                 {
@@ -189,7 +189,7 @@ namespace FrontierDepths.UI
                 PlayerWeaponController weapon = playerController != null ? playerController.GetComponent<PlayerWeaponController>() : null;
                 if (weapon != null && (weapon.ReserveAmmo <= 0 || weapon.CurrentAmmo <= 0))
                 {
-                    ShowPrompt("V / MMB: Pistol Whip", PromptPausedColor);
+                    ShowPrompt($"{InputBindingService.GetDisplay(GameplayInputAction.PistolWhip)}: Pistol Whip", PromptPausedColor);
                     return;
                 }
 
@@ -423,7 +423,7 @@ namespace FrontierDepths.UI
 
             if (runInfoPanelController != null && runInfoPanelController.IsVisible)
             {
-                if (Input.GetKeyDown(KeyCode.G))
+                if (InputBindingService.GetKeyDown(GameplayInputAction.RunInfo))
                 {
                     SetRunInfoVisible(false);
                 }
@@ -431,12 +431,12 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.M))
+            if (InputBindingService.GetKeyDown(GameplayInputAction.Minimap))
             {
                 minimapController?.ToggleVisibility();
             }
 
-            if (Input.GetKeyDown(KeyCode.G))
+            if (InputBindingService.GetKeyDown(GameplayInputAction.RunInfo))
             {
                 SetRunInfoVisible(true);
             }

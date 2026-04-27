@@ -20,7 +20,16 @@ namespace FrontierDepths.Combat
 
         private FirstPersonController playerController;
         private PlayerHealth playerHealth;
+        private AudioSource whipAudioSource;
+        private AudioClip swingClip;
+        private AudioClip hitClip;
+        private AudioClip wallClip;
+        private Transform weaponBlockout;
+        private Vector3 weaponBlockoutRestPosition;
+        private Vector3 weaponBlockoutRestEuler;
         private float nextWhipTime;
+        private float feedbackEndTime;
+        private bool feedbackHit;
 
         public float Damage => damage;
         public float Range => range;
@@ -39,7 +48,9 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.V) || Input.GetMouseButtonDown(2))
+            TickFeedback();
+
+            if (InputBindingService.GetKeyDown(GameplayInputAction.PistolWhip))
             {
                 TryWhip(Time.time);
             }
@@ -54,8 +65,10 @@ namespace FrontierDepths.Combat
             }
 
             nextWhipTime = currentTime + Mathf.Max(0.05f, cooldownSeconds);
-            return TryResolveHit(out RaycastHit hit, out IDamageable damageable) &&
-                   ApplyWhipDamage(hit, damageable);
+            bool hitApplied = TryResolveHit(out RaycastHit hit, out IDamageable damageable) &&
+                              ApplyWhipDamage(hit, damageable);
+            PlayWhipFeedback(hitApplied, hit);
+            return hitApplied;
         }
 
         internal bool TryWhipForTests(float currentTime)
@@ -123,6 +136,7 @@ namespace FrontierDepths.Combat
                 IDamageable candidate = collider.GetComponentInParent<IDamageable>();
                 if (candidate == null)
                 {
+                    hit = hits[i];
                     return false;
                 }
 
@@ -147,10 +161,121 @@ namespace FrontierDepths.Combat
             playerController ??= GetComponent<FirstPersonController>();
             playerHealth ??= GetComponent<PlayerHealth>();
             aimCamera ??= playerController != null ? playerController.PlayerCamera : GetComponentInChildren<Camera>();
+            EnsureFeedbackObjects();
             if (hitMask.value == 0 || hitMask.value == -1)
             {
                 hitMask = PlayerWeaponController.DefaultWeaponRaycastMask;
             }
+        }
+
+        private void EnsureFeedbackObjects()
+        {
+            if (whipAudioSource == null)
+            {
+                whipAudioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+                whipAudioSource.playOnAwake = false;
+                whipAudioSource.loop = false;
+                whipAudioSource.spatialBlend = 0f;
+                whipAudioSource.volume = 0.22f;
+            }
+
+            swingClip ??= CreateFeedbackClip("PistolWhipSwing", 0.08f, 520f, 0.12f, 0.04f);
+            hitClip ??= CreateFeedbackClip("PistolWhipHit", 0.09f, 160f, 0.2f, 0.045f);
+            wallClip ??= CreateFeedbackClip("PistolWhipWall", 0.06f, 260f, 0.12f, 0.035f);
+            if (aimCamera == null)
+            {
+                return;
+            }
+
+            weaponBlockout ??= aimCamera.transform.Find("WeaponBlockout");
+            if (weaponBlockout != null && weaponBlockoutRestPosition == Vector3.zero)
+            {
+                weaponBlockoutRestPosition = weaponBlockout.localPosition;
+                weaponBlockoutRestEuler = weaponBlockout.localEulerAngles;
+            }
+        }
+
+        private void PlayWhipFeedback(bool hitApplied, RaycastHit hit)
+        {
+            EnsureFeedbackObjects();
+            feedbackHit = hitApplied;
+            feedbackEndTime = Time.unscaledTime + 0.16f;
+            if (whipAudioSource != null)
+            {
+                whipAudioSource.PlayOneShot(hitApplied ? hitClip : (hit.collider != null ? wallClip : swingClip), 1f);
+            }
+
+            playerController?.ApplyLookRecoil(hitApplied ? 0.8f : 0.35f, hitApplied ? 0.45f : 0.2f, 0.12f);
+            ShowWhipMarker(hitApplied, hit);
+        }
+
+        private void TickFeedback()
+        {
+            if (weaponBlockout == null)
+            {
+                return;
+            }
+
+            float remaining = feedbackEndTime - Time.unscaledTime;
+            if (remaining <= 0f)
+            {
+                weaponBlockout.localPosition = Vector3.Lerp(weaponBlockout.localPosition, weaponBlockoutRestPosition, Time.unscaledDeltaTime * 18f);
+                weaponBlockout.localEulerAngles = Vector3.Lerp(weaponBlockout.localEulerAngles, weaponBlockoutRestEuler, Time.unscaledDeltaTime * 18f);
+                return;
+            }
+
+            float t = 1f - Mathf.Clamp01(remaining / 0.16f);
+            float punch = Mathf.Sin(t * Mathf.PI);
+            weaponBlockout.localPosition = weaponBlockoutRestPosition + new Vector3(-0.08f, -0.02f, 0.18f) * punch;
+            weaponBlockout.localEulerAngles = weaponBlockoutRestEuler + new Vector3(10f, -12f, feedbackHit ? -20f : -12f) * punch;
+        }
+
+        private static void ShowWhipMarker(bool hitApplied, RaycastHit hit)
+        {
+            if (hit.collider == null)
+            {
+                return;
+            }
+
+            Transform pool = PlayerWeaponController.GetOrCreateFeedbackPool("PistolWhipImpactPool");
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            marker.name = hitApplied ? "PistolWhipHit" : "PistolWhipThud";
+            marker.transform.SetParent(pool, true);
+            marker.transform.position = hit.point;
+            marker.transform.localScale = Vector3.one * (hitApplied ? 0.22f : 0.14f);
+            Collider collider = marker.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
+
+            Renderer renderer = marker.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = new Material(Shader.Find("Standard"))
+                {
+                    color = hitApplied ? new Color(1f, 0.82f, 0.3f, 1f) : new Color(0.55f, 0.55f, 0.5f, 1f)
+                };
+            }
+
+            Destroy(marker, 0.18f);
+        }
+
+        private static AudioClip CreateFeedbackClip(string name, float durationSeconds, float frequency, float amplitude, float decaySeconds)
+        {
+            const int sampleRate = 22050;
+            int sampleCount = Mathf.CeilToInt(durationSeconds * sampleRate);
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float time = i / (float)sampleRate;
+                float envelope = Mathf.Exp(-time / Mathf.Max(0.01f, decaySeconds));
+                samples[i] = Mathf.Sin(time * frequency * Mathf.PI * 2f) * amplitude * envelope;
+            }
+
+            AudioClip clip = AudioClip.Create(name, sampleCount, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
         }
 
         private static bool IsInDungeonRuntime()

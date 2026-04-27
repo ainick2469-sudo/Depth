@@ -59,7 +59,7 @@ namespace FrontierDepths.Progression
             shopService = new TownShopService(GameBootstrap.Instance.ProfileService);
             playerController = FindAnyObjectByType<FirstPersonController>();
             EnsureSpawnAnchors();
-            TownRuntimeKioskBuilder.EnsureRuntimeKiosks(transform);
+            TownServiceLayoutManager.GetOrCreate(transform);
             PlacePlayerAtTownSpawn();
         }
 
@@ -113,8 +113,8 @@ namespace FrontierDepths.Progression
 
         public bool HandlePanelInput()
         {
-            bool eDown = Input.GetKeyDown(KeyCode.E);
-            bool escapeDown = Input.GetKeyDown(KeyCode.Escape);
+            bool eDown = InputBindingService.GetKeyDown(GameplayInputAction.Interact);
+            bool escapeDown = InputBindingService.GetKeyDown(GameplayInputAction.Pause);
             if (!ShouldClosePanelFromInput(IsPanelOpen, eDown, escapeDown, InputFrameGuard.WasTownServiceOpenConsumedThisFrame))
             {
                 return false;

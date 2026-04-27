@@ -11,11 +11,14 @@ namespace FrontierDepths.UI
 
         private RectTransform panel;
         private RectTransform settingsPanel;
+        private RectTransform keybindingsPanel;
         private Text messageText;
         private Text settingsText;
+        private Text keybindingsText;
         private FirstPersonController playerController;
         private int returnConfirmFrame = -999;
         private int quitConfirmFrame = -999;
+        private GameplayInputAction? pendingRebind;
 
         public bool IsVisible => panel != null && panel.gameObject.activeSelf;
 
@@ -25,19 +28,39 @@ namespace FrontierDepths.UI
             Hide();
         }
 
+        private void Update()
+        {
+            if (!IsVisible || !pendingRebind.HasValue)
+            {
+                return;
+            }
+
+            if (InputBindingService.TryReadPressedCandidate(out KeyCode key))
+            {
+                InputBindingService.SetPrimaryBinding(pendingRebind.Value, key);
+                messageText.text = $"{FormatAction(pendingRebind.Value)} rebound to {InputBindingService.GetDisplay(pendingRebind.Value)}.";
+                pendingRebind = null;
+                RefreshKeybindingsText();
+            }
+        }
+
         public void Show(FirstPersonController controller)
         {
             EnsureUi();
             playerController = controller ?? FindAnyObjectByType<FirstPersonController>();
             panel.gameObject.SetActive(true);
             settingsPanel.gameObject.SetActive(false);
+            keybindingsPanel.gameObject.SetActive(false);
+            pendingRebind = null;
             messageText.text = "Paused";
             playerController?.SetUiCaptured(true);
             RefreshSettingsText();
+            RefreshKeybindingsText();
         }
 
         public void Hide()
         {
+            pendingRebind = null;
             if (panel != null)
             {
                 panel.gameObject.SetActive(false);
@@ -46,6 +69,11 @@ namespace FrontierDepths.UI
             if (settingsPanel != null)
             {
                 settingsPanel.gameObject.SetActive(false);
+            }
+
+            if (keybindingsPanel != null)
+            {
+                keybindingsPanel.gameObject.SetActive(false);
             }
 
             playerController ??= FindAnyObjectByType<FirstPersonController>();
@@ -59,45 +87,92 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             GameObject panelObject = new GameObject(RootName, typeof(RectTransform), typeof(Image));
             panelObject.transform.SetParent(transform, false);
             panel = panelObject.GetComponent<RectTransform>();
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(420f, 430f);
+            panel.sizeDelta = new Vector2(460f, 520f);
             panel.anchoredPosition = Vector2.zero;
-            panelObject.GetComponent<Image>().color = new Color(0.02f, 0.018f, 0.018f, 0.94f);
+            panelObject.GetComponent<Image>().color = UiTheme.Panel;
 
-            CreateLabel(panel, "Title", "PAUSED", font, 30, new Vector2(0f, -36f), new Vector2(380f, 44f));
-            messageText = CreateLabel(panel, "Message", "Paused", font, 15, new Vector2(0f, -82f), new Vector2(380f, 42f));
+            CreateLabel(panel, "Title", "FRONTIER PAUSED", UiTheme.TitleSize, new Vector2(0f, -32f), new Vector2(410f, 44f), TextAnchor.MiddleCenter, UiTheme.Text);
+            messageText = CreateLabel(panel, "Message", "Paused", UiTheme.BodySize, new Vector2(0f, -78f), new Vector2(410f, 44f), TextAnchor.MiddleCenter, UiTheme.MutedText);
             CreateButton(panel, "Resume", "Resume", new Vector2(0f, -138f), Resume);
             CreateButton(panel, "Settings", "Settings", new Vector2(0f, -190f), ToggleSettings);
-            CreateButton(panel, "ReturnTown", "Return To Town", new Vector2(0f, -242f), ReturnToTown);
-            CreateButton(panel, "QuitMain", "Quit To Main Menu", new Vector2(0f, -294f), QuitToMainMenu);
+            CreateButton(panel, "Keybindings", "Keybindings", new Vector2(0f, -242f), ToggleKeybindings);
+            CreateButton(panel, "ReturnTown", "Return To Town", new Vector2(0f, -294f), ReturnToTown);
+            CreateButton(panel, "QuitMain", "Quit To Main Menu", new Vector2(0f, -346f), QuitToMainMenu);
 
-            GameObject settingsObject = new GameObject("SettingsPanel", typeof(RectTransform), typeof(Image));
-            settingsObject.transform.SetParent(panel, false);
-            settingsPanel = settingsObject.GetComponent<RectTransform>();
-            settingsPanel.anchorMin = settingsPanel.anchorMax = new Vector2(1f, 0.5f);
-            settingsPanel.pivot = new Vector2(0f, 0.5f);
-            settingsPanel.sizeDelta = new Vector2(430f, 620f);
-            settingsPanel.anchoredPosition = new Vector2(18f, 0f);
-            settingsObject.GetComponent<Image>().color = new Color(0.035f, 0.032f, 0.028f, 0.94f);
-            settingsText = CreateLabel(settingsPanel, "SettingsText", string.Empty, font, 16, new Vector2(0f, -36f), new Vector2(390f, 300f));
-            CreateButton(settingsPanel, "SensitivityMinus", "Sensitivity -", new Vector2(-105f, -250f), () => AdjustSensitivity(-0.1f));
-            CreateButton(settingsPanel, "SensitivityPlus", "Sensitivity +", new Vector2(105f, -250f), () => AdjustSensitivity(0.1f));
-            CreateButton(settingsPanel, "FovMinus", "FOV -", new Vector2(-105f, -302f), () => AdjustFov(-5f));
-            CreateButton(settingsPanel, "FovPlus", "FOV +", new Vector2(105f, -302f), () => AdjustFov(5f));
-            CreateButton(settingsPanel, "MapSizeMinus", "Map Size -", new Vector2(-105f, -354f), () => AdjustMinimapSize(-20f));
-            CreateButton(settingsPanel, "MapSizePlus", "Map Size +", new Vector2(105f, -354f), () => AdjustMinimapSize(20f));
-            CreateButton(settingsPanel, "MapOpacityMinus", "Opacity -", new Vector2(-105f, -406f), () => AdjustMinimapOpacity(-0.1f));
-            CreateButton(settingsPanel, "MapOpacityPlus", "Opacity +", new Vector2(105f, -406f), () => AdjustMinimapOpacity(0.1f));
-            CreateButton(settingsPanel, "MapZoomMinus", "Map Zoom -", new Vector2(-105f, -458f), () => AdjustMinimapZoom(-0.1f));
-            CreateButton(settingsPanel, "MapZoomPlus", "Map Zoom +", new Vector2(105f, -458f), () => AdjustMinimapZoom(0.1f));
-            CreateButton(settingsPanel, "VolumeMinus", "Volume -", new Vector2(-105f, -510f), () => AdjustMasterVolume(-0.1f));
-            CreateButton(settingsPanel, "VolumePlus", "Volume +", new Vector2(105f, -510f), () => AdjustMasterVolume(0.1f));
-            CreateButton(settingsPanel, "InvertY", "Invert Y", new Vector2(0f, -562f), ToggleInvertY);
+            settingsPanel = CreateSidePanel("SettingsPanel", new Vector2(500f, 640f), new Vector2(24f, 0f));
+            CreateLabel(settingsPanel, "SettingsTitle", "SETTINGS", UiTheme.HeaderSize, new Vector2(0f, -24f), new Vector2(450f, 34f), TextAnchor.MiddleCenter, UiTheme.Accent);
+            settingsText = CreateLabel(settingsPanel, "SettingsText", string.Empty, UiTheme.BodySize, new Vector2(0f, -64f), new Vector2(440f, 190f), TextAnchor.UpperLeft, UiTheme.Text);
+            CreateSettingsButtons(settingsPanel);
+
+            keybindingsPanel = CreateSidePanel("KeybindingsPanel", new Vector2(560f, 640f), new Vector2(24f, 0f));
+            CreateLabel(keybindingsPanel, "BindingsTitle", "KEYBINDINGS", UiTheme.HeaderSize, new Vector2(0f, -24f), new Vector2(500f, 34f), TextAnchor.MiddleCenter, UiTheme.Accent);
+            keybindingsText = CreateLabel(keybindingsPanel, "BindingsText", string.Empty, UiTheme.SmallSize, new Vector2(-120f, -64f), new Vector2(280f, 510f), TextAnchor.UpperLeft, UiTheme.Text);
+            CreateBindingButtons(keybindingsPanel);
+        }
+
+        private RectTransform CreateSidePanel(string name, Vector2 size, Vector2 offset)
+        {
+            GameObject sideObject = new GameObject(name, typeof(RectTransform), typeof(Image));
+            sideObject.transform.SetParent(panel, false);
+            RectTransform rect = sideObject.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = offset;
+            sideObject.GetComponent<Image>().color = UiTheme.PanelAlt;
+            sideObject.SetActive(false);
+            return rect;
+        }
+
+        private void CreateSettingsButtons(RectTransform parent)
+        {
+            CreateLabel(parent, "SettingsTabs", "GAMEPLAY     VIDEO     AUDIO     UI", UiTheme.SmallSize, new Vector2(0f, -250f), new Vector2(440f, 28f), TextAnchor.MiddleCenter, UiTheme.MutedText);
+            CreateButton(parent, "SensitivityMinus", "Sensitivity -", new Vector2(-120f, -292f), () => AdjustSensitivity(-0.1f), 170f);
+            CreateButton(parent, "SensitivityPlus", "Sensitivity +", new Vector2(120f, -292f), () => AdjustSensitivity(0.1f), 170f);
+            CreateButton(parent, "FovMinus", "FOV -", new Vector2(-120f, -340f), () => AdjustFov(-5f), 170f);
+            CreateButton(parent, "FovPlus", "FOV +", new Vector2(120f, -340f), () => AdjustFov(5f), 170f);
+            CreateButton(parent, "MapSizeMinus", "Map Size -", new Vector2(-120f, -388f), () => AdjustMinimapSize(-20f), 170f);
+            CreateButton(parent, "MapSizePlus", "Map Size +", new Vector2(120f, -388f), () => AdjustMinimapSize(20f), 170f);
+            CreateButton(parent, "MapOpacityMinus", "Opacity -", new Vector2(-120f, -436f), () => AdjustMinimapOpacity(-0.1f), 170f);
+            CreateButton(parent, "MapOpacityPlus", "Opacity +", new Vector2(120f, -436f), () => AdjustMinimapOpacity(0.1f), 170f);
+            CreateButton(parent, "MapZoomMinus", "Map Zoom -", new Vector2(-120f, -484f), () => AdjustMinimapZoom(-0.1f), 170f);
+            CreateButton(parent, "MapZoomPlus", "Map Zoom +", new Vector2(120f, -484f), () => AdjustMinimapZoom(0.1f), 170f);
+            CreateButton(parent, "VolumeMinus", "Volume -", new Vector2(-120f, -532f), () => AdjustMasterVolume(-0.1f), 170f);
+            CreateButton(parent, "VolumePlus", "Volume +", new Vector2(120f, -532f), () => AdjustMasterVolume(0.1f), 170f);
+            CreateButton(parent, "InvertY", "Invert Y", new Vector2(0f, -580f), ToggleInvertY, 220f);
+        }
+
+        private void CreateBindingButtons(RectTransform parent)
+        {
+            GameplayInputAction[] actions =
+            {
+                GameplayInputAction.MoveForward,
+                GameplayInputAction.MoveBack,
+                GameplayInputAction.MoveLeft,
+                GameplayInputAction.MoveRight,
+                GameplayInputAction.Jump,
+                GameplayInputAction.Sprint,
+                GameplayInputAction.Interact,
+                GameplayInputAction.Fire,
+                GameplayInputAction.Reload,
+                GameplayInputAction.PistolWhip,
+                GameplayInputAction.RunInfo,
+                GameplayInputAction.Minimap,
+                GameplayInputAction.Pause
+            };
+
+            for (int i = 0; i < actions.Length; i++)
+            {
+                GameplayInputAction action = actions[i];
+                CreateButton(parent, $"Bind_{action}", "Rebind", new Vector2(160f, -82f - i * 34f), () => BeginRebind(action), 120f, 28f, UiTheme.SmallSize);
+            }
+
+            CreateButton(parent, "ResetBindings", "Reset Defaults", new Vector2(150f, -560f), ResetBindings, 180f);
         }
 
         private void Resume()
@@ -108,7 +183,31 @@ namespace FrontierDepths.UI
         private void ToggleSettings()
         {
             settingsPanel.gameObject.SetActive(!settingsPanel.gameObject.activeSelf);
+            keybindingsPanel.gameObject.SetActive(false);
+            pendingRebind = null;
             RefreshSettingsText();
+        }
+
+        private void ToggleKeybindings()
+        {
+            keybindingsPanel.gameObject.SetActive(!keybindingsPanel.gameObject.activeSelf);
+            settingsPanel.gameObject.SetActive(false);
+            pendingRebind = null;
+            RefreshKeybindingsText();
+        }
+
+        private void BeginRebind(GameplayInputAction action)
+        {
+            pendingRebind = action;
+            messageText.text = $"Press a key/button for {FormatAction(action)}.";
+        }
+
+        private void ResetBindings()
+        {
+            InputBindingService.ResetToDefaults();
+            pendingRebind = null;
+            messageText.text = "Keybindings reset.";
+            RefreshKeybindingsText();
         }
 
         private void ReturnToTown()
@@ -120,16 +219,11 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            GameBootstrap bootstrap = GameBootstrap.Instance;
-            if (bootstrap == null)
-            {
-                return;
-            }
-
             Time.timeScale = 1f;
-            bootstrap.RunService?.PrepareTownReturnOnFoot();
-            bootstrap.SceneFlowService?.SetPendingTownHubLoadReason(TownHubLoadReason.DungeonEntranceReturn);
-            bootstrap.SceneFlowService?.LoadScene(GameSceneId.TownHub);
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            bootstrap?.RunService?.PrepareTownReturnOnFoot();
+            bootstrap?.SceneFlowService?.SetPendingTownHubLoadReason(TownHubLoadReason.DungeonEntranceReturn);
+            bootstrap?.SceneFlowService?.LoadScene(GameSceneId.TownHub);
         }
 
         private void QuitToMainMenu()
@@ -222,29 +316,62 @@ namespace FrontierDepths.UI
 
             GameSettingsState settings = GameSettingsService.Current;
             settingsText.text =
-                $"Mouse Sensitivity: {settings.mouseSensitivity:0.0}\n" +
-                $"FOV: {settings.fov:0}\n" +
-                $"Master Volume: {settings.masterVolume:0.00}\n" +
-                $"SFX Volume: {settings.sfxVolume:0.00}\n" +
-                $"Music Volume: {settings.musicVolume:0.00}\n" +
-                $"Invert Y: {(settings.invertY ? "On" : "Off")}\n" +
-                $"Crosshair Size: {settings.crosshairSize:0}\n" +
-                $"Minimap Size: {settings.minimapSize:0}\n" +
-                $"Minimap Opacity: {settings.minimapOpacity:0.00}\n" +
-                $"Minimap Zoom: {settings.minimapZoom:0.00}";
+                $"Mouse Sensitivity    {settings.mouseSensitivity:0.0}\n" +
+                $"FOV                  {settings.fov:0}\n" +
+                $"Master Volume        {settings.masterVolume:0.00}\n" +
+                $"SFX Volume           {settings.sfxVolume:0.00}\n" +
+                $"Music Volume         {settings.musicVolume:0.00}\n" +
+                $"Invert Y             {(settings.invertY ? "On" : "Off")}\n" +
+                $"Crosshair Size       {settings.crosshairSize:0}\n" +
+                $"Minimap Size         {settings.minimapSize:0}\n" +
+                $"Minimap Opacity      {settings.minimapOpacity:0.00}\n" +
+                $"Minimap Zoom         {settings.minimapZoom:0.00}";
         }
 
-        private static Text CreateLabel(Transform parent, string name, string label, Font font, int fontSize, Vector2 position, Vector2 size)
+        private void RefreshKeybindingsText()
+        {
+            if (keybindingsText == null)
+            {
+                return;
+            }
+
+            keybindingsText.text =
+                $"{FormatAction(GameplayInputAction.MoveForward),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveForward)}\n" +
+                $"{FormatAction(GameplayInputAction.MoveBack),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveBack)}\n" +
+                $"{FormatAction(GameplayInputAction.MoveLeft),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveLeft)}\n" +
+                $"{FormatAction(GameplayInputAction.MoveRight),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveRight)}\n" +
+                $"{FormatAction(GameplayInputAction.Jump),-18} {InputBindingService.GetDisplay(GameplayInputAction.Jump)}\n" +
+                $"{FormatAction(GameplayInputAction.Sprint),-18} {InputBindingService.GetDisplay(GameplayInputAction.Sprint)}\n" +
+                $"{FormatAction(GameplayInputAction.Interact),-18} {InputBindingService.GetDisplay(GameplayInputAction.Interact)}\n" +
+                $"{FormatAction(GameplayInputAction.Fire),-18} {InputBindingService.GetDisplay(GameplayInputAction.Fire)}\n" +
+                $"{FormatAction(GameplayInputAction.Reload),-18} {InputBindingService.GetDisplay(GameplayInputAction.Reload)}\n" +
+                $"{FormatAction(GameplayInputAction.PistolWhip),-18} {InputBindingService.GetDisplay(GameplayInputAction.PistolWhip)}\n" +
+                $"{FormatAction(GameplayInputAction.RunInfo),-18} {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)}\n" +
+                $"{FormatAction(GameplayInputAction.Minimap),-18} {InputBindingService.GetDisplay(GameplayInputAction.Minimap)}\n" +
+                $"{FormatAction(GameplayInputAction.Pause),-18} {InputBindingService.GetDisplay(GameplayInputAction.Pause)}";
+        }
+
+        private static string FormatAction(GameplayInputAction action)
+        {
+            return action switch
+            {
+                GameplayInputAction.MoveForward => "Move Forward",
+                GameplayInputAction.MoveBack => "Move Back",
+                GameplayInputAction.MoveLeft => "Move Left",
+                GameplayInputAction.MoveRight => "Move Right",
+                GameplayInputAction.PistolWhip => "Pistol Whip",
+                GameplayInputAction.RunInfo => "Run Info",
+                _ => action.ToString()
+            };
+        }
+
+        private static Text CreateLabel(Transform parent, string name, string label, int fontSize, Vector2 position, Vector2 size, TextAnchor alignment, Color color)
         {
             GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(parent, false);
             Text text = textObject.GetComponent<Text>();
-            text.font = font;
-            text.fontSize = fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
+            UiTheme.StyleText(text, fontSize, alignment, color);
             text.text = label;
-            text.raycastTarget = false;
             RectTransform rect = text.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
@@ -253,20 +380,19 @@ namespace FrontierDepths.UI
             return text;
         }
 
-        private static Button CreateButton(Transform parent, string name, string label, Vector2 position, UnityEngine.Events.UnityAction action)
+        private static Button CreateButton(Transform parent, string name, string label, Vector2 position, UnityEngine.Events.UnityAction action, float width = 240f, float height = 40f, int fontSize = UiTheme.BodySize)
         {
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(parent, false);
-            buttonObject.GetComponent<Image>().color = new Color(0.16f, 0.12f, 0.09f, 0.96f);
             Button button = buttonObject.GetComponent<Button>();
             button.onClick.AddListener(action);
+            UiTheme.StyleButton(button);
             RectTransform rect = buttonObject.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.sizeDelta = new Vector2(220f, 40f);
+            rect.sizeDelta = new Vector2(width, height);
             rect.anchoredPosition = position;
-            Text text = CreateLabel(buttonObject.transform, "Label", label, font, 16, Vector2.zero, rect.sizeDelta);
+            Text text = CreateLabel(buttonObject.transform, "Label", label, fontSize, Vector2.zero, rect.sizeDelta, TextAnchor.MiddleCenter, UiTheme.Text);
             RectTransform textRect = text.rectTransform;
             textRect.anchorMin = textRect.anchorMax = new Vector2(0.5f, 0.5f);
             textRect.pivot = new Vector2(0.5f, 0.5f);

@@ -13,6 +13,8 @@ namespace FrontierDepths.World
         [SerializeField] private int ammoAmount;
         [SerializeField] private float healAmount;
         [SerializeField] private float healthRiskAmount;
+        [SerializeField] private string resultPrefix = string.Empty;
+        [SerializeField] private RoomPurposeEffect effect = RoomPurposeEffect.Cache;
 
         private bool claimed;
         private string lastResultMessage = string.Empty;
@@ -31,6 +33,20 @@ namespace FrontierDepths.World
             float heal,
             float healthRisk)
         {
+            Configure(claimId, title, promptText, gold, ammo, heal, healthRisk, string.Empty, RoomPurposeEffect.Cache);
+        }
+
+        public void Configure(
+            string claimId,
+            string title,
+            string promptText,
+            int gold,
+            int ammo,
+            float heal,
+            float healthRisk,
+            string resultText,
+            RoomPurposeEffect purposeEffect)
+        {
             purposeId = claimId ?? string.Empty;
             displayName = string.IsNullOrWhiteSpace(title) ? "Cache" : title;
             prompt = string.IsNullOrWhiteSpace(promptText) ? displayName : promptText;
@@ -38,6 +54,8 @@ namespace FrontierDepths.World
             ammoAmount = Mathf.Max(0, ammo);
             healAmount = Mathf.Max(0f, heal);
             healthRiskAmount = Mathf.Max(0f, healthRisk);
+            resultPrefix = resultText ?? string.Empty;
+            effect = purposeEffect;
             claimed = IsClaimed();
         }
 
@@ -76,7 +94,26 @@ namespace FrontierDepths.World
             MarkClaimed();
             claimed = true;
             lastResultMessage = BuildResultMessage(goldAmount, ammoAdded, healed, hpLost);
+            if (!string.IsNullOrWhiteSpace(resultPrefix))
+            {
+                lastResultMessage = $"{resultPrefix} {lastResultMessage}";
+            }
+
+            ApplyPurposeSideEffect();
             Debug.Log($"{displayName}: {lastResultMessage}");
+        }
+
+        private void ApplyPurposeSideEffect()
+        {
+            if (effect == RoomPurposeEffect.Scout)
+            {
+                FloorState floor = GetCurrentFloor();
+                if (floor != null)
+                {
+                    floor.stairDiscovered = true;
+                    GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                }
+            }
         }
 
         private bool IsClaimed()

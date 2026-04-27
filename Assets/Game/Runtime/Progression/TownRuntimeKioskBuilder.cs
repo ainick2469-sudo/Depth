@@ -1,3 +1,4 @@
+using FrontierDepths.Core;
 using UnityEngine;
 
 namespace FrontierDepths.Progression
@@ -10,9 +11,8 @@ namespace FrontierDepths.Progression
         {
             new KioskDefinition("Blacksmith", "shop.blacksmith", "Talk to the Blacksmith", new Vector3(-18f, 0f, 14f), 32f, new Color(0.55f, 0.28f, 0.18f)),
             new KioskDefinition("Quartermaster", "shop.quartermaster", "Browse the General Store", new Vector3(18f, 0f, 14f), -32f, new Color(0.22f, 0.42f, 0.62f)),
-            new KioskDefinition("Saloon / Inn", "shop.curio", "Visit the Saloon", new Vector3(-18f, 0f, -12f), 145f, new Color(0.56f, 0.38f, 0.16f)),
-            new KioskDefinition("Bounty Board", "shop.bounty_board", "Read the Bounty Board", new Vector3(18f, 0f, -12f), -145f, new Color(0.25f, 0.5f, 0.28f)),
-            new KioskDefinition("Dungeon Gate", string.Empty, "Enter the Dungeon", new Vector3(0f, 0f, 30f), 180f, new Color(0.58f, 0.2f, 0.16f))
+            new KioskDefinition("Saloon / Inn", "shop.saloon", "Visit the Saloon", new Vector3(-18f, 0f, -12f), 145f, new Color(0.56f, 0.38f, 0.16f)),
+            new KioskDefinition("Bounty Board", "shop.bounty_board", "Read the Bounty Board", new Vector3(18f, 0f, -12f), -145f, new Color(0.25f, 0.5f, 0.28f))
         };
 
         private void Start()
@@ -31,6 +31,7 @@ namespace FrontierDepths.Progression
             Transform existing = safeParent.Find(RootName);
             if (existing != null)
             {
+                RemoveRuntimeDungeonGateKiosk(existing);
                 return existing;
             }
 
@@ -86,16 +87,33 @@ namespace FrontierDepths.Progression
 
         private static void CreateLabel(Transform parent, string text, Vector3 localPosition)
         {
-            GameObject labelObject = new GameObject("SignLabel", typeof(TextMesh));
-            labelObject.transform.SetParent(parent, false);
-            labelObject.transform.localPosition = localPosition;
-            TextMesh label = labelObject.GetComponent<TextMesh>();
-            label.text = text;
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
-            label.characterSize = 0.34f;
-            label.fontSize = 42;
-            label.color = Color.white;
+            WorldLabelBillboard label = WorldLabelBillboard.Create(parent, "SignLabel", text, localPosition, UiTheme.Text, 38f, true);
+            TextMesh textMesh = label.GetComponent<TextMesh>();
+            textMesh.characterSize = 0.3f;
+            textMesh.fontSize = 46;
+        }
+
+        private static void RemoveRuntimeDungeonGateKiosk(Transform root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            Transform duplicateGate = root.Find("Kiosk_Dungeon Gate");
+            if (duplicateGate == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(duplicateGate.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(duplicateGate.gameObject);
+            }
         }
 
         private readonly struct KioskDefinition

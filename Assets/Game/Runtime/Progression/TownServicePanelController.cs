@@ -90,7 +90,7 @@ namespace FrontierDepths.Progression
             ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
             ProfileState profile = profileService != null ? profileService.Current : new ProfileState();
             titleText.text = shop.displayName;
-            goldText.text = $"Gold: {profile.gold} | Sigils: {profile.townSigils}";
+            goldText.text = $"Gold: {profile.gold} | Sigils: {profile.townSigils} | Skill Pts: {profile.skillPoints}";
             resultText.text = string.IsNullOrWhiteSpace(message) ? shop.greeting : message;
 
             for (int i = 0; i < offerButtons.Count; i++)
@@ -103,9 +103,10 @@ namespace FrontierDepths.Progression
             {
                 int offerIndex = i;
                 ShopOffer offer = shop.offers[i];
-                Button button = CreateButton(panel, $"Offer_{i}", $"{i + 1}. {offer.displayName} - {offer.cost}g\n{offer.description}");
+                string label = $"{i + 1}. {offer.displayName} - {offer.cost}g\n{BuildOfferDescription(profile, offer)}";
+                Button button = CreateButton(panel, $"Offer_{i}", label);
                 bool soldOut = offer.purchaseLimit > 0 && profileService != null && profileService.GetPurchaseCount(shop.shopId, offer.offerId) >= offer.purchaseLimit;
-                button.interactable = profile.gold >= offer.cost && !soldOut;
+                button.interactable = profile.gold >= offer.cost && !soldOut && CanUseOffer(profile, offer);
                 button.onClick.AddListener(() => selectOffer?.Invoke(offerIndex));
                 RectTransform rect = button.GetComponent<RectTransform>();
                 rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
@@ -130,9 +131,10 @@ namespace FrontierDepths.Progression
             panel.sizeDelta = new Vector2(620f, 520f);
             panel.anchoredPosition = Vector2.zero;
             Image image = gameObject.AddComponent<Image>();
-            image.color = new Color(0.04f, 0.035f, 0.03f, 0.94f);
+            image.color = UiTheme.Panel;
 
             titleText = CreateText(panel, "Title", font, 30, TextAnchor.MiddleCenter, new Vector2(0f, -28f), new Vector2(560f, 42f));
+            titleText.color = UiTheme.Accent;
             goldText = CreateText(panel, "Gold", font, 18, TextAnchor.MiddleCenter, new Vector2(0f, -70f), new Vector2(560f, 30f));
             resultText = CreateText(panel, "Result", font, 16, TextAnchor.UpperCenter, new Vector2(0f, -96f), new Vector2(560f, 42f));
 
@@ -153,7 +155,7 @@ namespace FrontierDepths.Progression
             text.font = font;
             text.fontSize = size;
             text.alignment = alignment;
-            text.color = Color.white;
+            text.color = UiTheme.Text;
             text.raycastTarget = false;
             RectTransform rect = text.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
@@ -169,7 +171,7 @@ namespace FrontierDepths.Progression
             GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(parent, false);
             Image image = buttonObject.GetComponent<Image>();
-            image.color = new Color(0.18f, 0.14f, 0.1f, 0.96f);
+            image.color = UiTheme.Button;
             Button button = buttonObject.GetComponent<Button>();
 
             Text text = CreateText(buttonObject.transform, "Label", font, 16, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(500f, 54f));
@@ -178,6 +180,37 @@ namespace FrontierDepths.Progression
             textRect.anchorMin = textRect.anchorMax = new Vector2(0.5f, 0.5f);
             textRect.pivot = new Vector2(0.5f, 0.5f);
             return button;
+        }
+
+        private static string BuildOfferDescription(ProfileState profile, ShopOffer offer)
+        {
+            if (offer.action != ShopOfferAction.AcceptBounty && offer.action != ShopOfferAction.TurnInBounty)
+            {
+                return offer.description;
+            }
+
+            BountyDefinition bounty = BountyCatalog.Get(offer.rewardId);
+            BountyRuntimeState state = profile != null ? BountyObjectiveTracker.GetOrCreate(profile, offer.rewardId) : null;
+            string stateLabel = state != null ? state.state.ToString() : "Available";
+            return bounty == null
+                ? $"{offer.description}\nState: {stateLabel}"
+                : $"Target: {bounty.targetName} | Floor {bounty.minFloor}-{bounty.maxFloor} | State: {stateLabel}\n{bounty.reason}\nReward: {bounty.goldReward}g, {bounty.xpReward} XP";
+        }
+
+        private static bool CanUseOffer(ProfileState profile, ShopOffer offer)
+        {
+            if (offer.action == ShopOfferAction.AcceptBounty)
+            {
+                return BountyObjectiveTracker.CanAccept(profile, offer.rewardId, out _);
+            }
+
+            if (offer.action == ShopOfferAction.TurnInBounty)
+            {
+                BountyRuntimeState state = profile != null ? BountyObjectiveTracker.GetOrCreate(profile, offer.rewardId) : null;
+                return state != null && state.state == BountyState.Killed;
+            }
+
+            return true;
         }
     }
 }

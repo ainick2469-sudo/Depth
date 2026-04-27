@@ -75,13 +75,45 @@ namespace FrontierDepths.Core
 
         public bool AcceptBounty(string bountyId)
         {
-            if (string.IsNullOrWhiteSpace(bountyId) || Current.activeBountyIds.Contains(bountyId))
+            if (!BountyObjectiveTracker.MarkAccepted(Current, bountyId, out _))
             {
                 return false;
             }
 
-            Current.activeBountyIds.Add(bountyId);
+            if (!Current.activeBountyIds.Contains(bountyId))
+            {
+                Current.activeBountyIds.Add(bountyId);
+            }
+
             Save();
+            return true;
+        }
+
+        public bool TryTurnInBounty(string bountyId, out string message)
+        {
+            if (!BountyObjectiveTracker.TryTurnIn(Current, bountyId, out BountyDefinition definition, out string reason))
+            {
+                message = reason;
+                return false;
+            }
+
+            if (definition.goldReward > 0)
+            {
+                Current.gold += definition.goldReward;
+            }
+
+            if (definition.xpReward > 0)
+            {
+                Current.classXp += definition.xpReward;
+                while (Current.classXp >= (Current.skillPoints + 1) * 100)
+                {
+                    Current.skillPoints++;
+                }
+            }
+
+            Current.activeBountyIds.Remove(bountyId);
+            Save();
+            message = $"{definition.targetName} bounty complete: +{definition.goldReward}g, +{definition.xpReward} XP.";
             return true;
         }
 

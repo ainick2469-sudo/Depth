@@ -78,7 +78,7 @@ namespace FrontierDepths.UI
             builder.AppendLine("AMMO");
             if (weapon != null)
             {
-                builder.AppendLine($"{weapon.CurrentAmmo}/{weapon.MagazineSize} loaded | {weapon.ReserveAmmo}/{weapon.MaxReserveAmmo} reserve");
+                builder.AppendLine($"{weapon.CurrentAmmo}/{weapon.MagazineSize} loaded | Reserve {weapon.ReserveAmmo}/{weapon.MaxReserveAmmo}");
             }
             else
             {

@@ -135,9 +135,9 @@ namespace FrontierDepths.Combat
 
             HandleWeaponInputFrame(
                 currentTime,
-                Input.GetMouseButton(0),
-                Input.GetMouseButtonDown(0),
-                Input.GetKeyDown(KeyCode.R));
+                InputBindingService.GetKey(GameplayInputAction.Fire),
+                InputBindingService.GetKeyDown(GameplayInputAction.Fire),
+                InputBindingService.GetKeyDown(GameplayInputAction.Reload));
         }
 
         internal WeaponInputFrameResult HandleWeaponInputFrame(

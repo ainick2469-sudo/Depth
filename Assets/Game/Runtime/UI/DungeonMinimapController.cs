@@ -643,22 +643,55 @@ namespace FrontierDepths.UI
 
         private Color GetRoomColor(DungeonRoomBuildRecord room, bool visited, bool current)
         {
-            Color baseColor = room.roomType switch
+            Color baseColor = GetPurposeMinimapColor(room);
+            if (baseColor == default)
             {
-                DungeonNodeKind.TransitDown => new Color(0.95f, 0.75f, 0.2f, 1f),
-                DungeonNodeKind.TransitUp => new Color(0.55f, 0.82f, 0.95f, 1f),
-                DungeonNodeKind.Landmark => new Color(0.35f, 0.85f, 0.58f, 1f),
-                DungeonNodeKind.Secret => new Color(0.62f, 0.38f, 0.82f, 1f),
-                DungeonNodeKind.EntryHub => new Color(0.45f, 0.58f, 0.72f, 1f),
-                _ => new Color(0.58f, 0.6f, 0.64f, 1f)
-            };
+                baseColor = room.roomType switch
+                {
+                    DungeonNodeKind.TransitDown => new Color(0.95f, 0.75f, 0.2f, 1f),
+                    DungeonNodeKind.TransitUp => new Color(0.55f, 0.82f, 0.95f, 1f),
+                    DungeonNodeKind.Landmark => new Color(0.35f, 0.85f, 0.58f, 1f),
+                    DungeonNodeKind.Secret => new Color(0.62f, 0.38f, 0.82f, 1f),
+                    DungeonNodeKind.EntryHub => new Color(0.45f, 0.58f, 0.72f, 1f),
+                    _ => new Color(0.58f, 0.6f, 0.64f, 1f)
+                };
+            }
 
             float alpha = current ? 0.92f : visited ? 0.72f : 0.36f;
             return new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
         }
 
+        private static Color GetPurposeMinimapColor(DungeonRoomBuildRecord room)
+        {
+            if (room == null || string.IsNullOrWhiteSpace(room.purposeId))
+            {
+                return default;
+            }
+
+            return room.purposeId switch
+            {
+                "green_cache" => new Color(0.25f, 0.9f, 0.38f, 1f),
+                "purple_shrine" => new Color(0.68f, 0.35f, 0.95f, 1f),
+                "red_elite" => new Color(0.92f, 0.18f, 0.14f, 1f),
+                "orange_ambush" => new Color(1f, 0.48f, 0.12f, 1f),
+                "rainbow_wild" => new Color(1f, 0.72f, 0.95f, 1f),
+                "blue_fountain" => new Color(0.25f, 0.65f, 1f, 1f),
+                "gold_treasury" => new Color(1f, 0.78f, 0.18f, 1f),
+                "cyan_armory" => new Color(0.22f, 0.92f, 0.95f, 1f),
+                "white_sanctuary" => new Color(0.9f, 0.9f, 0.82f, 1f),
+                "black_vault" => new Color(0.16f, 0.08f, 0.2f, 1f),
+                "teal_scout" => new Color(0.22f, 0.78f, 0.68f, 1f),
+                _ => default
+            };
+        }
+
         private static string GetRoomIcon(DungeonRoomBuildRecord room)
         {
+            if (!string.IsNullOrWhiteSpace(room.purposeIcon))
+            {
+                return room.purposeIcon;
+            }
+
             return room.roomType switch
             {
                 DungeonNodeKind.TransitDown => "D",
@@ -671,6 +704,12 @@ namespace FrontierDepths.UI
 
         private static Color GetRoomIconColor(DungeonRoomBuildRecord room)
         {
+            Color purposeColor = GetPurposeMinimapColor(room);
+            if (purposeColor != default)
+            {
+                return purposeColor;
+            }
+
             return room.roomType switch
             {
                 DungeonNodeKind.TransitDown => new Color(1f, 0.9f, 0.35f, 1f),

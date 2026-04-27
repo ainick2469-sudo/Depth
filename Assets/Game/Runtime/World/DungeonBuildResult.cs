@@ -42,6 +42,7 @@ namespace FrontierDepths.World
         public readonly List<DungeonReservedZoneRecord> reservedZones = new List<DungeonReservedZoneRecord>();
         public readonly List<DungeonInteractableBuildRecord> interactables = new List<DungeonInteractableBuildRecord>();
         public readonly List<DungeonSpawnPointRecord> spawnPoints = new List<DungeonSpawnPointRecord>();
+        public readonly List<RoomClusterRecord> roomClusters = new List<RoomClusterRecord>();
 
         public static string GetEdgeKey(string a, string b)
         {
@@ -152,6 +153,10 @@ namespace FrontierDepths.World
         public string label;
         public DungeonNodeKind roomType;
         public DungeonRoomTemplateKind templateKind;
+        public string purposeId = string.Empty;
+        public string purposeDisplayName = string.Empty;
+        public string purposeIcon = string.Empty;
+        public string clusterId = string.Empty;
         public GameObject rootObject;
         public Vector3 origin;
         public Bounds bounds;
@@ -241,5 +246,14 @@ namespace FrontierDepths.World
         public Vector3 position;
         public Bounds bounds;
         public float score;
+    }
+
+    public sealed class RoomClusterRecord
+    {
+        public string clusterId = string.Empty;
+        public string purposeId = string.Empty;
+        public int floorIndex;
+        public Bounds combinedBounds;
+        public readonly List<string> roomIds = new List<string>();
     }
 }

@@ -122,7 +122,7 @@ namespace FrontierDepths.Core
             HandleLook();
             HandleMovement();
 
-            if (Input.GetKeyDown(KeyCode.E))
+            if (InputBindingService.GetKeyDown(GameplayInputAction.Interact))
             {
                 if (InputFrameGuard.WasTownServiceCloseConsumedThisFrame)
                 {
@@ -207,17 +207,17 @@ namespace FrontierDepths.Core
         private void HandleMovement()
         {
             bool groundedBeforeMove = controller.isGrounded;
-            Vector2 moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+            Vector2 moveInput = InputBindingService.GetMovementVector();
             Vector3 desired = transform.right * moveInput.x + transform.forward * moveInput.y;
             desired = Vector3.ClampMagnitude(desired, 1f);
-            float speed = walkSpeed * (Input.GetKey(KeyCode.LeftShift) ? sprintMultiplier : 1f);
+            float speed = walkSpeed * (InputBindingService.GetKey(GameplayInputAction.Sprint) ? sprintMultiplier : 1f);
 
             if (groundedBeforeMove && verticalVelocity < 0f)
             {
                 verticalVelocity = GroundSnapVelocity;
             }
 
-            if (Input.GetKeyDown(KeyCode.Space) && groundedBeforeMove)
+            if (InputBindingService.GetKeyDown(GameplayInputAction.Jump) && groundedBeforeMove)
             {
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
                 GameplayEventBus.Publish(new GameplayEvent

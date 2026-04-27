@@ -10,10 +10,14 @@ namespace FrontierDepths.Core
         public int gold = 350;
         public int townSigils;
         public int curioDust;
+        public int classXp;
+        public int skillPoints;
         public string equippedWeaponId = "weapon.frontier_revolver";
         public string storedHeirloomId = string.Empty;
         public List<string> unlockedWeaponIds = new List<string> { "weapon.frontier_revolver" };
         public List<string> activeBountyIds = new List<string>();
+        public List<BountyRuntimeState> bounties = new List<BountyRuntimeState>();
+        public List<string> unlockedSkillNodeIds = new List<string>();
         public List<ShopPurchaseRecord> purchaseRecords = new List<ShopPurchaseRecord>();
 
         public void Normalize()
@@ -21,11 +25,46 @@ namespace FrontierDepths.Core
             equippedWeaponId = string.IsNullOrWhiteSpace(equippedWeaponId) ? "weapon.frontier_revolver" : equippedWeaponId;
             unlockedWeaponIds ??= new List<string>();
             activeBountyIds ??= new List<string>();
+            bounties ??= new List<BountyRuntimeState>();
+            unlockedSkillNodeIds ??= new List<string>();
             purchaseRecords ??= new List<ShopPurchaseRecord>();
+            classXp = Math.Max(0, classXp);
+            skillPoints = Math.Max(0, skillPoints);
 
             if (!unlockedWeaponIds.Contains("weapon.frontier_revolver"))
             {
                 unlockedWeaponIds.Insert(0, "weapon.frontier_revolver");
+            }
+
+            for (int i = bounties.Count - 1; i >= 0; i--)
+            {
+                if (bounties[i] == null || string.IsNullOrWhiteSpace(bounties[i].bountyId))
+                {
+                    bounties.RemoveAt(i);
+                    continue;
+                }
+
+                bounties[i].Normalize();
+                if ((bounties[i].state == BountyState.Accepted || bounties[i].state == BountyState.Spawned) &&
+                    !activeBountyIds.Contains(bounties[i].bountyId))
+                {
+                    activeBountyIds.Add(bounties[i].bountyId);
+                }
+            }
+
+            for (int i = 0; i < activeBountyIds.Count; i++)
+            {
+                string bountyId = activeBountyIds[i];
+                if (string.IsNullOrWhiteSpace(bountyId))
+                {
+                    continue;
+                }
+
+                BountyRuntimeState state = BountyObjectiveTracker.GetOrCreate(this, bountyId);
+                if (state.state == BountyState.Available)
+                {
+                    state.state = BountyState.Accepted;
+                }
             }
         }
 

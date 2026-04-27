@@ -218,6 +218,7 @@ namespace FrontierDepths.World
                     break;
             }
 
+            pickup.AddComponent<PickupDropLandingController>().BeginLanding(position);
             int defaultLayer = LayerMask.NameToLayer("Default");
             DungeonSceneController.SetLayerRecursively(pickup, defaultLayer >= 0 ? defaultLayer : 0);
             return pickup;
