@@ -1,5 +1,4 @@
 using FrontierDepths.Core;
-using FrontierDepths.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -140,8 +139,7 @@ namespace FrontierDepths.Combat
             ResolveComponents();
             return Time.timeScale <= 0f ||
                    (playerController != null && playerController.IsUiCaptured) ||
-                   (playerHealth != null && playerHealth.IsDead) ||
-                   DungeonRewardChoiceController.IsRewardChoiceActive;
+                   (playerHealth != null && playerHealth.IsDead);
         }
 
         private void ResolveComponents()
