@@ -14,6 +14,9 @@ namespace FrontierDepths.Core
         public int skillPoints;
         public int townReputation;
         public string equippedWeaponId = "weapon.frontier_revolver";
+        public string primaryWeaponId = "weapon.frontier_revolver";
+        public string secondaryWeaponId = string.Empty;
+        public int activeWeaponSlot = 1;
         public string storedHeirloomId = string.Empty;
         public List<string> unlockedWeaponIds = new List<string> { "weapon.frontier_revolver" };
         public List<string> activeBountyIds = new List<string>();
@@ -32,11 +35,47 @@ namespace FrontierDepths.Core
             classXp = Math.Max(0, classXp);
             skillPoints = Math.Max(0, skillPoints);
             townReputation = Math.Max(0, townReputation);
+            activeWeaponSlot = activeWeaponSlot == 2 ? 2 : 1;
 
             if (!unlockedWeaponIds.Contains("weapon.frontier_revolver"))
             {
                 unlockedWeaponIds.Insert(0, "weapon.frontier_revolver");
             }
+
+            if (!string.IsNullOrWhiteSpace(equippedWeaponId) && !unlockedWeaponIds.Contains(equippedWeaponId))
+            {
+                unlockedWeaponIds.Add(equippedWeaponId);
+            }
+
+            primaryWeaponId = string.IsNullOrWhiteSpace(primaryWeaponId) ? "weapon.frontier_revolver" : primaryWeaponId;
+            if (!unlockedWeaponIds.Contains(primaryWeaponId))
+            {
+                primaryWeaponId = "weapon.frontier_revolver";
+            }
+
+            if (string.IsNullOrWhiteSpace(secondaryWeaponId))
+            {
+                for (int i = 0; i < unlockedWeaponIds.Count; i++)
+                {
+                    string candidate = unlockedWeaponIds[i];
+                    if (!string.IsNullOrWhiteSpace(candidate) && candidate != primaryWeaponId)
+                    {
+                        secondaryWeaponId = candidate;
+                        break;
+                    }
+                }
+            }
+            else if (!unlockedWeaponIds.Contains(secondaryWeaponId))
+            {
+                secondaryWeaponId = string.Empty;
+            }
+
+            if (activeWeaponSlot == 2 && string.IsNullOrWhiteSpace(secondaryWeaponId))
+            {
+                activeWeaponSlot = 1;
+            }
+
+            equippedWeaponId = GetActiveWeaponId();
 
             for (int i = bounties.Count - 1; i >= 0; i--)
             {
@@ -68,6 +107,42 @@ namespace FrontierDepths.Core
                     state.state = BountyState.Accepted;
                 }
             }
+        }
+
+        public string GetActiveWeaponId()
+        {
+            return activeWeaponSlot == 2 && !string.IsNullOrWhiteSpace(secondaryWeaponId)
+                ? secondaryWeaponId
+                : (string.IsNullOrWhiteSpace(primaryWeaponId) ? "weapon.frontier_revolver" : primaryWeaponId);
+        }
+
+        public bool HasUnlockedWeapon(string weaponId)
+        {
+            return !string.IsNullOrWhiteSpace(weaponId) &&
+                   unlockedWeaponIds != null &&
+                   unlockedWeaponIds.Contains(weaponId);
+        }
+
+        public bool TryAssignWeaponToSlot(string weaponId, int slot)
+        {
+            if (!HasUnlockedWeapon(weaponId))
+            {
+                return false;
+            }
+
+            if (slot == 2)
+            {
+                secondaryWeaponId = weaponId;
+                activeWeaponSlot = 2;
+            }
+            else
+            {
+                primaryWeaponId = weaponId;
+                activeWeaponSlot = 1;
+            }
+
+            equippedWeaponId = GetActiveWeaponId();
+            return true;
         }
 
         public int GetPurchaseCount(string shopId, string offerId)

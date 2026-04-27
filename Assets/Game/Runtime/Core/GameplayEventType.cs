@@ -21,6 +21,7 @@ namespace FrontierDepths.Core
         DistanceMoved,
         ReloadStarted,
         ReloadFinished,
-        DryFire
+        DryFire,
+        AmmoRestocked
     }
 }

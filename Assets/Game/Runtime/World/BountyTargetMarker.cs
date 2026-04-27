@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FrontierDepths.World
 {
-    public sealed class BountyTargetMarker : MonoBehaviour
+    public sealed class BountyTargetMarker : MonoBehaviour, IBountyTargetMarker
     {
         [SerializeField] private string bountyId = string.Empty;
         [SerializeField] private string bountyTitle = string.Empty;

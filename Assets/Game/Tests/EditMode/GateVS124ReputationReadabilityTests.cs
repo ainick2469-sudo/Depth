@@ -120,7 +120,17 @@ namespace FrontierDepths.Tests.EditMode
                    kind == RunUpgradeEffectKind.AmmoPickupPercent ||
                    kind == RunUpgradeEffectKind.EveryNthHitChain ||
                    kind == RunUpgradeEffectKind.PistolWhipDamagePercent ||
-                   kind == RunUpgradeEffectKind.PistolWhipCooldownPercent;
+                   kind == RunUpgradeEffectKind.PistolWhipCooldownPercent ||
+                   kind == RunUpgradeEffectKind.ReserveAmmoCapacityFlat ||
+                   kind == RunUpgradeEffectKind.DashCooldownPercent ||
+                   kind == RunUpgradeEffectKind.LastRoundDamagePercent ||
+                   kind == RunUpgradeEffectKind.ConsecutiveShotDamagePercent ||
+                   kind == RunUpgradeEffectKind.LowHealthReloadPercent ||
+                   kind == RunUpgradeEffectKind.EliteBountyRewardFlat ||
+                   kind == RunUpgradeEffectKind.LethalSavePerFloor ||
+                   kind == RunUpgradeEffectKind.ScoutRevealBonus ||
+                   kind == RunUpgradeEffectKind.ChainRangeFlat ||
+                   kind == RunUpgradeEffectKind.MoveSpeedAfterKillPercent;
         }
     }
 }

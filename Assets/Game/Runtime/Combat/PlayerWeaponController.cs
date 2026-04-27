@@ -63,6 +63,7 @@ namespace FrontierDepths.Combat
         private bool firstShotAfterReloadReady;
         private float pendingShotDamageMultiplier = 1f;
         private int runUpgradeWeaponHitCounter;
+        private int consecutiveShotsSinceReload;
         private bool applyingChainHit;
 
         public static int DefaultWeaponRaycastMask => ~(1 << 2);
@@ -72,6 +73,7 @@ namespace FrontierDepths.Combat
         public event Action<PlayerWeaponController> ReloadStarted;
         public event Action<PlayerWeaponController> ReloadFinished;
         public event Action<PlayerWeaponController> DryFired;
+        public event Action<PlayerWeaponController> WeaponEquipped;
         public event Action<DamageResult> DamageHitConfirmed;
         public event Action<WeaponHitFeedback> HitFeedbackReceived;
 
@@ -122,6 +124,8 @@ namespace FrontierDepths.Combat
         private void Update()
         {
             float currentTime = Time.time;
+            playerController?.SetDashCooldownMultiplier(RunStatAggregator.Current.DashCooldownMultiplier);
+            RefreshAmmoCapacityFromRunStats();
             TickReloadCompletion(currentTime);
 
             UpdateMuzzleFlash(currentTime);
@@ -162,6 +166,7 @@ namespace FrontierDepths.Combat
 
             if (weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
             {
+                consecutiveShotsSinceReload = 0;
                 BeginReloadFeedback();
                 result.reloadStarted = true;
                 result.autoReloadStarted = true;
@@ -262,11 +267,13 @@ namespace FrontierDepths.Combat
                         weaponState.ClearPendingAutoReload();
                         if (weaponState.TryStartReload(currentTime, GetReloadDuration()))
                         {
+                            consecutiveShotsSinceReload = 0;
                             BeginReloadFeedback();
                         }
                     }
                     else if (weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
                     {
+                        consecutiveShotsSinceReload = 0;
                         BeginReloadFeedback();
                     }
                 }
@@ -275,6 +282,7 @@ namespace FrontierDepths.Combat
             }
 
             SyncAmmoToRun(false);
+            consecutiveShotsSinceReload++;
             pendingShotDamageMultiplier = firstShotAfterReloadReady
                 ? RunStatAggregator.Current.FirstShotAfterReloadMultiplier
                 : 1f;
@@ -311,6 +319,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            consecutiveShotsSinceReload = 0;
             BeginReloadFeedback();
             return true;
         }
@@ -355,6 +364,51 @@ namespace FrontierDepths.Combat
             }
 
             return added;
+        }
+
+        public bool EquipWeapon(string weaponId)
+        {
+            EnsureRuntimeReady();
+            if (!WeaponCatalog.TryGet(weaponId, out WeaponDefinition nextDefinition))
+            {
+                return false;
+            }
+
+            SyncAmmoToRun(true);
+            weaponDefinition = nextDefinition;
+            weaponState = CreateWeaponRuntimeState();
+            firstShotAfterReloadReady = false;
+            pendingShotDamageMultiplier = 1f;
+
+            if (GameBootstrap.Instance != null)
+            {
+                ProfileService profileService = GameBootstrap.Instance.ProfileService;
+                if (profileService != null && profileService.Current.HasUnlockedWeapon(weaponId))
+                {
+                    profileService.EquipWeapon(weaponId);
+                }
+
+                RunService runService = GameBootstrap.Instance.RunService;
+                if (runService != null)
+                {
+                    runService.EnsureRun();
+                    runService.Current.equippedWeaponId = weaponId;
+                    SyncAmmoToRun(false);
+                    runService.Save();
+                }
+            }
+
+            WeaponEquipped?.Invoke(this);
+            GameplayEventBus.Publish(new GameplayEvent
+            {
+                eventType = GameplayEventType.WeaponSwapped,
+                sourceObject = gameObject,
+                weaponId = weaponId,
+                worldPosition = transform.position,
+                floorIndex = GetFloorIndex(),
+                timestamp = Time.unscaledTime
+            });
+            return true;
         }
 
         public static bool IsWeaponHitAllowed(Collider hitCollider, Transform playerRoot)
@@ -591,6 +645,7 @@ namespace FrontierDepths.Combat
             bool isCritical = critChance > 0f && RollCriticalHit(critChance);
             float amount = GetBaseDamage() *
                            Mathf.Max(0.01f, pendingShotDamageMultiplier) *
+                           GetRunUpgradeShotMultiplier() *
                            Mathf.Clamp01(rangeDamageMultiplier);
             GameplayTag[] tags = isCritical ? new[] { GameplayTag.OnCrit } : Array.Empty<GameplayTag>();
             if (isCritical)
@@ -651,11 +706,6 @@ namespace FrontierDepths.Combat
 
         private void ResolveWeaponDefinition()
         {
-            if (weaponDefinition != null)
-            {
-                return;
-            }
-
             string equippedId = DefaultWeaponId;
             if (GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null)
             {
@@ -664,14 +714,14 @@ namespace FrontierDepths.Combat
                     : GameBootstrap.Instance.RunService.Current.equippedWeaponId;
             }
 
-            WeaponDefinition[] definitions = Resources.LoadAll<WeaponDefinition>("Definitions/Combat");
-            for (int i = 0; i < definitions.Length; i++)
+            if (weaponDefinition != null && weaponDefinition.weaponId == equippedId)
             {
-                if (definitions[i] != null && definitions[i].weaponId == equippedId)
-                {
-                    weaponDefinition = definitions[i];
-                    return;
-                }
+                return;
+            }
+
+            if (WeaponCatalog.TryGet(equippedId, out WeaponDefinition resolved))
+            {
+                weaponDefinition = resolved;
             }
         }
 
@@ -711,7 +761,7 @@ namespace FrontierDepths.Combat
             RunWeaponAmmoState savedAmmo = GetRunAmmoState();
             if (savedAmmo != null && string.Equals(savedAmmo.weaponId, GetWeaponId(), StringComparison.Ordinal))
             {
-                savedAmmo.Normalize(GetWeaponId());
+                savedAmmo.Normalize(GetWeaponId(), false, magazineSize, startingReserve, maxReserve);
                 return new WeaponRuntimeState(
                     magazineSize,
                     Mathf.Clamp(savedAmmo.reserveAmmo, 0, maxReserve),
@@ -719,14 +769,33 @@ namespace FrontierDepths.Combat
                     Mathf.Clamp(savedAmmo.currentMagazineAmmo, 0, magazineSize));
             }
 
+            RunState run = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current
+                : null;
+            RunWeaponAmmoState perWeaponAmmo = run?.GetWeaponAmmoState(GetWeaponId());
+            if (perWeaponAmmo != null)
+            {
+                perWeaponAmmo.Normalize(GetWeaponId(), false, magazineSize, startingReserve, maxReserve);
+                return new WeaponRuntimeState(
+                    magazineSize,
+                    Mathf.Clamp(perWeaponAmmo.reserveAmmo, 0, maxReserve),
+                    maxReserve,
+                    Mathf.Clamp(perWeaponAmmo.currentMagazineAmmo, 0, magazineSize));
+            }
+
             return new WeaponRuntimeState(magazineSize, startingReserve, maxReserve);
         }
 
         private RunWeaponAmmoState GetRunAmmoState()
         {
-            return GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
-                ? GameBootstrap.Instance.RunService.Current.weaponAmmo
-                : null;
+            if (GameBootstrap.Instance == null || GameBootstrap.Instance.RunService == null)
+            {
+                return null;
+            }
+
+            RunState run = GameBootstrap.Instance.RunService.Current;
+            RunWeaponAmmoState perWeapon = run.GetWeaponAmmoState(GetWeaponId());
+            return perWeapon ?? run.weaponAmmo;
         }
 
         private void SyncAmmoToRun(bool save)
@@ -742,6 +811,7 @@ namespace FrontierDepths.Combat
             run.weaponAmmo.currentMagazineAmmo = weaponState.CurrentAmmo;
             run.weaponAmmo.reserveAmmo = weaponState.ReserveAmmo;
             run.weaponAmmo.maxReserveAmmo = weaponState.MaxReserveAmmo;
+            run.UpsertWeaponAmmoState(run.weaponAmmo);
             if (save)
             {
                 GameBootstrap.Instance.RunService.Save();
@@ -1235,12 +1305,18 @@ namespace FrontierDepths.Combat
             int configured = weaponDefinition != null && weaponDefinition.maxReserveAmmo >= 0
                 ? weaponDefinition.maxReserveAmmo
                 : DefaultMaxReserveAmmo;
-            return Mathf.Max(0, configured);
+            return Mathf.Max(0, configured + Mathf.RoundToInt(RunStatAggregator.Current.reserveAmmoCapacityFlat));
         }
 
         private float GetReloadDuration()
         {
-            return GetBaseReloadDuration() / Mathf.Max(0.1f, RunStatAggregator.Current.ReloadSpeedMultiplier);
+            float reloadSpeed = RunStatAggregator.Current.ReloadSpeedMultiplier;
+            if (playerHealth != null && playerHealth.MaxHealth > 0f && playerHealth.CurrentHealth / playerHealth.MaxHealth <= 0.4f)
+            {
+                reloadSpeed *= RunStatAggregator.Current.LowHealthReloadMultiplier;
+            }
+
+            return GetBaseReloadDuration() / Mathf.Max(0.1f, reloadSpeed);
         }
 
         private float GetBaseReloadDuration()
@@ -1372,6 +1448,16 @@ namespace FrontierDepths.Combat
         private void HandleGameplayEvent(GameplayEvent gameplayEvent)
         {
             playerHealth ??= GetComponent<PlayerHealth>();
+            if (gameplayEvent.eventType == GameplayEventType.AmmoRestocked)
+            {
+                if (string.IsNullOrWhiteSpace(gameplayEvent.weaponId) || gameplayEvent.weaponId == GetWeaponId())
+                {
+                    weaponState = CreateWeaponRuntimeState();
+                }
+
+                return;
+            }
+
             if (gameplayEvent.eventType != GameplayEventType.EnemyKilled ||
                 gameplayEvent.sourceObject == null ||
                 playerHealth == null ||
@@ -1391,11 +1477,79 @@ namespace FrontierDepths.Combat
             {
                 playerHealth.Heal(healAmount);
             }
+
+            if (RunStatAggregator.Current.moveSpeedAfterKillPercent > 0f)
+            {
+                playerController?.ApplyTemporaryMoveSpeed(RunStatAggregator.Current.moveSpeedAfterKillPercent, 2f);
+            }
+
+            ApplyHunterClaimBonus(gameplayEvent);
         }
 
         internal void HandleGameplayEventForTests(GameplayEvent gameplayEvent)
         {
             HandleGameplayEvent(gameplayEvent);
+        }
+
+        private void ApplyHunterClaimBonus(GameplayEvent gameplayEvent)
+        {
+            int stacks = Mathf.RoundToInt(RunStatAggregator.Current.eliteBountyRewardFlat);
+            if (stacks <= 0 || gameplayEvent.targetObject == null || GameBootstrap.Instance == null)
+            {
+                return;
+            }
+
+            EnemyHealth enemy = gameplayEvent.targetObject.GetComponentInParent<EnemyHealth>();
+            bool bountyTarget = gameplayEvent.targetObject.GetComponentInParent<IBountyTargetMarker>() != null;
+            bool eliteEnemy = enemy != null && enemy.Definition != null && enemy.Definition.tier >= 3;
+            if (!bountyTarget && !eliteEnemy)
+            {
+                return;
+            }
+
+            ProfileService profileService = GameBootstrap.Instance.ProfileService;
+            if (profileService == null)
+            {
+                return;
+            }
+
+            profileService.AddGold(10 * stacks);
+            ReputationService.AddReputation(profileService.Current, 3 * stacks);
+            profileService.Save();
+        }
+
+        private float GetRunUpgradeShotMultiplier()
+        {
+            RunStatSnapshot stats = RunStatAggregator.Current;
+            float multiplier = 1f;
+            if (weaponState != null && weaponState.CurrentAmmo == 0)
+            {
+                multiplier += Mathf.Max(0f, stats.lastRoundDamagePercent);
+            }
+
+            if (consecutiveShotsSinceReload > 1)
+            {
+                multiplier += Mathf.Max(0f, stats.consecutiveShotDamagePercent) * (consecutiveShotsSinceReload - 1);
+            }
+
+            return multiplier;
+        }
+
+        private void RefreshAmmoCapacityFromRunStats()
+        {
+            if (weaponState == null)
+            {
+                return;
+            }
+
+            int expectedMaxReserve = GetMaxReserveAmmo();
+            if (weaponState.MaxReserveAmmo == expectedMaxReserve)
+            {
+                return;
+            }
+
+            weaponState.ResetAmmo(GetMagazineSize(), weaponState.CurrentAmmo, weaponState.ReserveAmmo, expectedMaxReserve);
+            SyncAmmoToRun(true);
         }
 
         internal bool TryApplyChainHit(DamageInfo damageInfo, DamageResult result, GameObject targetObject)
@@ -1417,7 +1571,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, RunUpgradeCatalog.ChainHitSearchRadius);
+            EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, RunUpgradeCatalog.ChainHitSearchRadius + stats.chainRangeFlat);
             if (chainTarget == null)
             {
                 return false;

@@ -13,6 +13,9 @@ namespace FrontierDepths.Core
         [SerializeField] private float sprintMultiplier = 1.45f;
         [SerializeField] private float jumpHeight = 1.2f;
         [SerializeField] private float gravity = -25f;
+        [SerializeField] private float dashDistance = 6f;
+        [SerializeField] private float dashDuration = 0.15f;
+        [SerializeField] private float dashCooldownSeconds = 3f;
         [SerializeField] private float lookSensitivity = 1.2f;
         [SerializeField] private bool invertY;
         [SerializeField] private float footstepDistance = 2.25f;
@@ -32,6 +35,12 @@ namespace FrontierDepths.Core
         private bool manualPauseCaptured;
         private int suppressLookFrames;
         private LookRecoilState lookRecoil;
+        private float dashCooldownMultiplier = 1f;
+        private float nextDashTime;
+        private float dashEndTime;
+        private Vector3 dashVelocity;
+        private float temporaryMoveSpeedMultiplier = 1f;
+        private float temporaryMoveSpeedUntil;
 
         private static AudioClip footstepClip;
         private static AudioClip landingClip;
@@ -40,6 +49,9 @@ namespace FrontierDepths.Core
         public Camera PlayerCamera => playerCamera;
         public bool IsUiCaptured => externalUiCaptured || manualPauseCaptured;
         public bool IsManualPauseActive => manualPauseCaptured;
+        public float DashCooldownDuration => Mathf.Max(0.1f, dashCooldownSeconds * dashCooldownMultiplier);
+        public float DashCooldownRemaining => Mathf.Max(0f, nextDashTime - Time.time);
+        public bool IsDashing => Time.time < dashEndTime;
 
         private void Awake()
         {
@@ -120,6 +132,7 @@ namespace FrontierDepths.Core
             }
 
             HandleLook();
+            HandleDashInput();
             HandleMovement();
 
             if (InputBindingService.GetKeyDown(GameplayInputAction.Interact))
@@ -190,6 +203,17 @@ namespace FrontierDepths.Core
             }
         }
 
+        public void SetDashCooldownMultiplier(float multiplier)
+        {
+            dashCooldownMultiplier = Mathf.Clamp(multiplier, 0.25f, 2f);
+        }
+
+        public void ApplyTemporaryMoveSpeed(float additivePercent, float durationSeconds)
+        {
+            temporaryMoveSpeedMultiplier = Mathf.Max(temporaryMoveSpeedMultiplier, 1f + Mathf.Max(0f, additivePercent));
+            temporaryMoveSpeedUntil = Mathf.Max(temporaryMoveSpeedUntil, Time.time + Mathf.Max(0.1f, durationSeconds));
+        }
+
         private void HandleLook()
         {
             if (playerCamera == null || suppressLookFrames > 0)
@@ -211,6 +235,14 @@ namespace FrontierDepths.Core
             Vector3 desired = transform.right * moveInput.x + transform.forward * moveInput.y;
             desired = Vector3.ClampMagnitude(desired, 1f);
             float speed = walkSpeed * (InputBindingService.GetKey(GameplayInputAction.Sprint) ? sprintMultiplier : 1f);
+            if (Time.time < temporaryMoveSpeedUntil)
+            {
+                speed *= temporaryMoveSpeedMultiplier;
+            }
+            else
+            {
+                temporaryMoveSpeedMultiplier = 1f;
+            }
 
             if (groundedBeforeMove && verticalVelocity < 0f)
             {
@@ -231,6 +263,10 @@ namespace FrontierDepths.Core
             float preMoveVerticalVelocity = verticalVelocity;
             verticalVelocity += gravity * Time.deltaTime;
             Vector3 velocity = desired * speed + Vector3.up * verticalVelocity;
+            if (IsDashing)
+            {
+                velocity += dashVelocity;
+            }
             controller.Move(velocity * Time.deltaTime);
 
             bool groundedAfterMove = controller.isGrounded;
@@ -242,6 +278,35 @@ namespace FrontierDepths.Core
             HandleFeedback(desired, groundedAfterMove, preMoveVerticalVelocity);
             wasGroundedLastFrame = groundedAfterMove;
             lastPosition = transform.position;
+        }
+
+        private void HandleDashInput()
+        {
+            if (!InputBindingService.GetKeyDown(GameplayInputAction.Dash) || Time.time < nextDashTime)
+            {
+                return;
+            }
+
+            Vector2 moveInput = InputBindingService.GetMovementVector();
+            Vector3 direction = transform.right * moveInput.x + transform.forward * moveInput.y;
+            if (direction.sqrMagnitude <= 0.001f)
+            {
+                direction = transform.forward;
+            }
+
+            direction.y = 0f;
+            direction.Normalize();
+            float duration = Mathf.Clamp(dashDuration, 0.05f, 0.35f);
+            dashVelocity = direction * (Mathf.Max(0.5f, dashDistance) / duration);
+            dashEndTime = Time.time + duration;
+            nextDashTime = Time.time + DashCooldownDuration;
+            GameplayEventBus.Publish(new GameplayEvent
+            {
+                eventType = GameplayEventType.PlayerDashed,
+                sourceObject = gameObject,
+                worldPosition = transform.position,
+                timestamp = Time.unscaledTime
+            });
         }
 
         private void HandleFeedback(Vector3 desired, bool groundedAfterMove, float preMoveVerticalVelocity)

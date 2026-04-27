@@ -251,6 +251,10 @@ namespace FrontierDepths.UI
             EnsureCrosshairVisuals();
             EnsureWeaponHudView();
             EnsurePlayerHealthHudView();
+            EnsureInventoryPanelController();
+            EnsureHudResourceView();
+            EnsureControlHintHudView();
+            EnsureDashHudView();
             EnsureDungeonMinimapController();
             EnsureRunInfoPanelController();
         }
@@ -268,6 +272,38 @@ namespace FrontierDepths.UI
             if (GetComponent<PlayerHealthHudView>() == null)
             {
                 gameObject.AddComponent<PlayerHealthHudView>();
+            }
+        }
+
+        private void EnsureInventoryPanelController()
+        {
+            if (GetComponent<InventoryPanelController>() == null)
+            {
+                gameObject.AddComponent<InventoryPanelController>();
+            }
+        }
+
+        private void EnsureHudResourceView()
+        {
+            if (GetComponent<HudResourceView>() == null)
+            {
+                gameObject.AddComponent<HudResourceView>();
+            }
+        }
+
+        private void EnsureControlHintHudView()
+        {
+            if (GetComponent<ControlHintHudView>() == null)
+            {
+                gameObject.AddComponent<ControlHintHudView>();
+            }
+        }
+
+        private void EnsureDashHudView()
+        {
+            if (GetComponent<DashHudView>() == null)
+            {
+                gameObject.AddComponent<DashHudView>();
             }
         }
 

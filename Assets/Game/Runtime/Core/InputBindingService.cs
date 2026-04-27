@@ -17,6 +17,10 @@ namespace FrontierDepths.Core
         Fire,
         Reload,
         PistolWhip,
+        Inventory,
+        Dash,
+        EquipPrimary,
+        EquipSecondary,
         RunInfo,
         Minimap,
         Pause
@@ -130,7 +134,7 @@ namespace FrontierDepths.Core
         private static readonly KeyCode[] RebindCandidates =
         {
             KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D, KeyCode.Space, KeyCode.LeftShift,
-            KeyCode.E, KeyCode.R, KeyCode.V, KeyCode.G, KeyCode.M, KeyCode.Escape,
+            KeyCode.LeftControl, KeyCode.LeftAlt, KeyCode.E, KeyCode.R, KeyCode.V, KeyCode.I, KeyCode.G, KeyCode.M, KeyCode.Escape,
             KeyCode.Q, KeyCode.F, KeyCode.C, KeyCode.X, KeyCode.Z, KeyCode.Tab,
             KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
             KeyCode.Mouse0, KeyCode.Mouse1, KeyCode.Mouse2, KeyCode.Mouse3, KeyCode.Mouse4
@@ -265,6 +269,10 @@ namespace FrontierDepths.Core
                 GameplayInputAction.Fire => Record(action, KeyCode.Mouse0),
                 GameplayInputAction.Reload => Record(action, KeyCode.R),
                 GameplayInputAction.PistolWhip => Record(action, KeyCode.V, KeyCode.Mouse2),
+                GameplayInputAction.Inventory => Record(action, KeyCode.I, KeyCode.Tab),
+                GameplayInputAction.Dash => Record(action, KeyCode.LeftControl, KeyCode.LeftAlt),
+                GameplayInputAction.EquipPrimary => Record(action, KeyCode.Alpha1),
+                GameplayInputAction.EquipSecondary => Record(action, KeyCode.Alpha2),
                 GameplayInputAction.RunInfo => Record(action, KeyCode.G),
                 GameplayInputAction.Minimap => Record(action, KeyCode.M),
                 GameplayInputAction.Pause => Record(action, KeyCode.Escape),
@@ -311,6 +319,10 @@ namespace FrontierDepths.Core
                 "Mouse1" => "Mouse Right",
                 "Mouse2" => "Mouse Middle",
                 "LeftShift" => "Left Shift",
+                "LeftControl" => "Left Ctrl",
+                "LeftAlt" => "Left Alt",
+                "Alpha1" => "1",
+                "Alpha2" => "2",
                 _ => string.IsNullOrWhiteSpace(keyName) ? "Unbound" : keyName
             };
         }

@@ -14,6 +14,7 @@ namespace FrontierDepths.Combat
         {
             amount = Mathf.Max(1, goldAmount);
             ConfigureCollider();
+            EnsureMagnet();
         }
 
         public bool ApplyToPlayer(GameObject playerObject)
@@ -30,6 +31,7 @@ namespace FrontierDepths.Combat
         private void Awake()
         {
             ConfigureCollider();
+            EnsureMagnet();
         }
 
         private void OnTriggerEnter(Collider other)
@@ -37,6 +39,14 @@ namespace FrontierDepths.Combat
             if (other != null && ApplyToPlayer(other.gameObject))
             {
                 Destroy(gameObject);
+            }
+        }
+
+        private void EnsureMagnet()
+        {
+            if (GetComponent<PickupMagnetController>() == null)
+            {
+                gameObject.AddComponent<PickupMagnetController>();
             }
         }
 

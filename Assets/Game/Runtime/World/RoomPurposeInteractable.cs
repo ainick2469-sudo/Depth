@@ -130,19 +130,11 @@ namespace FrontierDepths.World
                     AddProfileProgress(profileService, classXp: 24, reputation: 10);
                     return "+24 class XP, +10 reputation";
                 case RoomPurposeEffect.Scout:
-                    FloorState floor = GetCurrentFloor();
-                    if (floor != null)
-                    {
-                        floor.stairDiscovered = true;
-                        GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
-                    }
-
-                    AddProfileProgress(profileService, classXp: 6, reputation: 2);
-                    return "stair marked, +6 class XP";
+                    return ApplyScoutSurvey(profileService);
                 case RoomPurposeEffect.Treasury:
                     return "treasury payout";
                 case RoomPurposeEffect.Cache:
-                    return "safe supplies";
+                    return "safe supplies recovered";
                 default:
                     return string.Empty;
             }
@@ -186,6 +178,146 @@ namespace FrontierDepths.World
 
             ReputationService.AddReputation(profileService.Current, reputation);
             profileService.Save();
+        }
+
+        private static string ApplyScoutSurvey(ProfileService profileService)
+        {
+            FloorState floor = GetCurrentFloor();
+            DungeonBuildResult build = FindAnyObjectByType<DungeonSceneController>()?.CurrentBuildResult;
+            if (floor != null && build != null)
+            {
+                DungeonRoomBuildRecord stair = FindStairRoom(build);
+                if (stair != null && string.IsNullOrWhiteSpace(floor.knownStairRoomId))
+                {
+                    MarkRoomDiscovered(floor, stair.nodeId);
+                    floor.knownStairRoomId = stair.nodeId;
+                    floor.stairDiscovered = true;
+                    GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                    return "Stair room marked.";
+                }
+
+                DungeonRoomBuildRecord special = FindNearestHiddenSpecialRoom(build, floor);
+                if (special != null)
+                {
+                    MarkRoomDiscovered(floor, special.nodeId);
+                    int extra = RevealExtraSpecialRooms(build, floor, special.nodeId, RunStatAggregator.Current.scoutRevealBonus);
+                    GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                    return extra > 0
+                        ? $"Nearest special room marked: {special.purposeDisplayName}. +{extra} extra scout reveal."
+                        : $"Nearest special room marked: {special.purposeDisplayName}.";
+                }
+
+                DungeonRoomBuildRecord bounty = FindHiddenBountyRoom(build, floor, profileService?.Current);
+                if (bounty != null)
+                {
+                    MarkRoomDiscovered(floor, bounty.nodeId);
+                    GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                    return "Bounty trail marked.";
+                }
+            }
+
+            AddProfileProgress(profileService, classXp: 6, reputation: 2);
+            return "Already mapped. +6 class XP, +2 reputation.";
+        }
+
+        private static DungeonRoomBuildRecord FindStairRoom(DungeonBuildResult build)
+        {
+            for (int i = 0; i < build.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = build.rooms[i];
+                if (room.roomType == DungeonNodeKind.TransitDown || room.roomType == DungeonNodeKind.TransitUp)
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
+        private static DungeonRoomBuildRecord FindNearestHiddenSpecialRoom(DungeonBuildResult build, FloorState floor)
+        {
+            for (int i = 0; i < build.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = build.rooms[i];
+                if (!string.IsNullOrWhiteSpace(room.purposeId) && !IsRoomKnown(floor, room.nodeId))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
+        private static DungeonRoomBuildRecord FindHiddenBountyRoom(DungeonBuildResult build, FloorState floor, ProfileState profile)
+        {
+            if (profile == null || profile.bounties == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < profile.bounties.Count; i++)
+            {
+                BountyRuntimeState bounty = profile.bounties[i];
+                if (bounty == null ||
+                    bounty.spawnedFloorIndex != floor.floorIndex ||
+                    string.IsNullOrWhiteSpace(bounty.targetRoomId) ||
+                    IsRoomKnown(floor, bounty.targetRoomId))
+                {
+                    continue;
+                }
+
+                return build.FindRoom(bounty.targetRoomId);
+            }
+
+            return null;
+        }
+
+        private static int RevealExtraSpecialRooms(DungeonBuildResult build, FloorState floor, string excludeRoomId, int count)
+        {
+            int revealed = 0;
+            for (int i = 0; i < build.rooms.Count && revealed < count; i++)
+            {
+                DungeonRoomBuildRecord room = build.rooms[i];
+                if (room.nodeId == excludeRoomId || string.IsNullOrWhiteSpace(room.purposeId) || IsRoomKnown(floor, room.nodeId))
+                {
+                    continue;
+                }
+
+                MarkRoomDiscovered(floor, room.nodeId);
+                revealed++;
+            }
+
+            return revealed;
+        }
+
+        private static void MarkRoomDiscovered(FloorState floor, string roomId)
+        {
+            if (floor == null || string.IsNullOrWhiteSpace(roomId))
+            {
+                return;
+            }
+
+            floor.discoveredRoomIds ??= new System.Collections.Generic.List<string>();
+            if (!floor.discoveredRoomIds.Contains(roomId))
+            {
+                floor.discoveredRoomIds.Add(roomId);
+            }
+
+            GameplayEventBus.Publish(new GameplayEvent
+            {
+                eventType = GameplayEventType.RoomDiscovered,
+                roomId = roomId,
+                floorIndex = floor.floorIndex,
+                timestamp = Time.unscaledTime
+            });
+        }
+
+        private static bool IsRoomKnown(FloorState floor, string roomId)
+        {
+            return floor != null &&
+                   !string.IsNullOrWhiteSpace(roomId) &&
+                   ((floor.discoveredRoomIds != null && floor.discoveredRoomIds.Contains(roomId)) ||
+                    (floor.visitedRoomIds != null && floor.visitedRoomIds.Contains(roomId)));
         }
 
         private bool IsClaimed()

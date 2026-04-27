@@ -6,7 +6,7 @@ namespace FrontierDepths.Core
     [Serializable]
     public class RunState
     {
-        public int version = 4;
+        public int version = 5;
         public bool isActive;
         public int seed;
         public int floorIndex = 1;
@@ -14,6 +14,7 @@ namespace FrontierDepths.Core
         public List<string> acceptedBountyIds = new List<string>();
         public List<RunUpgradeRecord> runUpgrades = new List<RunUpgradeRecord>();
         public RunWeaponAmmoState weaponAmmo = new RunWeaponAmmoState();
+        public List<RunWeaponAmmoState> weaponAmmoStates = new List<RunWeaponAmmoState>();
         public FloorState currentFloor = new FloorState();
         public List<FloorState> visitedFloors = new List<FloorState>();
         public PortalAnchorState portalAnchor = PortalAnchorState.Invalid;
@@ -26,7 +27,19 @@ namespace FrontierDepths.Core
             bool legacyAmmoState = version < 3 || weaponAmmo == null;
             weaponAmmo ??= new RunWeaponAmmoState();
             weaponAmmo.Normalize(equippedWeaponId, legacyAmmoState);
-            version = 4;
+            weaponAmmoStates ??= new List<RunWeaponAmmoState>();
+            UpsertWeaponAmmoState(weaponAmmo);
+            for (int i = weaponAmmoStates.Count - 1; i >= 0; i--)
+            {
+                if (weaponAmmoStates[i] == null)
+                {
+                    weaponAmmoStates.RemoveAt(i);
+                    continue;
+                }
+
+                weaponAmmoStates[i].Normalize(weaponAmmoStates[i].weaponId);
+            }
+            version = 5;
             for (int i = runUpgrades.Count - 1; i >= 0; i--)
             {
                 RunUpgradeRecord record = runUpgrades[i];
@@ -154,6 +167,81 @@ namespace FrontierDepths.Core
             });
         }
 
+        public RunWeaponAmmoState GetWeaponAmmoState(string weaponId)
+        {
+            if (string.IsNullOrWhiteSpace(weaponId) || weaponAmmoStates == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < weaponAmmoStates.Count; i++)
+            {
+                RunWeaponAmmoState state = weaponAmmoStates[i];
+                if (state != null && string.Equals(state.weaponId, weaponId, StringComparison.Ordinal))
+                {
+                    return state;
+                }
+            }
+
+            return null;
+        }
+
+        public RunWeaponAmmoState GetOrCreateWeaponAmmoState(string weaponId, int magazineAmmo, int reserveAmmo, int maxReserveAmmo)
+        {
+            weaponId = string.IsNullOrWhiteSpace(weaponId) ? equippedWeaponId : weaponId;
+            RunWeaponAmmoState existing = GetWeaponAmmoState(weaponId);
+            if (existing != null)
+            {
+                existing.Normalize(weaponId, false, magazineAmmo, reserveAmmo, maxReserveAmmo);
+                return existing;
+            }
+
+            RunWeaponAmmoState created = new RunWeaponAmmoState
+            {
+                weaponId = weaponId,
+                currentMagazineAmmo = Math.Max(0, magazineAmmo),
+                reserveAmmo = Math.Max(0, Math.Min(reserveAmmo, Math.Max(0, maxReserveAmmo))),
+                maxReserveAmmo = Math.Max(0, maxReserveAmmo)
+            };
+            weaponAmmoStates ??= new List<RunWeaponAmmoState>();
+            weaponAmmoStates.Add(created);
+            return created;
+        }
+
+        public void UpsertWeaponAmmoState(RunWeaponAmmoState state)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            weaponAmmoStates ??= new List<RunWeaponAmmoState>();
+            state.Normalize(equippedWeaponId);
+            for (int i = 0; i < weaponAmmoStates.Count; i++)
+            {
+                if (weaponAmmoStates[i] != null && string.Equals(weaponAmmoStates[i].weaponId, state.weaponId, StringComparison.Ordinal))
+                {
+                    weaponAmmoStates[i] = state.Clone();
+                    return;
+                }
+            }
+
+            weaponAmmoStates.Add(state.Clone());
+        }
+
+        public int TryAddReserveAmmoToActiveWeapon(int amount)
+        {
+            weaponAmmo ??= new RunWeaponAmmoState();
+            RunWeaponAmmoState active = GetOrCreateWeaponAmmoState(
+                string.IsNullOrWhiteSpace(equippedWeaponId) ? weaponAmmo.weaponId : equippedWeaponId,
+                weaponAmmo.currentMagazineAmmo,
+                weaponAmmo.reserveAmmo,
+                weaponAmmo.maxReserveAmmo);
+            int added = active.TryAddReserveAmmo(amount);
+            weaponAmmo = active.Clone();
+            return added;
+        }
+
         private static FloorState CloneFloor(FloorState source)
         {
             return new FloorState
@@ -199,18 +287,51 @@ namespace FrontierDepths.Core
 
         public void Normalize(string fallbackWeaponId, bool useDefaultsForMissingValues = false)
         {
+            Normalize(fallbackWeaponId, useDefaultsForMissingValues, 6, 36, 72);
+        }
+
+        public void Normalize(
+            string fallbackWeaponId,
+            bool useDefaultsForMissingValues,
+            int defaultMagazineAmmo,
+            int defaultReserveAmmo,
+            int defaultMaxReserveAmmo)
+        {
             weaponId = string.IsNullOrWhiteSpace(weaponId)
                 ? (string.IsNullOrWhiteSpace(fallbackWeaponId) ? "weapon.frontier_revolver" : fallbackWeaponId)
                 : weaponId;
-            maxReserveAmmo = Math.Max(0, maxReserveAmmo <= 0 ? 72 : maxReserveAmmo);
+            maxReserveAmmo = Math.Max(0, maxReserveAmmo <= 0 ? defaultMaxReserveAmmo : maxReserveAmmo);
             if (useDefaultsForMissingValues)
             {
-                currentMagazineAmmo = currentMagazineAmmo <= 0 ? 6 : currentMagazineAmmo;
-                reserveAmmo = reserveAmmo <= 0 ? 36 : reserveAmmo;
+                currentMagazineAmmo = currentMagazineAmmo <= 0 ? defaultMagazineAmmo : currentMagazineAmmo;
+                reserveAmmo = reserveAmmo <= 0 ? defaultReserveAmmo : reserveAmmo;
             }
 
             currentMagazineAmmo = Math.Max(0, currentMagazineAmmo);
             reserveAmmo = Math.Max(0, Math.Min(reserveAmmo, maxReserveAmmo));
+        }
+
+        public int TryAddReserveAmmo(int amount)
+        {
+            if (amount <= 0 || reserveAmmo >= maxReserveAmmo)
+            {
+                return 0;
+            }
+
+            int before = reserveAmmo;
+            reserveAmmo = Math.Min(maxReserveAmmo, reserveAmmo + amount);
+            return reserveAmmo - before;
+        }
+
+        public RunWeaponAmmoState Clone()
+        {
+            return new RunWeaponAmmoState
+            {
+                weaponId = weaponId,
+                currentMagazineAmmo = currentMagazineAmmo,
+                reserveAmmo = reserveAmmo,
+                maxReserveAmmo = maxReserveAmmo
+            };
         }
     }
 

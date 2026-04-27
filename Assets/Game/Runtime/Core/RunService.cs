@@ -30,22 +30,26 @@ namespace FrontierDepths.Core
         {
             int seed = Mathf.Abs(Guid.NewGuid().GetHashCode());
             FloorState floorOne = CreateFloorState(1, seed);
+            profileService.Current.Normalize();
+            string activeWeaponId = profileService.Current.GetActiveWeaponId();
+            RunWeaponAmmoState activeAmmo = new RunWeaponAmmoState
+            {
+                weaponId = activeWeaponId,
+                currentMagazineAmmo = 6,
+                reserveAmmo = 36,
+                maxReserveAmmo = 72
+            };
 
             Current = new RunState
             {
                 isActive = true,
                 seed = seed,
                 floorIndex = 1,
-                equippedWeaponId = profileService.Current.equippedWeaponId,
+                equippedWeaponId = activeWeaponId,
                 acceptedBountyIds = new List<string>(profileService.GetActiveBounties()),
                 runUpgrades = new List<RunUpgradeRecord>(),
-                weaponAmmo = new RunWeaponAmmoState
-                {
-                    weaponId = profileService.Current.equippedWeaponId,
-                    currentMagazineAmmo = 6,
-                    reserveAmmo = 36,
-                    maxReserveAmmo = 72
-                },
+                weaponAmmo = activeAmmo.Clone(),
+                weaponAmmoStates = new List<RunWeaponAmmoState> { activeAmmo.Clone() },
                 currentFloor = floorOne,
                 visitedFloors = new List<FloorState> { CloneFloor(floorOne) },
                 portalAnchor = PortalAnchorState.Invalid,

@@ -18,6 +18,7 @@ namespace FrontierDepths.Combat
         private bool isDead;
         private bool deathEventRaised;
         private bool initialized;
+        private int lethalSaveUsedFloor;
 
         public event Action<PlayerHealth, DamageResult> Damaged;
         public event Action<PlayerHealth, float> Healed;
@@ -69,7 +70,19 @@ namespace FrontierDepths.Combat
             }
 
             float finalDamage = Mathf.Max(0f, damageInfo.amount);
-            currentHealth = Mathf.Max(0f, currentHealth - finalDamage);
+            float projectedHealth = currentHealth - finalDamage;
+            int floorIndex = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current.floorIndex
+                : 0;
+            bool gritSaved = projectedHealth <= 0f &&
+                             currentHealth > 1f &&
+                             RunStatAggregator.Current.hasLethalSavePerFloor &&
+                             lethalSaveUsedFloor != floorIndex;
+            currentHealth = gritSaved ? 1f : Mathf.Max(0f, projectedHealth);
+            if (gritSaved)
+            {
+                lethalSaveUsedFloor = floorIndex;
+            }
             invulnerableUntil = currentTime + Mathf.Max(0f, invulnerabilityAfterHit);
             bool killed = currentHealth <= 0f;
 

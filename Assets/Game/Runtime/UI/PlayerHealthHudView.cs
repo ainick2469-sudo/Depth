@@ -129,12 +129,12 @@ namespace FrontierDepths.UI
 
             if (healthText == null)
             {
-                healthText = CreateText("PlayerHealth", font, 28, TextAnchor.UpperLeft);
+                healthText = CreateText("PlayerHealth", font, 30, TextAnchor.LowerLeft);
                 RectTransform rect = healthText.rectTransform;
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-                rect.pivot = new Vector2(0f, 1f);
-                rect.sizeDelta = new Vector2(240f, 48f);
-                rect.anchoredPosition = new Vector2(28f, -252f);
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
+                rect.pivot = new Vector2(0f, 0f);
+                rect.sizeDelta = new Vector2(260f, 44f);
+                rect.anchoredPosition = new Vector2(28f, 158f);
             }
 
             if (deathText == null)

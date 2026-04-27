@@ -11,6 +11,7 @@ namespace FrontierDepths.Combat
         private readonly DamageNumberMarker[] damageNumbers = new DamageNumberMarker[DamageNumberPoolSize];
         private int nextDamageNumber;
         private bool initialized;
+        private bool warnedMissingCamera;
 
         public static CombatFeedbackService Instance { get; private set; }
 
@@ -38,7 +39,10 @@ namespace FrontierDepths.Combat
 
         public static void ShowDamageNumber(Vector3 point, float amount, Color color, bool killedTarget, string label = "")
         {
-            GetOrCreate().Show(point, amount, color, killedTarget, label);
+            if (!GetOrCreate().TryShow(point, amount, color, killedTarget, label))
+            {
+                Debug.LogWarning("CombatFeedbackService received damage feedback but could not display it.");
+            }
         }
 
         internal int PoolSizeForTests => damageNumbers.Length;
@@ -66,12 +70,20 @@ namespace FrontierDepths.Combat
 
         private void EnsureInitialized()
         {
-            if (initialized)
+            if (initialized && damageNumbers[0] != null && damageNumbers[0].IsValid)
             {
                 return;
             }
 
-            Transform poolTransform = PlayerWeaponController.GetOrCreateFeedbackPool("SharedCombatDamageNumberPool");
+            initialized = false;
+            Transform poolTransform = transform.Find("SharedCombatDamageNumberPool");
+            if (poolTransform == null)
+            {
+                GameObject poolObject = new GameObject("SharedCombatDamageNumberPool");
+                poolObject.transform.SetParent(transform, false);
+                poolTransform = poolObject.transform;
+            }
+
             for (int i = 0; i < damageNumbers.Length; i++)
             {
                 Transform existing = poolTransform.Find($"DamageNumber_{i}");
@@ -91,12 +103,19 @@ namespace FrontierDepths.Combat
             initialized = true;
         }
 
-        private void Show(Vector3 point, float amount, Color color, bool killedTarget, string label)
+        private bool TryShow(Vector3 point, float amount, Color color, bool killedTarget, string label)
         {
             EnsureInitialized();
+            if (!warnedMissingCamera && Camera.main == null)
+            {
+                warnedMissingCamera = true;
+                Debug.LogWarning("CombatFeedbackService has no Camera.main; damage numbers will not billboard until a camera is available.");
+            }
+
             DamageNumberMarker marker = damageNumbers[nextDamageNumber];
             nextDamageNumber = (nextDamageNumber + 1) % damageNumbers.Length;
-            marker?.Show(point + Vector3.up * 1.25f, Time.time + DamageNumberDuration, amount, color, killedTarget, label);
+            return marker != null &&
+                   marker.Show(point + Vector3.up * 1.25f, Time.time + DamageNumberDuration, amount, color, killedTarget, label);
         }
 
         private sealed class DamageNumberMarker
@@ -113,11 +132,13 @@ namespace FrontierDepths.Combat
                 this.text = text;
             }
 
-            public void Show(Vector3 position, float hideTime, float amount, Color color, bool killedTarget, string label)
+            public bool IsValid => markerObject != null && text != null;
+
+            public bool Show(Vector3 position, float hideTime, float amount, Color color, bool killedTarget, string label)
             {
                 if (markerObject == null || text == null)
                 {
-                    return;
+                    return false;
                 }
 
                 startPosition = position;
@@ -129,6 +150,7 @@ namespace FrontierDepths.Combat
                 markerObject.transform.position = position;
                 markerObject.transform.localScale = Vector3.one * (killedTarget ? 1.22f : 1f);
                 markerObject.SetActive(true);
+                return true;
             }
 
             public void Tick(float currentTime, Camera camera)

@@ -13,7 +13,31 @@ namespace FrontierDepths.Combat
         AmmoPickupPercent,
         EveryNthHitChain,
         PistolWhipDamagePercent,
-        PistolWhipCooldownPercent
+        PistolWhipCooldownPercent,
+        ReserveAmmoCapacityFlat,
+        DashCooldownPercent,
+        LastRoundDamagePercent,
+        ConsecutiveShotDamagePercent,
+        LowHealthReloadPercent,
+        EliteBountyRewardFlat,
+        LethalSavePerFloor,
+        ScoutRevealBonus,
+        ChainRangeFlat,
+        MoveSpeedAfterKillPercent
+    }
+
+    public enum RunUpgradeCategory
+    {
+        Damage,
+        Ammo,
+        Reload,
+        Survival,
+        Mobility,
+        Melee,
+        Bounty,
+        RoomMap,
+        Chain,
+        Economy
     }
 
     public enum RunStatId
@@ -27,7 +51,17 @@ namespace FrontierDepths.Combat
         AmmoPickup,
         ChainHit,
         PistolWhipDamage,
-        PistolWhipCooldown
+        PistolWhipCooldown,
+        ReserveAmmoCapacity,
+        DashCooldown,
+        LastRoundDamage,
+        ConsecutiveShotDamage,
+        LowHealthReload,
+        EliteBountyReward,
+        LethalSave,
+        ScoutReveal,
+        ChainRange,
+        MoveSpeedAfterKill
     }
 
     [Serializable]
@@ -37,6 +71,7 @@ namespace FrontierDepths.Combat
         public string displayName;
         public string description;
         public RunUpgradeEffectKind effectKind;
+        public RunUpgradeCategory category;
         public bool unique;
         public float value;
         public int triggerEveryNthHit;

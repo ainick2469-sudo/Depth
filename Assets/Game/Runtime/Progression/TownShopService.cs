@@ -37,12 +37,12 @@ namespace FrontierDepths.Progression
             bool changed = offer.action switch
             {
                 ShopOfferAction.BuyPortalSigil => BuyPortalSigil(),
-                ShopOfferAction.UnlockWeapon => profileService.UnlockWeapon(offer.rewardId),
+                ShopOfferAction.UnlockWeapon => UnlockWeapon(offer.rewardId, out message),
                 ShopOfferAction.AcceptBounty => profileService.AcceptBounty(offer.rewardId),
                 ShopOfferAction.StoreHeirloom => StoreHeirloom(offer.rewardId),
                 ShopOfferAction.GainCurioDust => GainCurioDust(),
                 ShopOfferAction.TurnInBounty => TurnInBounty(offer.rewardId, out message),
-                ShopOfferAction.RestockAmmo => RestockAmmo(),
+                ShopOfferAction.RestockAmmo => RestockAmmo(out message),
                 ShopOfferAction.BuyRumor => BuyRumor(),
                 _ => false
             };
@@ -58,7 +58,10 @@ namespace FrontierDepths.Progression
             }
 
             profileService.RecordPurchase(shop.shopId, offer.offerId);
-            message = $"{offer.displayName} acquired.";
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                message = $"{offer.displayName} acquired.";
+            }
             return true;
         }
 
@@ -86,21 +89,52 @@ namespace FrontierDepths.Progression
             return true;
         }
 
+        private bool UnlockWeapon(string weaponId, out string message)
+        {
+            if (!profileService.UnlockWeapon(weaponId))
+            {
+                message = "Already owned.";
+                return false;
+            }
+
+            message = weaponId == "weapon.frontier_rifle"
+                ? "Frontier Rifle purchased. Press I to equip."
+                : "Weapon purchased. Press I to equip.";
+            return true;
+        }
+
         private bool TurnInBounty(string bountyId, out string message)
         {
             return profileService.TryTurnInBounty(bountyId, out message);
         }
 
-        private bool RestockAmmo()
+        private bool RestockAmmo(out string message)
         {
-            RunState run = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService?.Current : null;
-            if (run == null || run.weaponAmmo == null)
+            message = string.Empty;
+            if (GameBootstrap.Instance == null || GameBootstrap.Instance.RunService == null)
             {
+                message = "No ammo state available.";
                 return false;
             }
 
-            run.weaponAmmo.reserveAmmo = run.weaponAmmo.maxReserveAmmo;
+            const int purchaseAmount = 12;
+            RunState run = GameBootstrap.Instance.RunService.EnsureRun();
+            int added = run.TryAddReserveAmmoToActiveWeapon(purchaseAmount);
+            if (added <= 0)
+            {
+                message = "Ammo reserve full.";
+                return false;
+            }
+
             GameBootstrap.Instance.RunService.Save();
+            GameplayEventBus.Publish(new GameplayEvent
+            {
+                eventType = GameplayEventType.AmmoRestocked,
+                weaponId = run.equippedWeaponId,
+                amount = added,
+                timestamp = UnityEngine.Time.unscaledTime
+            });
+            message = $"+{added} reserve ammo.";
             return true;
         }
 

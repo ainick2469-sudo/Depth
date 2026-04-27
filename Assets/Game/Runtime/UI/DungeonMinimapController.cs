@@ -57,6 +57,16 @@ namespace FrontierDepths.UI
             EnsureUi();
         }
 
+        private void OnEnable()
+        {
+            GameplayEventBus.Subscribe(HandleGameplayEvent);
+        }
+
+        private void OnDisable()
+        {
+            GameplayEventBus.Unsubscribe(HandleGameplayEvent);
+        }
+
         private void Update()
         {
             if (!configured || player == null)
@@ -204,6 +214,21 @@ namespace FrontierDepths.UI
             return discoveredCorridors.Contains(edgeKey);
         }
 
+        public void RevealRoom(string roomId, bool persist = true)
+        {
+            if (buildResult == null || string.IsNullOrWhiteSpace(roomId) || buildResult.FindRoom(roomId) == null)
+            {
+                return;
+            }
+
+            discoveredRooms.Add(roomId);
+            RefreshRevealState();
+            if (persist)
+            {
+                ExportActiveFloorDiscovery(true);
+            }
+        }
+
         public void ImportDiscoveryFrom(FloorState floorState)
         {
             visitedRooms.Clear();
@@ -282,6 +307,15 @@ namespace FrontierDepths.UI
             if (save)
             {
                 runService.SaveActiveFloorState();
+            }
+        }
+
+        private void HandleGameplayEvent(GameplayEvent gameplayEvent)
+        {
+            if (gameplayEvent.eventType == GameplayEventType.RoomDiscovered &&
+                gameplayEvent.floorIndex == (buildResult != null ? buildResult.floorIndex : gameplayEvent.floorIndex))
+            {
+                RevealRoom(gameplayEvent.roomId, false);
             }
         }
 

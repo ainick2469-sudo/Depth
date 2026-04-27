@@ -16,6 +16,16 @@ namespace FrontierDepths.Combat
             float ammoPickupPercent,
             float pistolWhipDamagePercent,
             float pistolWhipCooldownPercent,
+            float reserveAmmoCapacityFlat,
+            float dashCooldownPercent,
+            float lastRoundDamagePercent,
+            float consecutiveShotDamagePercent,
+            float lowHealthReloadPercent,
+            float eliteBountyRewardFlat,
+            bool hasLethalSavePerFloor,
+            int scoutRevealBonus,
+            float chainRangeFlat,
+            float moveSpeedAfterKillPercent,
             int chainEveryNthHit,
             float chainDamageFraction,
             IReadOnlyList<RunStatModifierContribution> modifiers)
@@ -29,6 +39,16 @@ namespace FrontierDepths.Combat
             this.ammoPickupPercent = ammoPickupPercent;
             this.pistolWhipDamagePercent = pistolWhipDamagePercent;
             this.pistolWhipCooldownPercent = pistolWhipCooldownPercent;
+            this.reserveAmmoCapacityFlat = reserveAmmoCapacityFlat;
+            this.dashCooldownPercent = dashCooldownPercent;
+            this.lastRoundDamagePercent = lastRoundDamagePercent;
+            this.consecutiveShotDamagePercent = consecutiveShotDamagePercent;
+            this.lowHealthReloadPercent = lowHealthReloadPercent;
+            this.eliteBountyRewardFlat = eliteBountyRewardFlat;
+            this.hasLethalSavePerFloor = hasLethalSavePerFloor;
+            this.scoutRevealBonus = scoutRevealBonus;
+            this.chainRangeFlat = chainRangeFlat;
+            this.moveSpeedAfterKillPercent = moveSpeedAfterKillPercent;
             this.chainEveryNthHit = chainEveryNthHit;
             this.chainDamageFraction = chainDamageFraction;
             this.modifiers = modifiers;
@@ -43,6 +63,16 @@ namespace FrontierDepths.Combat
         public readonly float ammoPickupPercent;
         public readonly float pistolWhipDamagePercent;
         public readonly float pistolWhipCooldownPercent;
+        public readonly float reserveAmmoCapacityFlat;
+        public readonly float dashCooldownPercent;
+        public readonly float lastRoundDamagePercent;
+        public readonly float consecutiveShotDamagePercent;
+        public readonly float lowHealthReloadPercent;
+        public readonly float eliteBountyRewardFlat;
+        public readonly bool hasLethalSavePerFloor;
+        public readonly int scoutRevealBonus;
+        public readonly float chainRangeFlat;
+        public readonly float moveSpeedAfterKillPercent;
         public readonly int chainEveryNthHit;
         public readonly float chainDamageFraction;
         public readonly IReadOnlyList<RunStatModifierContribution> modifiers;
@@ -54,6 +84,8 @@ namespace FrontierDepths.Combat
         public float AmmoPickupMultiplier => 1f + Mathf.Max(0f, ammoPickupPercent);
         public float PistolWhipDamageMultiplier => 1f + Mathf.Max(0f, pistolWhipDamagePercent);
         public float PistolWhipCooldownMultiplier => Mathf.Max(0.25f, 1f - Mathf.Max(0f, pistolWhipCooldownPercent));
+        public float DashCooldownMultiplier => Mathf.Max(0.25f, 1f - Mathf.Max(0f, dashCooldownPercent));
+        public float LowHealthReloadMultiplier => 1f + Mathf.Max(0f, lowHealthReloadPercent);
         public int KillHealAmount => Mathf.Max(0, Mathf.RoundToInt(killHealFlat));
         public bool HasFirstShotAfterReloadBonus => firstShotAfterReloadPercent > 0f;
         public bool HasChainHit => chainEveryNthHit > 0 && chainDamageFraction > 0f;
@@ -95,6 +127,16 @@ namespace FrontierDepths.Combat
             float ammoPickupPercent = 0f;
             float pistolWhipDamagePercent = 0f;
             float pistolWhipCooldownPercent = 0f;
+            float reserveAmmoCapacityFlat = 0f;
+            float dashCooldownPercent = 0f;
+            float lastRoundDamagePercent = 0f;
+            float consecutiveShotDamagePercent = 0f;
+            float lowHealthReloadPercent = 0f;
+            float eliteBountyRewardFlat = 0f;
+            bool hasLethalSavePerFloor = false;
+            int scoutRevealBonus = 0;
+            float chainRangeFlat = 0f;
+            float moveSpeedAfterKillPercent = 0f;
             int chainEveryNthHit = 0;
             float chainDamageFraction = 0f;
             List<RunStatModifierContribution> modifiers = new List<RunStatModifierContribution>();
@@ -155,6 +197,46 @@ namespace FrontierDepths.Combat
                             pistolWhipCooldownPercent += stackedValue;
                             modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.PistolWhipCooldown, 0f, stackedValue, stackCount));
                             break;
+                        case RunUpgradeEffectKind.ReserveAmmoCapacityFlat:
+                            reserveAmmoCapacityFlat += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ReserveAmmoCapacity, stackedValue, 0f, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.DashCooldownPercent:
+                            dashCooldownPercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.DashCooldown, 0f, stackedValue, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.LastRoundDamagePercent:
+                            lastRoundDamagePercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.LastRoundDamage, 0f, stackedValue, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.ConsecutiveShotDamagePercent:
+                            consecutiveShotDamagePercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ConsecutiveShotDamage, 0f, stackedValue, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.LowHealthReloadPercent:
+                            lowHealthReloadPercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.LowHealthReload, 0f, stackedValue, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.EliteBountyRewardFlat:
+                            eliteBountyRewardFlat += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.EliteBountyReward, stackedValue, 0f, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.LethalSavePerFloor:
+                            hasLethalSavePerFloor = true;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.LethalSave, 1f, 0f, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.ScoutRevealBonus:
+                            scoutRevealBonus += Mathf.RoundToInt(stackedValue);
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ScoutReveal, stackedValue, 0f, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.ChainRangeFlat:
+                            chainRangeFlat += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ChainRange, stackedValue, 0f, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.MoveSpeedAfterKillPercent:
+                            moveSpeedAfterKillPercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.MoveSpeedAfterKill, 0f, stackedValue, stackCount));
+                            break;
                     }
                 }
             }
@@ -169,6 +251,16 @@ namespace FrontierDepths.Combat
                 ammoPickupPercent,
                 pistolWhipDamagePercent,
                 pistolWhipCooldownPercent,
+                reserveAmmoCapacityFlat,
+                dashCooldownPercent,
+                lastRoundDamagePercent,
+                consecutiveShotDamagePercent,
+                lowHealthReloadPercent,
+                eliteBountyRewardFlat,
+                hasLethalSavePerFloor,
+                scoutRevealBonus,
+                chainRangeFlat,
+                moveSpeedAfterKillPercent,
                 chainEveryNthHit,
                 chainDamageFraction,
                 modifiers);

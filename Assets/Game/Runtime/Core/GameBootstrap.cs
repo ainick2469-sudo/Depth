@@ -10,6 +10,7 @@ namespace FrontierDepths.Core
 
         public SaveService SaveService { get; private set; }
         public ProfileService ProfileService { get; private set; }
+        public InventoryService InventoryService { get; private set; }
         public RunService RunService { get; private set; }
         public SceneFlowService SceneFlowService { get; private set; }
 
@@ -38,6 +39,7 @@ namespace FrontierDepths.Core
 
             SaveService ??= new SaveService();
             ProfileService ??= new ProfileService(SaveService);
+            InventoryService ??= new InventoryService(ProfileService);
             RunService ??= new RunService(SaveService, ProfileService);
             SceneFlowService ??= new SceneFlowService(this);
         }

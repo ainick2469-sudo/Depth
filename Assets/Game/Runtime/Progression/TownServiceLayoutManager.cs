@@ -6,9 +6,18 @@ namespace FrontierDepths.Progression
     public sealed class TownServiceLayoutManager : MonoBehaviour
     {
         public const string RootName = "RuntimeTownServiceAuthority";
+        private static readonly string[] ExplicitLegacyObjectNames =
+        {
+            "QuartermasterStall",
+            "ForgePad",
+            "CurioStall",
+            "StashChest",
+            "BountyBoard"
+        };
 
         private int hiddenLegacyCount;
         private int skippedDuplicateCount;
+        private readonly System.Collections.Generic.List<string> hiddenLegacyNames = new System.Collections.Generic.List<string>();
 
         private void Start()
         {
@@ -21,7 +30,9 @@ namespace FrontierDepths.Progression
             {
                 hiddenLegacyCount = 0;
                 skippedDuplicateCount = 0;
+                hiddenLegacyNames.Clear();
                 GetOrCreateRoot(parent != null ? parent : transform);
+                HideExplicitLegacyObjects();
                 HideLegacyServiceStations();
                 HideLegacyServiceGeometry();
                 HideCurioPlaceholders();
@@ -81,7 +92,24 @@ namespace FrontierDepths.Progression
                 }
 
                 station.gameObject.SetActive(false);
-                hiddenLegacyCount++;
+                MarkHidden(station.gameObject);
+            }
+        }
+
+        private void HideExplicitLegacyObjects()
+        {
+            for (int i = 0; i < ExplicitLegacyObjectNames.Length; i++)
+            {
+                GameObject legacy = GameObject.Find(ExplicitLegacyObjectNames[i]);
+                if (legacy == null ||
+                    legacy.name == "DungeonGate" ||
+                    IsUnderRuntimeKioskRoot(legacy.transform))
+                {
+                    continue;
+                }
+
+                legacy.SetActive(false);
+                MarkHidden(legacy);
             }
         }
 
@@ -126,7 +154,7 @@ namespace FrontierDepths.Progression
             if (looksLikeLegacyService && !lowerName.Contains("dungeon"))
             {
                 node.gameObject.SetActive(false);
-                hiddenLegacyCount++;
+                MarkHidden(node.gameObject);
                 return;
             }
 
@@ -147,7 +175,7 @@ namespace FrontierDepths.Progression
             if ((lowerName.Contains("curio") || lowerName.Contains("dusty")) && !IsUnderRuntimeKioskRoot(node))
             {
                 node.gameObject.SetActive(false);
-                hiddenLegacyCount++;
+                MarkHidden(node.gameObject);
                 return;
             }
 
@@ -212,7 +240,17 @@ namespace FrontierDepths.Progression
                 activeRuntimeServices = kioskRoot.childCount;
             }
 
-            Debug.Log($"Town services unified | hiddenLegacy={hiddenLegacyCount} activeRuntimeServices={activeRuntimeServices} skippedDuplicates={skippedDuplicateCount} dungeonGate=scene");
+            string hidden = hiddenLegacyNames.Count > 0 ? string.Join(", ", hiddenLegacyNames) : "none";
+            Debug.Log($"Town services unified | hiddenLegacy={hiddenLegacyCount} activeRuntimeServices={activeRuntimeServices} skippedDuplicates={skippedDuplicateCount} dungeonGate=scene hidden=[{hidden}]");
+        }
+
+        private void MarkHidden(GameObject target)
+        {
+            hiddenLegacyCount++;
+            if (target != null && !hiddenLegacyNames.Contains(target.name))
+            {
+                hiddenLegacyNames.Add(target.name);
+            }
         }
     }
 }

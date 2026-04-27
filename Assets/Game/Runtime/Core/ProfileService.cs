@@ -56,11 +56,21 @@ namespace FrontierDepths.Core
             }
 
             Current.unlockedWeaponIds.Add(weaponId);
+            if (string.IsNullOrWhiteSpace(Current.secondaryWeaponId) && weaponId != Current.primaryWeaponId)
+            {
+                Current.secondaryWeaponId = weaponId;
+            }
+
             Save();
             return true;
         }
 
         public void EquipWeapon(string weaponId)
+        {
+            EquipWeapon(weaponId, 0);
+        }
+
+        public void EquipWeapon(string weaponId, int preferredSlot)
         {
             if (string.IsNullOrWhiteSpace(weaponId))
             {
@@ -72,7 +82,21 @@ namespace FrontierDepths.Core
                 Current.unlockedWeaponIds.Add(weaponId);
             }
 
-            Current.equippedWeaponId = weaponId;
+            int slot = preferredSlot == 2 ? 2 : preferredSlot == 1 ? 1 : Current.activeWeaponSlot;
+            if (slot == 2 && string.IsNullOrWhiteSpace(Current.secondaryWeaponId))
+            {
+                Current.secondaryWeaponId = weaponId;
+            }
+            else if (slot == 1)
+            {
+                Current.primaryWeaponId = weaponId;
+            }
+
+            if (!Current.TryAssignWeaponToSlot(weaponId, slot))
+            {
+                Current.equippedWeaponId = weaponId;
+            }
+
             Save();
         }
 

@@ -189,6 +189,11 @@ namespace FrontierDepths.Progression
         {
             if (offer.action != ShopOfferAction.AcceptBounty && offer.action != ShopOfferAction.TurnInBounty)
             {
+                if (offer.action == ShopOfferAction.UnlockWeapon && profile != null && profile.HasUnlockedWeapon(offer.rewardId))
+                {
+                    return "Owned. Open Inventory to equip.";
+                }
+
                 return offer.description;
             }
 
@@ -211,6 +216,11 @@ namespace FrontierDepths.Progression
             {
                 BountyRuntimeState state = profile != null ? BountyObjectiveTracker.GetOrCreate(profile, offer.rewardId) : null;
                 return state != null && state.state == BountyState.Killed;
+            }
+
+            if (offer.action == ShopOfferAction.UnlockWeapon)
+            {
+                return profile == null || !profile.HasUnlockedWeapon(offer.rewardId);
             }
 
             return true;

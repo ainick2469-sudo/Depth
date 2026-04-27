@@ -7,9 +7,9 @@ namespace FrontierDepths.UI
 {
     public sealed class SharedSettingsPanelController : MonoBehaviour
     {
+        private readonly System.Collections.Generic.List<BindingRow> bindingRows = new System.Collections.Generic.List<BindingRow>();
         private Text titleText;
         private Text settingsText;
-        private Text keybindingsText;
         private RectTransform settingsGroup;
         private RectTransform keybindingsGroup;
         private Action<string> onMessage;
@@ -31,6 +31,13 @@ namespace FrontierDepths.UI
                 InputBindingService.SetPrimaryBinding(action, key);
                 pendingRebind = null;
                 onMessage?.Invoke($"{FormatAction(action)} rebound to {InputBindingService.GetDisplay(action)}.");
+                Refresh();
+            }
+            else if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                GameplayInputAction action = pendingRebind.Value;
+                pendingRebind = null;
+                onMessage?.Invoke($"{FormatAction(action)} rebind cancelled.");
                 Refresh();
             }
         }
@@ -56,8 +63,7 @@ namespace FrontierDepths.UI
             CreateLabel(settingsGroup, "SettingsText", string.Empty, UiTheme.SmallSize, new Vector2(0f, -16f), new Vector2(480f, 205f), TextAnchor.UpperLeft, UiTheme.Text, out settingsText);
             CreateSettingsButtons(settingsGroup);
 
-            CreateLabel(keybindingsGroup, "KeybindingsText", string.Empty, UiTheme.SmallSize, new Vector2(-112f, -16f), new Vector2(270f, 450f), TextAnchor.UpperLeft, UiTheme.Text, out keybindingsText);
-            CreateBindingButtons(keybindingsGroup);
+            CreateBindingRows(keybindingsGroup);
 
             if (closeCallback != null)
             {
@@ -122,7 +128,7 @@ namespace FrontierDepths.UI
             CreateButton(parent, "InvertY", "Toggle Invert Y", new Vector2(0f, y), () => Adjust(s => s.invertY = !s.invertY), 220f, 30f, UiTheme.SmallSize);
         }
 
-        private void CreateBindingButtons(RectTransform parent)
+        private void CreateBindingRows(RectTransform parent)
         {
             GameplayInputAction[] actions =
             {
@@ -136,18 +142,27 @@ namespace FrontierDepths.UI
                 GameplayInputAction.Fire,
                 GameplayInputAction.Reload,
                 GameplayInputAction.PistolWhip,
+                GameplayInputAction.Inventory,
+                GameplayInputAction.Dash,
+                GameplayInputAction.EquipPrimary,
+                GameplayInputAction.EquipSecondary,
                 GameplayInputAction.RunInfo,
                 GameplayInputAction.Minimap,
                 GameplayInputAction.Pause
             };
 
+            bindingRows.Clear();
             for (int i = 0; i < actions.Length; i++)
             {
                 GameplayInputAction action = actions[i];
-                CreateButton(parent, $"Rebind_{action}", "Rebind", new Vector2(160f, -34f - i * 32f), () => BeginRebind(action), 120f, 26f, UiTheme.SmallSize);
+                RectTransform row = CreateRow(parent, $"BindingRow_{action}", new Vector2(0f, -16f - i * 28f));
+                CreateLabel(row, "Action", FormatAction(action), UiTheme.SmallSize, new Vector2(-170f, 0f), new Vector2(180f, 26f), TextAnchor.MiddleLeft, UiTheme.Text, out Text actionText);
+                CreateLabel(row, "Binding", InputBindingService.GetDisplay(action), UiTheme.SmallSize, new Vector2(34f, 0f), new Vector2(190f, 26f), TextAnchor.MiddleLeft, UiTheme.Accent, out Text bindingText);
+                Button button = CreateButton(row, $"Rebind_{action}", "Rebind", new Vector2(194f, 0f), () => BeginRebind(action), 110f, 24f, UiTheme.SmallSize);
+                bindingRows.Add(new BindingRow(action, row, bindingText, button));
             }
 
-            CreateButton(parent, "ResetBindings", "Reset Defaults", new Vector2(150f, -472f), ResetBindings, 180f, 30f, UiTheme.SmallSize);
+            CreateButton(parent, "ResetBindings", "Reset Defaults", new Vector2(150f, -492f), ResetBindings, 180f, 30f, UiTheme.SmallSize);
         }
 
         private void BeginRebind(GameplayInputAction action)
@@ -207,25 +222,18 @@ namespace FrontierDepths.UI
 
         private void RefreshKeybindingsText()
         {
-            if (keybindingsText == null)
+            for (int i = 0; i < bindingRows.Count; i++)
             {
-                return;
+                BindingRow row = bindingRows[i];
+                bool waiting = pendingRebind.HasValue && pendingRebind.Value == row.action;
+                row.bindingText.text = waiting ? "Press key/button..." : InputBindingService.GetDisplay(row.action);
+                row.button.GetComponentInChildren<Text>().text = waiting ? "Cancel Esc" : "Rebind";
+                Image image = row.row.GetComponent<Image>();
+                if (image != null)
+                {
+                    image.color = waiting ? new Color(0.36f, 0.26f, 0.12f, 0.92f) : new Color(0f, 0f, 0f, 0.18f);
+                }
             }
-
-            keybindingsText.text =
-                $"{FormatAction(GameplayInputAction.MoveForward),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveForward)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveBack),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveBack)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveLeft),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveLeft)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveRight),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveRight)}\n" +
-                $"{FormatAction(GameplayInputAction.Jump),-18} {InputBindingService.GetDisplay(GameplayInputAction.Jump)}\n" +
-                $"{FormatAction(GameplayInputAction.Sprint),-18} {InputBindingService.GetDisplay(GameplayInputAction.Sprint)}\n" +
-                $"{FormatAction(GameplayInputAction.Interact),-18} {InputBindingService.GetDisplay(GameplayInputAction.Interact)}\n" +
-                $"{FormatAction(GameplayInputAction.Fire),-18} {InputBindingService.GetDisplay(GameplayInputAction.Fire)}\n" +
-                $"{FormatAction(GameplayInputAction.Reload),-18} {InputBindingService.GetDisplay(GameplayInputAction.Reload)}\n" +
-                $"{FormatAction(GameplayInputAction.PistolWhip),-18} {InputBindingService.GetDisplay(GameplayInputAction.PistolWhip)}\n" +
-                $"{FormatAction(GameplayInputAction.RunInfo),-18} {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)}\n" +
-                $"{FormatAction(GameplayInputAction.Minimap),-18} {InputBindingService.GetDisplay(GameplayInputAction.Minimap)}\n" +
-                $"{FormatAction(GameplayInputAction.Pause),-18} {InputBindingService.GetDisplay(GameplayInputAction.Pause)}";
         }
 
         private static string FormatAction(GameplayInputAction action)
@@ -237,6 +245,8 @@ namespace FrontierDepths.UI
                 GameplayInputAction.MoveLeft => "Move Left",
                 GameplayInputAction.MoveRight => "Move Right",
                 GameplayInputAction.PistolWhip => "Pistol Whip",
+                GameplayInputAction.EquipPrimary => "Equip Slot 1",
+                GameplayInputAction.EquipSecondary => "Equip Slot 2",
                 GameplayInputAction.RunInfo => "Run Info",
                 _ => action.ToString()
             };
@@ -251,6 +261,19 @@ namespace FrontierDepths.UI
             rect.pivot = new Vector2(0.5f, 1f);
             rect.sizeDelta = new Vector2(520f, 520f);
             rect.anchoredPosition = new Vector2(0f, -88f);
+            return rect;
+        }
+
+        private static RectTransform CreateRow(Transform parent, string name, Vector2 position)
+        {
+            GameObject rowObject = new GameObject(name, typeof(RectTransform), typeof(Image));
+            rowObject.transform.SetParent(parent, false);
+            RectTransform rect = rowObject.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(500f, 26f);
+            rect.anchoredPosition = position;
+            rowObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.18f);
             return rect;
         }
 
@@ -286,6 +309,22 @@ namespace FrontierDepths.UI
             textRect.anchorMin = textRect.anchorMax = new Vector2(0.5f, 0.5f);
             textRect.pivot = new Vector2(0.5f, 0.5f);
             return button;
+        }
+
+        private readonly struct BindingRow
+        {
+            public BindingRow(GameplayInputAction action, RectTransform row, Text bindingText, Button button)
+            {
+                this.action = action;
+                this.row = row;
+                this.bindingText = bindingText;
+                this.button = button;
+            }
+
+            public readonly GameplayInputAction action;
+            public readonly RectTransform row;
+            public readonly Text bindingText;
+            public readonly Button button;
         }
     }
 }
