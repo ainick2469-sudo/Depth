@@ -59,6 +59,7 @@ namespace FrontierDepths.Progression
             shopService = new TownShopService(GameBootstrap.Instance.ProfileService);
             playerController = FindAnyObjectByType<FirstPersonController>();
             EnsureSpawnAnchors();
+            TownRuntimeKioskBuilder.EnsureRuntimeKiosks(transform);
             PlacePlayerAtTownSpawn();
         }
 
@@ -74,15 +75,15 @@ namespace FrontierDepths.Progression
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.Alpha1)) TrySelect(0);
-            if (Input.GetKeyDown(KeyCode.Alpha2)) TrySelect(1);
-            if (Input.GetKeyDown(KeyCode.Alpha3)) TrySelect(2);
-            if (Input.GetKeyDown(KeyCode.Alpha4)) TrySelect(3);
-            if (Input.GetKeyDown(KeyCode.Alpha5)) TrySelect(4);
-            if (Input.GetKeyDown(KeyCode.Alpha6)) TrySelect(5);
-            if (Input.GetKeyDown(KeyCode.Alpha7)) TrySelect(6);
-            if (Input.GetKeyDown(KeyCode.Alpha8)) TrySelect(7);
-            if (Input.GetKeyDown(KeyCode.Alpha9)) TrySelect(8);
+            if (Input.GetKeyDown(KeyCode.Alpha1)) SelectOffer(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) SelectOffer(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) SelectOffer(2);
+            if (Input.GetKeyDown(KeyCode.Alpha4)) SelectOffer(3);
+            if (Input.GetKeyDown(KeyCode.Alpha5)) SelectOffer(4);
+            if (Input.GetKeyDown(KeyCode.Alpha6)) SelectOffer(5);
+            if (Input.GetKeyDown(KeyCode.Alpha7)) SelectOffer(6);
+            if (Input.GetKeyDown(KeyCode.Alpha8)) SelectOffer(7);
+            if (Input.GetKeyDown(KeyCode.Alpha9)) SelectOffer(8);
         }
 
         public void OpenService(ShopDefinition definition)
@@ -94,12 +95,18 @@ namespace FrontierDepths.Progression
             if (definition != null)
             {
                 InputFrameGuard.MarkTownServiceOpenConsumedThisFrame();
+                TownServicePanelController.GetOrCreate().Show(definition, SelectOffer);
+            }
+            else
+            {
+                TownServicePanelController.Instance?.Hide();
             }
         }
 
         public void CloseService()
         {
             activeShop = null;
+            TownServicePanelController.Instance?.Hide();
             playerController ??= FindAnyObjectByType<FirstPersonController>();
             playerController?.SetUiCaptured(false);
         }
@@ -134,7 +141,7 @@ namespace FrontierDepths.Progression
             return eDown || escapeDown;
         }
 
-        private void TrySelect(int index)
+        public void SelectOffer(int index)
         {
             if (activeShop == null)
             {
@@ -142,6 +149,7 @@ namespace FrontierDepths.Progression
             }
 
             shopService.TryExecuteOffer(activeShop, index, out lastMessage);
+            TownServicePanelController.Instance?.Refresh(lastMessage);
         }
 
         private void PlacePlayerAtTownSpawn()

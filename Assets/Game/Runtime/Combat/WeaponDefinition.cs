@@ -23,8 +23,8 @@ namespace FrontierDepths.Combat
         public float baseDamage = 15f;
         public float fireRate = 2.857f;
         public int magazineSize = 6;
-        public int startingReserveAmmo = 30;
-        public int maxReserveAmmo = 60;
+        public int startingReserveAmmo = 36;
+        public int maxReserveAmmo = 72;
         public float reloadDuration = 1.4f;
         public float maxRange = 45f;
         public float fullDamageRange = 17f;

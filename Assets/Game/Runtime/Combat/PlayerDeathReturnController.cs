@@ -62,6 +62,7 @@ namespace FrontierDepths.Combat
                 GameBootstrap bootstrap = GameBootstrap.Instance;
                 if (bootstrap != null && bootstrap.RunService != null && bootstrap.SceneFlowService != null)
                 {
+                    bootstrap.RunService.SaveActiveFloorState();
                     bootstrap.RunService.EndRun();
                     bootstrap.SceneFlowService.SetPendingTownHubLoadReason(TownHubLoadReason.DungeonEntranceReturn);
                     bootstrap.SceneFlowService.LoadScene(GameSceneId.TownHub);

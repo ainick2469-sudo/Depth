@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FrontierDepths.Core;
 using FrontierDepths.World;
 using UnityEngine;
 using UnityEngine.UI;
@@ -92,7 +93,8 @@ namespace FrontierDepths.UI
             mapping = CalculateCoordinateMapping(buildResult, new Vector2(minimapSize, minimapSize), DefaultPadding, minimapZoom);
             BuildStaticGeometry();
             SetVisible(visible);
-            if (!string.IsNullOrWhiteSpace(buildResult.playerSpawnNodeId))
+            ImportActiveFloorDiscovery();
+            if (visitedRooms.Count == 0 && !string.IsNullOrWhiteSpace(buildResult.playerSpawnNodeId))
             {
                 NotifyRoomEntered(buildResult.playerSpawnNodeId);
             }
@@ -181,6 +183,7 @@ namespace FrontierDepths.UI
             discoveredRooms.Add(roomId);
             RevealConnectedRoomsAndCorridors(roomId);
             RefreshRevealState();
+            ExportActiveFloorDiscovery(true);
         }
 
         public bool IsRoomVisited(string roomId)
@@ -196,6 +199,103 @@ namespace FrontierDepths.UI
         public bool IsCorridorDiscovered(string edgeKey)
         {
             return discoveredCorridors.Contains(edgeKey);
+        }
+
+        public void ImportDiscoveryFrom(FloorState floorState)
+        {
+            visitedRooms.Clear();
+            discoveredRooms.Clear();
+            discoveredCorridors.Clear();
+            currentRoomId = string.Empty;
+            if (floorState == null)
+            {
+                return;
+            }
+
+            AddRange(visitedRooms, floorState.visitedRoomIds);
+            AddRange(discoveredRooms, floorState.discoveredRoomIds);
+            AddRange(discoveredCorridors, floorState.discoveredCorridorIds);
+            currentRoomId = floorState.lastKnownPlayerRoomId ?? string.Empty;
+            RefreshRevealState();
+        }
+
+        public void ExportDiscoveryTo(FloorState floorState)
+        {
+            if (floorState == null)
+            {
+                return;
+            }
+
+            floorState.visitedRoomIds = new List<string>(visitedRooms);
+            floorState.discoveredRoomIds = new List<string>(discoveredRooms);
+            floorState.discoveredCorridorIds = new List<string>(discoveredCorridors);
+            floorState.lastKnownPlayerRoomId = currentRoomId ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(currentRoomId))
+            {
+                DungeonRoomBuildRecord currentRoom = buildResult != null ? buildResult.FindRoom(currentRoomId) : null;
+                if (currentRoom != null && (currentRoom.roomType == DungeonNodeKind.TransitDown || currentRoom.roomType == DungeonNodeKind.TransitUp))
+                {
+                    floorState.knownStairRoomId = currentRoomId;
+                    floorState.stairDiscovered = true;
+                }
+            }
+
+            if (buildResult != null)
+            {
+                foreach (string discoveredRoomId in discoveredRooms)
+                {
+                    DungeonRoomBuildRecord room = buildResult.FindRoom(discoveredRoomId);
+                    if (room != null && (room.roomType == DungeonNodeKind.TransitDown || room.roomType == DungeonNodeKind.TransitUp))
+                    {
+                        floorState.knownStairRoomId = room.nodeId;
+                        floorState.stairDiscovered = true;
+                    }
+                }
+            }
+        }
+
+        public void PersistCurrentDiscovery()
+        {
+            ExportActiveFloorDiscovery(true);
+        }
+
+        private void ImportActiveFloorDiscovery()
+        {
+            RunService runService = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService : null;
+            FloorState floorState = runService != null && runService.Current != null ? runService.Current.currentFloor : null;
+            ImportDiscoveryFrom(floorState);
+        }
+
+        private void ExportActiveFloorDiscovery(bool save)
+        {
+            RunService runService = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService : null;
+            FloorState floorState = runService != null && runService.Current != null ? runService.Current.currentFloor : null;
+            if (floorState == null)
+            {
+                return;
+            }
+
+            ExportDiscoveryTo(floorState);
+            if (save)
+            {
+                runService.SaveActiveFloorState();
+            }
+        }
+
+        private static void AddRange(HashSet<string> target, List<string> source)
+        {
+            if (target == null || source == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(source[i]))
+                {
+                    target.Add(source[i]);
+                }
+            }
         }
 
         public static MinimapCoordinateMapping CalculateCoordinateMapping(DungeonBuildResult result, Vector2 mapSize, float padding, float zoom = 1f)

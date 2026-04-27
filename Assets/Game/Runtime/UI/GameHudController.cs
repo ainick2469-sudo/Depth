@@ -1,4 +1,5 @@
 using FrontierDepths.Core;
+using FrontierDepths.Combat;
 using FrontierDepths.Progression;
 using FrontierDepths.World;
 using UnityEngine;
@@ -28,6 +29,7 @@ namespace FrontierDepths.UI
         private DungeonSceneController dungeonScene;
         private DungeonMinimapController minimapController;
         private RunInfoPanelController runInfoPanelController;
+        private PauseMenuController pauseMenuController;
         private DungeonBuildResult configuredMinimapBuild;
 
         private void Awake()
@@ -71,6 +73,7 @@ namespace FrontierDepths.UI
             HidePanel();
             HidePrompt();
             runInfoPanelController?.SetVisible(false);
+            pauseMenuController?.Hide();
             configuredMinimapBuild = null;
         }
 
@@ -88,6 +91,12 @@ namespace FrontierDepths.UI
 
             if (Input.GetKeyDown(KeyCode.Escape))
             {
+                if (pauseMenuController != null && pauseMenuController.IsVisible)
+                {
+                    pauseMenuController.Hide();
+                    return;
+                }
+
                 if (runInfoPanelController != null && runInfoPanelController.IsVisible)
                 {
                     SetRunInfoVisible(false);
@@ -96,6 +105,12 @@ namespace FrontierDepths.UI
 
                 if (townHub != null && townHub.IsPanelOpen)
                 {
+                    return;
+                }
+
+                if (pauseMenuController != null)
+                {
+                    pauseMenuController.Show(playerController);
                     return;
                 }
 
@@ -128,7 +143,7 @@ namespace FrontierDepths.UI
                     statusText.text = townHub.GetStatusLine();
                 }
 
-                bool panelOpen = townHub.IsPanelOpen;
+                bool panelOpen = townHub.IsPanelOpen && !TownServicePanelController.IsAnyVisible;
                 if (panelBackground != null)
                 {
                     panelBackground.enabled = panelOpen;
@@ -171,6 +186,13 @@ namespace FrontierDepths.UI
 
             if (interactor == null || !interactor.HasFocusedInteractable)
             {
+                PlayerWeaponController weapon = playerController != null ? playerController.GetComponent<PlayerWeaponController>() : null;
+                if (weapon != null && (weapon.ReserveAmmo <= 0 || weapon.CurrentAmmo <= 0))
+                {
+                    ShowPrompt("V / MMB: Pistol Whip", PromptPausedColor);
+                    return;
+                }
+
                 HidePrompt();
                 return;
             }
@@ -197,6 +219,11 @@ namespace FrontierDepths.UI
             panelBackground ??= FindNamedComponent<Image>("PanelBackground");
             panelText ??= FindNamedComponent<Text>("PanelText");
             crosshairImage ??= FindNamedComponent<Image>("Crosshair");
+            pauseMenuController ??= GetComponentInChildren<PauseMenuController>(true);
+            if (pauseMenuController == null)
+            {
+                pauseMenuController = gameObject.AddComponent<PauseMenuController>();
+            }
 
             if (promptText != null)
             {
@@ -360,6 +387,7 @@ namespace FrontierDepths.UI
             if (build != null && build != configuredMinimapBuild)
             {
                 configuredMinimapBuild = build;
+                ApplySettingsToMinimap();
                 minimapController.Configure(build, playerController != null ? playerController.transform : null);
             }
             else if (build == null && configuredMinimapBuild != null)
@@ -371,6 +399,19 @@ namespace FrontierDepths.UI
             {
                 minimapController.Configure(null, null);
             }
+        }
+
+        private void ApplySettingsToMinimap()
+        {
+            if (minimapController == null)
+            {
+                return;
+            }
+
+            GameSettingsState settings = GameSettingsService.Current;
+            minimapController.SetSize(settings.minimapSize);
+            minimapController.SetOpacity(settings.minimapOpacity);
+            minimapController.SetZoom(settings.minimapZoom);
         }
 
         private void HandleOverlayInput()
@@ -406,6 +447,16 @@ namespace FrontierDepths.UI
             if (DungeonRewardChoiceController.IsRewardChoiceActive)
             {
                 CloseRunInfoIfOpen();
+                return false;
+            }
+
+            if (pauseMenuController != null && pauseMenuController.IsVisible)
+            {
+                return false;
+            }
+
+            if (playerController != null && playerController.IsUiCaptured && (runInfoPanelController == null || !runInfoPanelController.IsVisible))
+            {
                 return false;
             }
 

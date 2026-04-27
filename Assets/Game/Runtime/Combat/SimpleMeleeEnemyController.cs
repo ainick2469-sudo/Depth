@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FrontierDepths.Core;
 using UnityEngine;
@@ -19,6 +20,10 @@ namespace FrontierDepths.Combat
         private const float PerceptionIntervalChase = 0.08f;
         private const float StuckProgressEpsilon = 0.035f;
         private const float DoorwayEdgeInset = 4f;
+        private const float EnemySeparationRadius = 2.2f;
+        private const float EnemySeparationStrength = 0.62f;
+        private const float SlimeWanderMinRadius = 2.4f;
+        private const float SlimeWanderMaxRadius = 7.2f;
         private static readonly List<SimpleMeleeEnemyController> ActiveEnemies = new List<SimpleMeleeEnemyController>();
 
         [SerializeField] private float moveSpeed = 4.6f;
@@ -86,6 +91,13 @@ namespace FrontierDepths.Combat
         private int patrolCursor;
         private int roamingCursor;
         private int stuckRecoveryCount;
+        private int behaviorSeed;
+        private int behaviorPickCounter;
+        private int roamingDirection = 1;
+        private float behaviorPhase01;
+        private float patrolWaitJitter = 1f;
+        private float slimeWanderRadius = 4f;
+        private float batBobPhase;
 
         public SimpleMeleeEnemyState State => state;
         public float NextAttackTime => nextAttackTime;
@@ -114,6 +126,10 @@ namespace FrontierDepths.Combat
         public Vector3 LastHeardPosition => lastHeardPosition;
         public bool IsInvestigating => state == SimpleMeleeEnemyState.Investigate;
         public int StuckRecoveryCount => stuckRecoveryCount;
+        public int BehaviorSeed => behaviorSeed;
+        public float BehaviorPhase01 => behaviorPhase01;
+        public float BatBobPhase => batBobPhase;
+        public float SlimeWanderRadius => slimeWanderRadius;
 
         public void Configure(EnemyDefinition definition)
         {
@@ -146,6 +162,7 @@ namespace FrontierDepths.Combat
             stuckRecoverySeconds = Mathf.Max(0.25f, definition.stuckRecoverySeconds);
             baseBodyColor = definition.bodyColor;
             archetype = definition.archetype;
+            ConfigureBehaviorSeed(behaviorSeed != 0 ? behaviorSeed : gameObject.GetInstanceID());
 
             if (!IsCombatState(state) && state != SimpleMeleeEnemyState.Dead)
             {
@@ -184,6 +201,7 @@ namespace FrontierDepths.Combat
             }
 
             patrolCursor = Mathf.Clamp(patrolCursor, 0, Mathf.Max(0, patrolPoints.Count - 1));
+            ConfigureBehaviorSeed(behaviorSeed != 0 ? behaviorSeed : gameObject.GetInstanceID());
             hasMoveTarget = false;
         }
 
@@ -213,11 +231,34 @@ namespace FrontierDepths.Combat
             }
 
             roamingCursor = Mathf.Clamp(roamingCursor, 0, Mathf.Max(0, roamingRoutePoints.Count - 1));
+            ConfigureBehaviorSeed(behaviorSeed != 0 ? behaviorSeed : gameObject.GetInstanceID());
             if (CanRoamPassively() && roamingRoutePoints.Count > 0)
             {
                 hasMoveTarget = false;
                 SetState(SimpleMeleeEnemyState.Patrol);
             }
+        }
+
+        public void ConfigureBehaviorSeed(int seed)
+        {
+            behaviorSeed = seed == 0 ? gameObject.GetInstanceID() : seed;
+            behaviorPickCounter = 0;
+            behaviorPhase01 = Seeded01(17);
+            patrolWaitJitter = Mathf.Lerp(0.55f, 1.45f, Seeded01(23));
+            slimeWanderRadius = Mathf.Lerp(SlimeWanderMinRadius, SlimeWanderMaxRadius, Seeded01(29));
+            batBobPhase = Seeded01(31) * Mathf.PI * 2f;
+            roamingDirection = Seeded01(37) < 0.5f ? -1 : 1;
+            if (patrolPoints.Count > 0)
+            {
+                patrolCursor = Mathf.Clamp(Mathf.FloorToInt(Seeded01(41) * patrolPoints.Count), 0, patrolPoints.Count - 1);
+            }
+
+            if (roamingRoutePoints.Count > 0)
+            {
+                roamingCursor = Mathf.Clamp(Mathf.FloorToInt(Seeded01(43) * roamingRoutePoints.Count), 0, roamingRoutePoints.Count - 1);
+            }
+
+            patrolWaitUntilTime = Time.time + GetPatrolWaitDuration();
         }
 
         internal void SetHomeRoomForTests(string roomId, Bounds bounds, IReadOnlyList<Vector3> roomPatrolPoints)
@@ -233,6 +274,17 @@ namespace FrontierDepths.Combat
         internal IReadOnlyList<Vector3> GetRoamingRouteForTests()
         {
             return new List<Vector3>(roamingRoutePoints);
+        }
+
+        internal void ConfigureBehaviorSeedForTests(int seed)
+        {
+            ConfigureBehaviorSeed(seed);
+        }
+
+        internal Vector3 ChooseNextPatrolTargetForTests()
+        {
+            ChooseNextPatrolTarget();
+            return currentMoveTarget;
         }
 
         internal float GetEffectiveMoveSpeedForTests(SimpleMeleeEnemyState testState)
@@ -684,7 +736,7 @@ namespace FrontierDepths.Combat
 
             if (Vector3.Distance(Planar(transform.position), Planar(currentMoveTarget)) <= PatrolTargetStopDistance)
             {
-                patrolWaitUntilTime = currentTime + patrolWaitSeconds;
+                patrolWaitUntilTime = currentTime + GetPatrolWaitDuration();
                 ChooseNextPatrolTarget();
                 ApplyGravityOnly(deltaTime);
                 return;
@@ -791,6 +843,12 @@ namespace FrontierDepths.Combat
             Vector3 planarDirection = worldTarget - before;
             planarDirection.y = 0f;
             Vector3 direction = planarDirection.sqrMagnitude > 0.001f ? planarDirection.normalized : Vector3.zero;
+            Vector3 separationDirection = ComputeEnemySeparationDirection(restrictToHomeRoom);
+            if (separationDirection.sqrMagnitude > 0.001f)
+            {
+                direction = (direction + separationDirection * EnemySeparationStrength).normalized;
+            }
+
             if (direction.sqrMagnitude > 0.001f)
             {
                 transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
@@ -1016,7 +1074,7 @@ namespace FrontierDepths.Combat
         {
             if (CanRoamPassively() && roamingRoutePoints.Count > 0)
             {
-                roamingCursor = (roamingCursor + 1) % roamingRoutePoints.Count;
+                roamingCursor = (roamingCursor + roamingDirection + roamingRoutePoints.Count) % roamingRoutePoints.Count;
                 currentMoveTarget = roamingRoutePoints[roamingCursor];
                 hasMoveTarget = true;
                 return;
@@ -1029,10 +1087,17 @@ namespace FrontierDepths.Combat
                 return;
             }
 
+            if (archetype == EnemyArchetype.Slime && TryChooseSlimeWanderTarget(out Vector3 slimeTarget))
+            {
+                currentMoveTarget = slimeTarget;
+                hasMoveTarget = true;
+                return;
+            }
+
             int attempts = Mathf.Max(1, patrolPoints.Count);
             for (int i = 0; i < attempts; i++)
             {
-                patrolCursor = (patrolCursor + 1) % patrolPoints.Count;
+                patrolCursor = PickPatrolIndex();
                 Vector3 candidate = patrolPoints[patrolCursor];
                 if (IsSafeRoomLocalTarget(candidate))
                 {
@@ -1044,6 +1109,42 @@ namespace FrontierDepths.Combat
 
             currentMoveTarget = GetNearestHomePoint(transform.position);
             hasMoveTarget = true;
+        }
+
+        private int PickPatrolIndex()
+        {
+            if (patrolPoints.Count <= 1)
+            {
+                return 0;
+            }
+
+            int next = Mathf.Clamp(Mathf.FloorToInt(Seeded01(1000 + behaviorPickCounter++) * patrolPoints.Count), 0, patrolPoints.Count - 1);
+            if (next == patrolCursor)
+            {
+                next = (next + 1) % patrolPoints.Count;
+            }
+
+            return next;
+        }
+
+        private bool TryChooseSlimeWanderTarget(out Vector3 targetPoint)
+        {
+            targetPoint = transform.position;
+            Vector3 origin = hasHomeRoom ? ClampToHomeRoom(transform.position, DoorwayEdgeInset) : transform.position;
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                float angle = Seeded01(2000 + behaviorPickCounter++) * Mathf.PI * 2f;
+                float radius = Mathf.Lerp(SlimeWanderMinRadius, slimeWanderRadius, Seeded01(3000 + behaviorPickCounter++));
+                Vector3 candidate = origin + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                candidate.y = transform.position.y;
+                if (IsSafeRoomLocalTarget(candidate))
+                {
+                    targetPoint = candidate;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void AddPatrolPoint(Vector3 point)
@@ -1458,6 +1559,82 @@ namespace FrontierDepths.Combat
             }
 
             return 10;
+        }
+
+        private float GetPatrolWaitDuration()
+        {
+            float noise = Mathf.Lerp(0.72f, 1.38f, Seeded01(4000 + behaviorPickCounter++));
+            return Mathf.Max(0.05f, patrolWaitSeconds * patrolWaitJitter * noise);
+        }
+
+        private Vector3 ComputeEnemySeparationDirection(bool restrictToHomeRoom)
+        {
+            Vector3 separation = Vector3.zero;
+            List<SimpleMeleeEnemyController> snapshot = new List<SimpleMeleeEnemyController>(ActiveEnemies);
+            for (int i = 0; i < snapshot.Count; i++)
+            {
+                SimpleMeleeEnemyController other = snapshot[i];
+                if (other == null || other == this || other.health == null || other.health.IsDead)
+                {
+                    continue;
+                }
+
+                if (restrictToHomeRoom && hasHomeRoom && !string.Equals(HomeRoomId, other.HomeRoomId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                Vector3 offset = Planar(transform.position - other.transform.position);
+                float distance = offset.magnitude;
+                if (distance <= 0.001f || distance >= EnemySeparationRadius)
+                {
+                    continue;
+                }
+
+                separation += offset.normalized * (1f - distance / EnemySeparationRadius);
+            }
+
+            if (restrictToHomeRoom && hasHomeRoom)
+            {
+                Vector3 candidate = transform.position + separation;
+                if (!IsInsideHomeRoom(candidate, 0f))
+                {
+                    separation = Planar(ClampToHomeRoom(candidate, 0f) - transform.position);
+                }
+            }
+
+            return separation.sqrMagnitude > 0.001f ? separation.normalized : Vector3.zero;
+        }
+
+        private float Seeded01(int salt)
+        {
+            unchecked
+            {
+                int hash = behaviorSeed;
+                hash = (hash * 397) ^ salt;
+                hash = (hash * 397) ^ DeterministicStringHash(HomeRoomId);
+                hash ^= hash << 13;
+                hash ^= hash >> 17;
+                hash ^= hash << 5;
+                return (hash & 0x7fffffff) / (float)int.MaxValue;
+            }
+        }
+
+        private static int DeterministicStringHash(string value)
+        {
+            unchecked
+            {
+                int hash = 23;
+                if (!string.IsNullOrEmpty(value))
+                {
+                    for (int i = 0; i < value.Length; i++)
+                    {
+                        hash = hash * 31 + value[i];
+                    }
+                }
+
+                return hash;
+            }
         }
 
         private static Vector3 Planar(Vector3 value)

@@ -43,8 +43,8 @@ namespace FrontierDepths.Core
                 {
                     weaponId = profileService.Current.equippedWeaponId,
                     currentMagazineAmmo = 6,
-                    reserveAmmo = 30,
-                    maxReserveAmmo = 60
+                    reserveAmmo = 36,
+                    maxReserveAmmo = 72
                 },
                 currentFloor = floorOne,
                 visitedFloors = new List<FloorState> { CloneFloor(floorOne) },
@@ -64,6 +64,7 @@ namespace FrontierDepths.Core
         public void DescendToNextFloor()
         {
             EnsureRun();
+            SaveActiveFloorState();
             Current.floorIndex++;
             Current.currentFloor = GetOrCreateFloorState(Current.floorIndex);
             Current.portalAnchor = PortalAnchorState.Invalid;
@@ -93,6 +94,7 @@ namespace FrontierDepths.Core
                 return;
             }
 
+            SaveActiveFloorState();
             Current.floorIndex--;
             Current.currentFloor = GetOrCreateFloorState(Current.floorIndex);
             Current.portalAnchor = PortalAnchorState.Invalid;
@@ -124,6 +126,7 @@ namespace FrontierDepths.Core
         public void PrepareTownReturnOnFoot()
         {
             EnsureRun();
+            SaveActiveFloorState();
             Current.lastTransition = FloorTransitionKind.StartedRun;
             Save();
         }
@@ -146,8 +149,9 @@ namespace FrontierDepths.Core
             saveService.SaveRun(Current);
         }
 
-        private FloorState GetOrCreateFloorState(int floorIndex)
+        public FloorState GetOrCreateFloorState(int floorIndex)
         {
+            EnsureRun();
             FloorState existing = Current.GetVisitedFloor(floorIndex);
             if (existing != null)
             {
@@ -157,6 +161,22 @@ namespace FrontierDepths.Core
             FloorState created = CreateFloorState(floorIndex, Current.seed);
             Current.SetVisitedFloor(created);
             return CloneFloor(created);
+        }
+
+        public void SaveActiveFloorState()
+        {
+            if (Current == null || Current.currentFloor == null)
+            {
+                return;
+            }
+
+            Current.SetVisitedFloor(Current.currentFloor);
+            saveService.SaveRun(Current);
+        }
+
+        public FloorState LoadFloorState(int floorIndex)
+        {
+            return GetOrCreateFloorState(floorIndex);
         }
 
         private static FloorState CloneFloor(FloorState source)
@@ -171,8 +191,19 @@ namespace FrontierDepths.Core
                 stairDiscovered = source.stairDiscovered,
                 rewardGranted = source.rewardGranted,
                 graphLayoutSignature = source.graphLayoutSignature,
-                layoutShapeSignature = source.layoutShapeSignature
+                layoutShapeSignature = source.layoutShapeSignature,
+                visitedRoomIds = CopyStringList(source.visitedRoomIds),
+                discoveredRoomIds = CopyStringList(source.discoveredRoomIds),
+                discoveredCorridorIds = CopyStringList(source.discoveredCorridorIds),
+                claimedRoomPurposeIds = CopyStringList(source.claimedRoomPurposeIds),
+                lastKnownPlayerRoomId = source.lastKnownPlayerRoomId,
+                knownStairRoomId = source.knownStairRoomId
             };
+        }
+
+        private static List<string> CopyStringList(List<string> source)
+        {
+            return source != null ? new List<string>(source) : new List<string>();
         }
 
         private static FloorState CreateFloorState(int floorIndex, int runSeed)

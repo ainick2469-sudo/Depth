@@ -12,6 +12,7 @@ namespace FrontierDepths.World
         public const string SpawnSourceEncounterDirector = "EncounterDirectorLite";
         private const int FloorOneBatCap = 3;
         private const float BruteMinimumRoomFootprint = 1600f;
+        private const float MinimumEnemySpawnSeparation = 2.35f;
 
         private readonly Transform runtimeRoot;
         private readonly EncounterDropService dropService;
@@ -61,7 +62,8 @@ namespace FrontierDepths.World
                     room,
                     BuildRoomPatrolPoints(buildResult, room),
                     spawn.mobilityRole,
-                    spawn.roamingRoute);
+                    spawn.roamingRoute,
+                    spawn.behaviorSeed);
                 EnemyHealth enemyHealth = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
                 if (enemyHealth == null)
                 {
@@ -162,6 +164,12 @@ namespace FrontierDepths.World
                     continue;
                 }
 
+                if (spreadSpawns.Count < spawnCount)
+                {
+                    AppendWarning(plan, $"Encounter Director underfilled {assignment.roomId}: spacing allowed {spreadSpawns.Count}/{spawnCount} safe melee spawns.");
+                    spawnCount = spreadSpawns.Count;
+                }
+
                 for (int spawnIndex = 0; spawnIndex < spawnCount; spawnIndex++)
                 {
                     EnemyDefinition definition = FindDefinition(definitions, assignment.archetypes[spawnIndex]);
@@ -205,7 +213,8 @@ namespace FrontierDepths.World
                         definition = spawnDefinition,
                         mobilityRole = mobilityRole,
                         variantId = variant != null ? variant.variantId : string.Empty,
-                        roamingRoute = roamingRoute
+                        roamingRoute = roamingRoute,
+                        behaviorSeed = BuildEnemyBehaviorSeed(seed, buildResult.floorIndex, assignment.roomId, spawnIndex, spawnPoint.position, spawnDefinition.archetype)
                     });
                     plan.AddArchetype(spawnDefinition.archetype);
                 }
@@ -796,6 +805,28 @@ namespace FrontierDepths.World
             return definitions != null ? definitions.Find(definition => definition != null && definition.archetype == archetype) : null;
         }
 
+        private static int BuildEnemyBehaviorSeed(int floorSeed, int floorIndex, string roomId, int spawnIndex, Vector3 spawnPosition, EnemyArchetype archetype)
+        {
+            unchecked
+            {
+                int hash = floorSeed != 0 ? floorSeed : 17;
+                hash = hash * 397 ^ floorIndex;
+                hash = hash * 397 ^ spawnIndex;
+                hash = hash * 397 ^ (int)archetype;
+                hash = hash * 397 ^ Mathf.RoundToInt(spawnPosition.x * 10f);
+                hash = hash * 397 ^ Mathf.RoundToInt(spawnPosition.z * 10f);
+                if (!string.IsNullOrEmpty(roomId))
+                {
+                    for (int i = 0; i < roomId.Length; i++)
+                    {
+                        hash = hash * 31 + roomId[i];
+                    }
+                }
+
+                return hash == 0 ? 19 : hash;
+            }
+        }
+
         private static List<DungeonSpawnPointRecord> SelectSpreadSpawns(List<DungeonSpawnPointRecord> safeSpawns, int count)
         {
             List<DungeonSpawnPointRecord> result = new List<DungeonSpawnPointRecord>();
@@ -829,6 +860,11 @@ namespace FrontierDepths.World
                         bestDistance = nearestDistance;
                         bestIndex = i;
                     }
+                }
+
+                if (bestDistance < MinimumEnemySpawnSeparation * MinimumEnemySpawnSeparation)
+                {
+                    break;
                 }
 
                 result.Add(remaining[bestIndex]);
@@ -1271,7 +1307,7 @@ namespace FrontierDepths.World
             DungeonRoomBuildRecord homeRoom,
             IReadOnlyList<Vector3> patrolPoints)
         {
-            return CreateEnemy(parent, position, definition, homeRoom, patrolPoints, definition != null ? definition.defaultMobilityRole : EnemyMobilityRole.RoomGuard, null);
+            return CreateEnemy(parent, position, definition, homeRoom, patrolPoints, definition != null ? definition.defaultMobilityRole : EnemyMobilityRole.RoomGuard, null, 0);
         }
 
         internal static GameObject CreateEnemy(
@@ -1282,6 +1318,19 @@ namespace FrontierDepths.World
             IReadOnlyList<Vector3> patrolPoints,
             EnemyMobilityRole mobilityRole,
             IReadOnlyList<Vector3> roamingRoute)
+        {
+            return CreateEnemy(parent, position, definition, homeRoom, patrolPoints, mobilityRole, roamingRoute, 0);
+        }
+
+        internal static GameObject CreateEnemy(
+            Transform parent,
+            Vector3 position,
+            EnemyDefinition definition,
+            DungeonRoomBuildRecord homeRoom,
+            IReadOnlyList<Vector3> patrolPoints,
+            EnemyMobilityRole mobilityRole,
+            IReadOnlyList<Vector3> roamingRoute,
+            int behaviorSeed)
         {
             EnemyDefinition safeDefinition = definition != null
                 ? definition
@@ -1328,6 +1377,10 @@ namespace FrontierDepths.World
 
             melee.ConfigureMobilityRole(mobilityRole);
             melee.ConfigureRoamingRoute(roamingRoute);
+            if (behaviorSeed != 0)
+            {
+                melee.ConfigureBehaviorSeed(behaviorSeed);
+            }
 
             int defaultLayer = LayerMask.NameToLayer("Default");
             DungeonSceneController.SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
@@ -1529,6 +1582,7 @@ namespace FrontierDepths.World
         public EnemyMobilityRole mobilityRole = EnemyMobilityRole.RoomGuard;
         public string variantId = string.Empty;
         public List<Vector3> roamingRoute = new List<Vector3>();
+        public int behaviorSeed;
     }
 
     public sealed class DungeonEncounterRoomAssignment

@@ -5,7 +5,7 @@ namespace FrontierDepths.Combat
     [RequireComponent(typeof(Collider))]
     public sealed class AmmoPickup : MonoBehaviour
     {
-        [SerializeField] private int amount = 2;
+        [SerializeField] private int amount = 10;
 
         public int Amount => amount;
 
@@ -24,7 +24,13 @@ namespace FrontierDepths.Combat
             }
 
             int modifiedAmount = Mathf.Max(1, Mathf.CeilToInt(amount * RunStatAggregator.Current.AmmoPickupMultiplier));
-            return weapon.TryAddAmmoToReserve(modifiedAmount, true) > 0;
+            int added = weapon.TryAddAmmoToReserve(modifiedAmount, true);
+            if (added <= 0 && weapon.ReserveAmmo >= weapon.MaxReserveAmmo)
+            {
+                Debug.Log("Ammo Full");
+            }
+
+            return added > 0;
         }
 
         private void Awake()

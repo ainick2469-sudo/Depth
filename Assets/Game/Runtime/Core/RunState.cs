@@ -6,7 +6,7 @@ namespace FrontierDepths.Core
     [Serializable]
     public class RunState
     {
-        public int version = 3;
+        public int version = 4;
         public bool isActive;
         public int seed;
         public int floorIndex = 1;
@@ -26,7 +26,7 @@ namespace FrontierDepths.Core
             bool legacyAmmoState = version < 3 || weaponAmmo == null;
             weaponAmmo ??= new RunWeaponAmmoState();
             weaponAmmo.Normalize(equippedWeaponId, legacyAmmoState);
-            version = 3;
+            version = 4;
             for (int i = runUpgrades.Count - 1; i >= 0; i--)
             {
                 RunUpgradeRecord record = runUpgrades[i];
@@ -166,8 +166,19 @@ namespace FrontierDepths.Core
                 stairDiscovered = source.stairDiscovered,
                 rewardGranted = source.rewardGranted,
                 graphLayoutSignature = source.graphLayoutSignature,
-                layoutShapeSignature = source.layoutShapeSignature
+                layoutShapeSignature = source.layoutShapeSignature,
+                visitedRoomIds = CopyStringList(source.visitedRoomIds),
+                discoveredRoomIds = CopyStringList(source.discoveredRoomIds),
+                discoveredCorridorIds = CopyStringList(source.discoveredCorridorIds),
+                claimedRoomPurposeIds = CopyStringList(source.claimedRoomPurposeIds),
+                lastKnownPlayerRoomId = source.lastKnownPlayerRoomId,
+                knownStairRoomId = source.knownStairRoomId
             };
+        }
+
+        private static List<string> CopyStringList(List<string> source)
+        {
+            return source != null ? new List<string>(source) : new List<string>();
         }
     }
 
@@ -183,19 +194,19 @@ namespace FrontierDepths.Core
     {
         public string weaponId = "weapon.frontier_revolver";
         public int currentMagazineAmmo = 6;
-        public int reserveAmmo = 30;
-        public int maxReserveAmmo = 60;
+        public int reserveAmmo = 36;
+        public int maxReserveAmmo = 72;
 
         public void Normalize(string fallbackWeaponId, bool useDefaultsForMissingValues = false)
         {
             weaponId = string.IsNullOrWhiteSpace(weaponId)
                 ? (string.IsNullOrWhiteSpace(fallbackWeaponId) ? "weapon.frontier_revolver" : fallbackWeaponId)
                 : weaponId;
-            maxReserveAmmo = Math.Max(0, maxReserveAmmo <= 0 ? 60 : maxReserveAmmo);
+            maxReserveAmmo = Math.Max(0, maxReserveAmmo <= 0 ? 72 : maxReserveAmmo);
             if (useDefaultsForMissingValues)
             {
                 currentMagazineAmmo = currentMagazineAmmo <= 0 ? 6 : currentMagazineAmmo;
-                reserveAmmo = reserveAmmo <= 0 ? 30 : reserveAmmo;
+                reserveAmmo = reserveAmmo <= 0 ? 36 : reserveAmmo;
             }
 
             currentMagazineAmmo = Math.Max(0, currentMagazineAmmo);
@@ -215,6 +226,12 @@ namespace FrontierDepths.Core
         public bool rewardGranted;
         public string graphLayoutSignature = string.Empty;
         public string layoutShapeSignature = string.Empty;
+        public List<string> visitedRoomIds = new List<string>();
+        public List<string> discoveredRoomIds = new List<string>();
+        public List<string> discoveredCorridorIds = new List<string>();
+        public List<string> claimedRoomPurposeIds = new List<string>();
+        public string lastKnownPlayerRoomId = string.Empty;
+        public string knownStairRoomId = string.Empty;
 
         public void Normalize(int fallbackFloorIndex, int fallbackSeed)
         {
@@ -225,6 +242,53 @@ namespace FrontierDepths.Core
             themeKitId = string.IsNullOrWhiteSpace(themeKitId) ? "theme.frontier_town" : themeKitId;
             graphLayoutSignature ??= string.Empty;
             layoutShapeSignature ??= string.Empty;
+            visitedRoomIds = NormalizeStringList(visitedRoomIds);
+            discoveredRoomIds = NormalizeStringList(discoveredRoomIds);
+            discoveredCorridorIds = NormalizeStringList(discoveredCorridorIds);
+            claimedRoomPurposeIds = NormalizeStringList(claimedRoomPurposeIds);
+            lastKnownPlayerRoomId ??= string.Empty;
+            knownStairRoomId ??= string.Empty;
+        }
+
+        public bool HasClaimedRoomPurpose(string claimId)
+        {
+            return !string.IsNullOrWhiteSpace(claimId) &&
+                   claimedRoomPurposeIds != null &&
+                   claimedRoomPurposeIds.Contains(claimId);
+        }
+
+        public void MarkRoomPurposeClaimed(string claimId)
+        {
+            if (string.IsNullOrWhiteSpace(claimId))
+            {
+                return;
+            }
+
+            claimedRoomPurposeIds ??= new List<string>();
+            if (!claimedRoomPurposeIds.Contains(claimId))
+            {
+                claimedRoomPurposeIds.Add(claimId);
+            }
+        }
+
+        private static List<string> NormalizeStringList(List<string> source)
+        {
+            List<string> normalized = new List<string>();
+            if (source == null)
+            {
+                return normalized;
+            }
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                string value = source[i];
+                if (!string.IsNullOrWhiteSpace(value) && !normalized.Contains(value))
+                {
+                    normalized.Add(value);
+                }
+            }
+
+            return normalized;
         }
     }
 

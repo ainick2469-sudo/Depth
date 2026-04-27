@@ -66,12 +66,23 @@ namespace FrontierDepths.UI
             PlayerHealth health = FindAnyObjectByType<PlayerHealth>();
             RunStatSnapshot stats = RunStatAggregator.Current;
 
-            builder.AppendLine("RUN INFO");
+            builder.AppendLine("RUN");
             builder.AppendLine(run != null ? $"Floor {run.floorIndex}" : "Floor -");
             builder.AppendLine(profile != null ? $"Gold {profile.gold}" : "Gold -");
             if (health != null)
             {
                 builder.AppendLine($"HP {health.CurrentHealth:0}/{health.MaxHealth:0}");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("AMMO");
+            if (weapon != null)
+            {
+                builder.AppendLine($"{weapon.CurrentAmmo}/{weapon.MagazineSize} loaded | {weapon.ReserveAmmo}/{weapon.MaxReserveAmmo} reserve");
+            }
+            else
+            {
+                builder.AppendLine("No ammo state found.");
             }
 
             builder.AppendLine();
@@ -83,7 +94,6 @@ namespace FrontierDepths.UI
                 builder.AppendLine($"Reload {weapon.BaseReloadDuration:0.00}s -> {weapon.EffectiveReloadDuration:0.00}s (+{stats.reloadSpeedPercent * 100f:0.#}%)");
                 builder.AppendLine($"Crit {weapon.CritChance * 100f:0.#}%");
                 builder.AppendLine($"Range {weapon.MaxRange:0.#}m | full {weapon.FullDamageRange:0.#}m | max falloff {weapon.DamageMultiplierAtMaxRange * 100f:0.#}%");
-                builder.AppendLine($"Ammo {weapon.CurrentAmmo}/{weapon.MagazineSize} | Reserve {weapon.ReserveAmmo}/{weapon.MaxReserveAmmo}");
             }
             else
             {
@@ -91,7 +101,7 @@ namespace FrontierDepths.UI
             }
 
             builder.AppendLine();
-            builder.AppendLine("RUN UPGRADES");
+            builder.AppendLine("UPGRADES");
             if (run != null && run.runUpgrades != null && run.runUpgrades.Count > 0)
             {
                 for (int i = 0; i < run.runUpgrades.Count; i++)
@@ -116,10 +126,56 @@ namespace FrontierDepths.UI
             builder.AppendLine();
             builder.AppendLine("MASTERY");
             MasteryProgressService mastery = MasteryProgressRuntime.Service;
-            builder.AppendLine(mastery != null ? mastery.GetDebugSummary(8) : "Mastery runtime not ready");
+            AppendMasterySummary(builder, mastery, 8);
             builder.AppendLine();
             builder.AppendLine("Press G to close.");
             return builder.ToString();
+        }
+
+        private static void AppendMasterySummary(StringBuilder builder, MasteryProgressService mastery, int maxTrackers)
+        {
+            if (mastery == null || mastery.State == null)
+            {
+                builder.AppendLine("Mastery runtime not ready");
+                return;
+            }
+
+            int count = 0;
+            foreach (MasteryTrackerProgress progress in mastery.State.AllProgress)
+            {
+                if (count >= maxTrackers)
+                {
+                    break;
+                }
+
+                builder.AppendLine($"- {GetFriendlyMasteryName(progress.trackerId)} L{progress.level} {progress.xp:0.#}xp");
+                count++;
+            }
+
+            if (count == 0)
+            {
+                builder.AppendLine("- No mastery progress yet");
+            }
+        }
+
+        private static string GetFriendlyMasteryName(string trackerId)
+        {
+            return trackerId switch
+            {
+                "mastery.revolver" => "Revolver Mastery",
+                "mastery.ballistic" => "Ballistic Mastery",
+                "mastery.physical" => "Physical Mastery",
+                "mastery.marksman" => "Marksman Mastery",
+                "mastery.reload" => "Reload Mastery",
+                "mastery.dry_fire" => "Dry-Fire Discipline",
+                "mastery.mobility" => "Mobility Mastery",
+                "mastery.explorer" => "Explorer Mastery",
+                "mastery.stairs" => "Stair Mastery",
+                "mastery.frontier_legend" => "Frontier Legend",
+                _ => string.IsNullOrWhiteSpace(trackerId)
+                    ? "Unknown Mastery"
+                    : trackerId.Replace("mastery.", string.Empty).Replace("_", " ")
+            };
         }
 
         private void EnsureUi()

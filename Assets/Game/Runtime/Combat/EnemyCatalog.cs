@@ -81,7 +81,7 @@ namespace FrontierDepths.Combat
                     definition.healthDropChance = 0.12f;
                     definition.healthAmount = 8f;
                     definition.ammoDropChance = 0.08f;
-                    definition.ammoAmount = 6;
+                    definition.ammoAmount = 10;
                     break;
                 case EnemyArchetype.Bat:
                     definition.enemyId = "enemy.bat";
@@ -122,7 +122,7 @@ namespace FrontierDepths.Combat
                     definition.healthDropChance = 0.05f;
                     definition.healthAmount = 6f;
                     definition.ammoDropChance = 0.16f;
-                    definition.ammoAmount = 6;
+                    definition.ammoAmount = 10;
                     break;
                 case EnemyArchetype.GoblinBrute:
                     definition.enemyId = "enemy.goblin_brute";
@@ -163,7 +163,7 @@ namespace FrontierDepths.Combat
                     definition.healthDropChance = 0.18f;
                     definition.healthAmount = 14f;
                     definition.ammoDropChance = 0.22f;
-                    definition.ammoAmount = 9;
+                    definition.ammoAmount = 12;
                     break;
                 default:
                     definition.enemyId = "enemy.goblin_grunt";
@@ -204,7 +204,7 @@ namespace FrontierDepths.Combat
                     definition.healthDropChance = 0.08f;
                     definition.healthAmount = 10f;
                     definition.ammoDropChance = 0.14f;
-                    definition.ammoAmount = 6;
+                    definition.ammoAmount = 10;
                     break;
             }
         }

@@ -11,6 +11,12 @@ namespace FrontierDepths.Progression
         public string DisplayName => shopId;
         public string Prompt => prompt;
 
+        public void Configure(string configuredShopId, string configuredPrompt)
+        {
+            shopId = configuredShopId ?? string.Empty;
+            prompt = string.IsNullOrWhiteSpace(configuredPrompt) ? "Browse stock" : configuredPrompt;
+        }
+
         public bool CanInteract(PlayerInteractor interactor, out string reason)
         {
             reason = string.Empty;

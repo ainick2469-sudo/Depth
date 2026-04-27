@@ -14,6 +14,7 @@ namespace FrontierDepths.Core
         [SerializeField] private float jumpHeight = 1.2f;
         [SerializeField] private float gravity = -25f;
         [SerializeField] private float lookSensitivity = 1.2f;
+        [SerializeField] private bool invertY;
         [SerializeField] private float footstepDistance = 2.25f;
         [SerializeField] private float landingVelocityThreshold = 8f;
         [SerializeField] private float feedbackVolume = 0.14f;
@@ -64,6 +65,7 @@ namespace FrontierDepths.Core
             }
 
             pitch = NormalizePitch(playerCamera != null ? playerCamera.transform.localEulerAngles.x : 0f);
+            ApplyLookSettings(GameSettingsService.Current.mouseSensitivity, GameSettingsService.Current.invertY, GameSettingsService.Current.fov);
             lastPosition = transform.position;
             wasGroundedLastFrame = controller.isGrounded;
             UpdateUiCaptureState();
@@ -178,6 +180,16 @@ namespace FrontierDepths.Core
             ApplyCameraRotation();
         }
 
+        public void ApplyLookSettings(float sensitivity, bool shouldInvertY, float fov)
+        {
+            lookSensitivity = Mathf.Clamp(sensitivity, 0.1f, 10f);
+            invertY = shouldInvertY;
+            if (playerCamera != null)
+            {
+                playerCamera.fieldOfView = Mathf.Clamp(fov, 60f, 100f);
+            }
+        }
+
         private void HandleLook()
         {
             if (playerCamera == null || suppressLookFrames > 0)
@@ -187,7 +199,7 @@ namespace FrontierDepths.Core
 
             float mouseX = Input.GetAxisRaw("Mouse X") * lookSensitivity;
             float mouseY = Input.GetAxisRaw("Mouse Y") * lookSensitivity;
-            pitch = Mathf.Clamp(pitch - mouseY, -89f, 89f);
+            pitch = Mathf.Clamp(pitch + (invertY ? mouseY : -mouseY), -89f, 89f);
             transform.Rotate(Vector3.up, mouseX);
             ApplyCameraRotation();
         }

@@ -12,8 +12,8 @@ namespace FrontierDepths.Combat
         private const float DefaultDamage = 15f;
         private const float DefaultFireRate = 2.857f;
         private const int DefaultMagazineSize = 6;
-        private const int DefaultStartingReserveAmmo = 30;
-        private const int DefaultMaxReserveAmmo = 60;
+        private const int DefaultStartingReserveAmmo = 36;
+        private const int DefaultMaxReserveAmmo = 72;
         private const float DefaultReloadDuration = 1.4f;
         private const float DefaultRange = 45f;
         private const float DefaultFullDamageRange = 17f;

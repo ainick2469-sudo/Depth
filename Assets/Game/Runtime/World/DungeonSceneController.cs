@@ -1272,6 +1272,11 @@ namespace FrontierDepths.World
             {
                 player.gameObject.AddComponent<PlayerWeaponController>();
             }
+
+            if (player.GetComponent<PlayerPistolWhipController>() == null)
+            {
+                player.gameObject.AddComponent<PlayerPistolWhipController>();
+            }
         }
 
         private bool IsSpawnPointValid(
@@ -1753,6 +1758,7 @@ namespace FrontierDepths.World
 
             if (Input.GetKeyDown(KeyCode.F10) && GameBootstrap.Instance != null)
             {
+                GameBootstrap.Instance.RunService?.SaveActiveFloorState();
                 GameBootstrap.Instance.SceneFlowService.LoadScene(GameSceneId.TownHub);
             }
         }
@@ -1968,7 +1974,13 @@ namespace FrontierDepths.World
                 themeKitId = source != null ? source.themeKitId : "theme.frontier_town",
                 stairDiscovered = source != null && source.stairDiscovered,
                 graphLayoutSignature = source != null ? source.graphLayoutSignature : string.Empty,
-                layoutShapeSignature = source != null ? source.layoutShapeSignature : string.Empty
+                layoutShapeSignature = source != null ? source.layoutShapeSignature : string.Empty,
+                visitedRoomIds = source != null && source.visitedRoomIds != null ? new List<string>(source.visitedRoomIds) : new List<string>(),
+                discoveredRoomIds = source != null && source.discoveredRoomIds != null ? new List<string>(source.discoveredRoomIds) : new List<string>(),
+                discoveredCorridorIds = source != null && source.discoveredCorridorIds != null ? new List<string>(source.discoveredCorridorIds) : new List<string>(),
+                claimedRoomPurposeIds = source != null && source.claimedRoomPurposeIds != null ? new List<string>(source.claimedRoomPurposeIds) : new List<string>(),
+                lastKnownPlayerRoomId = source != null ? source.lastKnownPlayerRoomId : string.Empty,
+                knownStairRoomId = source != null ? source.knownStairRoomId : string.Empty
             };
             clone.Normalize(clone.floorIndex, floorSeed);
             return clone;
@@ -2958,14 +2970,102 @@ namespace FrontierDepths.World
             }
             else if (node.nodeKind == DungeonNodeKind.Landmark)
             {
-                CreatePurposePickup(roomRoot, node.nodeId, "LandmarkAmmoCache", EncounterDropKind.Ammo, new Vector3(-2.2f, 1f, 0f), 9);
-                CreatePurposePickup(roomRoot, node.nodeId, "LandmarkGoldCache", EncounterDropKind.Gold, new Vector3(2.2f, 1f, 0f), 12);
+                CreateRoomPurposeInteractable(
+                    roomRoot,
+                    node.nodeId,
+                    "green_cache",
+                    "Cache",
+                    "Open Cache",
+                    new Vector3(0f, 1f, 0f),
+                    new Color(0.25f, 0.9f, 0.38f, 1f),
+                    gold: 8,
+                    ammo: 12,
+                    heal: 10f,
+                    healthRisk: 0f);
             }
             else if (node.nodeKind == DungeonNodeKind.Secret)
             {
-                CreatePurposePickup(roomRoot, node.nodeId, "SecretCache", EncounterDropKind.Gold, new Vector3(0f, 1f, 0f), 18);
-                CreatePurposeMarker(roomRoot, node.nodeId, "SecretMarker", new Vector3(0f, 1.8f, 2.6f), new Color(0.7f, 0.3f, 0.95f, 1f));
+                CreateRoomPurposeInteractable(
+                    roomRoot,
+                    node.nodeId,
+                    "purple_shrine",
+                    "Strange Shrine",
+                    "Touch Strange Shrine",
+                    new Vector3(0f, 1f, 0f),
+                    new Color(0.7f, 0.3f, 0.95f, 1f),
+                    gold: 25,
+                    ammo: 10,
+                    heal: 0f,
+                    healthRisk: 8f);
             }
+        }
+
+        private void CreateRoomPurposeInteractable(
+            Transform roomRoot,
+            string nodeId,
+            string purposeType,
+            string displayName,
+            string prompt,
+            Vector3 localPosition,
+            Color color,
+            int gold,
+            int ammo,
+            float heal,
+            float healthRisk)
+        {
+            Transform purposeRoot = GetOrCreateRuntimeRootChild("RuntimeRoomPurposeInteractables");
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            marker.name = $"Interactable_{nodeId}_{purposeType}";
+            marker.transform.SetParent(purposeRoot, true);
+            marker.transform.position = roomRoot.TransformPoint(localPosition);
+            marker.transform.localScale = new Vector3(1.5f, 0.42f, 1.5f);
+            ApplyColor(marker.GetComponent<Renderer>(), color);
+
+            Collider collider = marker.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.isTrigger = true;
+            }
+
+            string claimId = BuildRoomPurposeClaimId(nodeId, purposeType);
+            marker.AddComponent<RoomPurposeInteractable>().Configure(claimId, displayName, prompt, gold, ammo, heal, healthRisk);
+            CreateFloatingLabel(marker.transform, displayName, color);
+            RecordInteractable(nodeId, purposeType, marker, false, false, false);
+        }
+
+        private Transform GetOrCreateRuntimeRootChild(string childName)
+        {
+            Transform parent = runtimeRoot != null ? runtimeRoot : transform;
+            Transform existing = parent.Find(childName);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            GameObject root = new GameObject(childName);
+            root.transform.SetParent(parent, false);
+            return root.transform;
+        }
+
+        private string BuildRoomPurposeClaimId(string nodeId, string purposeType)
+        {
+            int floorIndex = activeBuildResult != null ? activeBuildResult.floorIndex : 0;
+            int seed = activeBuildResult != null ? activeBuildResult.seed : 0;
+            return $"floor_{floorIndex}_seed_{seed}_room_{nodeId}_purpose_{purposeType}";
+        }
+
+        private static void CreateFloatingLabel(Transform parent, string label, Color color)
+        {
+            GameObject labelObject = new GameObject("PurposeLabel", typeof(TextMesh));
+            labelObject.transform.SetParent(parent, false);
+            labelObject.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+            TextMesh text = labelObject.GetComponent<TextMesh>();
+            text.text = label;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.characterSize = 0.24f;
+            text.fontSize = 36;
+            text.color = color;
         }
 
         private void CreatePurposePickup(

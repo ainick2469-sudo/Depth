@@ -9,7 +9,7 @@ namespace FrontierDepths.Combat
         private float autoReloadReadyTime;
 
         public WeaponRuntimeState(int magazineSize)
-            : this(magazineSize, 30, 60, -1)
+            : this(magazineSize, 36, 72, -1)
         {
         }
 
