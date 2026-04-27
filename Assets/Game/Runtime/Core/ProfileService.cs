@@ -9,9 +9,12 @@ namespace FrontierDepths.Core
         public ProfileService(SaveService saveService)
         {
             this.saveService = saveService;
-            Current = saveService.LoadProfile() ?? new ProfileState();
-            Current.Normalize();
-            Save();
+            using (LoadTimingLogger.Measure("Profile load"))
+            {
+                Current = saveService.LoadProfile() ?? new ProfileState();
+                Current.Normalize();
+                Save();
+            }
         }
 
         public ProfileState Current { get; private set; }
@@ -111,9 +114,10 @@ namespace FrontierDepths.Core
                 }
             }
 
+            int reputation = ReputationService.AddReputation(Current, ReputationService.GetBountyReputationReward(definition));
             Current.activeBountyIds.Remove(bountyId);
             Save();
-            message = $"{definition.targetName} bounty complete: +{definition.goldReward}g, +{definition.xpReward} XP.";
+            message = $"{definition.targetName} bounty complete: +{definition.goldReward}g, +{definition.xpReward} XP, +{reputation} reputation.";
             return true;
         }
 

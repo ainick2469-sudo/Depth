@@ -69,6 +69,11 @@ namespace FrontierDepths.UI
             builder.AppendLine("RUN");
             builder.AppendLine(run != null ? $"Floor {run.floorIndex}" : "Floor -");
             builder.AppendLine(profile != null ? $"Gold {profile.gold}" : "Gold -");
+            if (profile != null)
+            {
+                builder.AppendLine($"Reputation {profile.townReputation} ({ReputationService.GetTitle(profile.townReputation)})");
+                builder.AppendLine($"Class XP {profile.classXp} | Skill Points {profile.skillPoints}");
+            }
             if (health != null)
             {
                 builder.AppendLine($"HP {health.CurrentHealth:0}/{health.MaxHealth:0}");
@@ -117,7 +122,7 @@ namespace FrontierDepths.UI
             builder.AppendLine();
             builder.AppendLine("SPECIALS");
             builder.AppendLine(stats.HasChainHit
-                ? $"- Chain Spark: every {stats.chainEveryNthHit}th hit chains {stats.chainDamageFraction * 100f:0.#}% damage within {RunUpgradeCatalog.ChainHitSearchRadius:0.#}m"
+                ? $"- Chain Spark: every hit chains {stats.chainDamageFraction * 100f:0.#}% damage within {RunUpgradeCatalog.ChainHitSearchRadius:0.#}m"
                 : "- Chain Spark: inactive");
             builder.AppendLine(stats.HasFirstShotAfterReloadBonus
                 ? $"- First Shot: +{stats.firstShotAfterReloadPercent * 100f:0.#}% after reload"

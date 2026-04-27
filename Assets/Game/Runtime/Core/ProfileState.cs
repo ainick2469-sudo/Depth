@@ -12,6 +12,7 @@ namespace FrontierDepths.Core
         public int curioDust;
         public int classXp;
         public int skillPoints;
+        public int townReputation;
         public string equippedWeaponId = "weapon.frontier_revolver";
         public string storedHeirloomId = string.Empty;
         public List<string> unlockedWeaponIds = new List<string> { "weapon.frontier_revolver" };
@@ -30,6 +31,7 @@ namespace FrontierDepths.Core
             purchaseRecords ??= new List<ShopPurchaseRecord>();
             classXp = Math.Max(0, classXp);
             skillPoints = Math.Max(0, skillPoints);
+            townReputation = Math.Max(0, townReputation);
 
             if (!unlockedWeaponIds.Contains("weapon.frontier_revolver"))
             {

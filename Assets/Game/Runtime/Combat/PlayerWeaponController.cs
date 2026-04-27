@@ -1108,14 +1108,7 @@ namespace FrontierDepths.Combat
 
         private void ShowDamageNumber(Vector3 point, float amount, Color color, bool killedTarget, string label = "")
         {
-            if (damageNumbers.Length == 0)
-            {
-                return;
-            }
-
-            DamageNumberMarker number = damageNumbers[nextDamageNumber];
-            nextDamageNumber = (nextDamageNumber + 1) % damageNumbers.Length;
-            number?.Show(point + Vector3.up * 1.25f, Time.time + damageNumberDuration, amount, color, killedTarget, label);
+            CombatFeedbackService.ShowDamageNumber(point, amount, color, killedTarget, label);
         }
 
         private void ShowTracer(Vector3 start, Vector3 end, Color color)
@@ -1420,12 +1413,6 @@ namespace FrontierDepths.Combat
 
             RunStatSnapshot stats = RunStatAggregator.Current;
             if (!stats.HasChainHit)
-            {
-                return false;
-            }
-
-            runUpgradeWeaponHitCounter++;
-            if (runUpgradeWeaponHitCounter % stats.chainEveryNthHit != 0)
             {
                 return false;
             }

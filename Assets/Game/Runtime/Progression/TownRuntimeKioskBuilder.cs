@@ -22,28 +22,31 @@ namespace FrontierDepths.Progression
 
         public static Transform EnsureRuntimeKiosks(Transform parent)
         {
-            Transform safeParent = parent != null ? parent : FindAnyObjectByType<TownHubController>()?.transform;
-            if (safeParent == null)
+            using (LoadTimingLogger.Measure("Town kiosk build"))
             {
-                return null;
-            }
+                Transform safeParent = parent != null ? parent : FindAnyObjectByType<TownHubController>()?.transform;
+                if (safeParent == null)
+                {
+                    return null;
+                }
 
-            Transform existing = safeParent.Find(RootName);
-            if (existing != null)
-            {
-                RemoveRuntimeDungeonGateKiosk(existing);
-                return existing;
-            }
+                Transform existing = safeParent.Find(RootName);
+                if (existing != null)
+                {
+                    RemoveRuntimeDungeonGateKiosk(existing);
+                    return existing;
+                }
 
-            GameObject rootObject = new GameObject(RootName);
-            rootObject.transform.SetParent(safeParent, false);
-            Transform root = rootObject.transform;
-            for (int i = 0; i < Kiosks.Length; i++)
-            {
-                CreateKiosk(root, Kiosks[i]);
-            }
+                GameObject rootObject = new GameObject(RootName);
+                rootObject.transform.SetParent(safeParent, false);
+                Transform root = rootObject.transform;
+                for (int i = 0; i < Kiosks.Length; i++)
+                {
+                    CreateKiosk(root, Kiosks[i]);
+                }
 
-            return root;
+                return root;
+            }
         }
 
         private static void CreateKiosk(Transform root, KioskDefinition definition)

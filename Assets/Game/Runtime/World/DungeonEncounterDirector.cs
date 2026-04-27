@@ -49,7 +49,11 @@ namespace FrontierDepths.World
                 Clear(true);
             }
 
-            DungeonEncounterPlan plan = BuildPlan(buildResult, occupiedPositions, buildResult.seed);
+            DungeonEncounterPlan plan;
+            using (LoadTimingLogger.Measure("Encounter director"))
+            {
+                plan = BuildPlan(buildResult, occupiedPositions, buildResult.seed);
+            }
             summary = plan.ToSummary();
             Transform enemyRoot = GetOrCreateEnemyRoot(runtimeRoot);
             for (int i = 0; i < plan.spawns.Count; i++)
@@ -64,7 +68,8 @@ namespace FrontierDepths.World
                     BuildRoomPatrolPoints(buildResult, room),
                     spawn.mobilityRole,
                     spawn.roamingRoute,
-                    spawn.behaviorSeed);
+                    spawn.behaviorSeed,
+                    spawn.enemyLevel);
                 EnemyHealth enemyHealth = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
                 if (enemyHealth == null)
                 {
@@ -197,6 +202,9 @@ namespace FrontierDepths.World
                     EnemyDefinition spawnDefinition = variant != null
                         ? EnemyVariantCatalog.CreateVariantDefinition(definition, variant)
                         : definition;
+                    int behaviorSeed = BuildEnemyBehaviorSeed(seed, buildResult.floorIndex, assignment.roomId, spawnIndex, spawnPoint.position, spawnDefinition.archetype);
+                    int enemyLevel = CalculateEnemyLevel(buildResult.floorIndex, spawnDefinition, behaviorSeed, variant != null, false);
+                    spawnDefinition = EnemyVariantCatalog.CreateLeveledDefinition(spawnDefinition, enemyLevel);
 
                     if (mobilityRole == EnemyMobilityRole.Roamer || mobilityRole == EnemyMobilityRole.Hunter)
                     {
@@ -221,7 +229,8 @@ namespace FrontierDepths.World
                         mobilityRole = mobilityRole,
                         variantId = variant != null ? variant.variantId : string.Empty,
                         roamingRoute = roamingRoute,
-                        behaviorSeed = BuildEnemyBehaviorSeed(seed, buildResult.floorIndex, assignment.roomId, spawnIndex, spawnPoint.position, spawnDefinition.archetype)
+                        behaviorSeed = behaviorSeed,
+                        enemyLevel = enemyLevel
                     });
                     plan.AddArchetype(spawnDefinition.archetype);
                 }
@@ -849,6 +858,16 @@ namespace FrontierDepths.World
             }
         }
 
+        internal static int CalculateEnemyLevel(int floorIndex, EnemyDefinition definition, int behaviorSeed, bool hasVariant, bool isBounty)
+        {
+            int safeFloor = Mathf.Max(1, floorIndex);
+            int tierBonus = Mathf.Max(0, ((definition != null ? definition.tier : 1) - 1) * 2);
+            int variance = Mathf.Abs(behaviorSeed) % (safeFloor <= 2 ? 2 : 3);
+            int variantBonus = hasVariant ? 1 : 0;
+            int bountyBonus = isBounty ? 3 : 0;
+            return Mathf.Max(1, safeFloor + tierBonus + variance + variantBonus + bountyBonus);
+        }
+
         private static List<DungeonSpawnPointRecord> SelectSpreadSpawns(List<DungeonSpawnPointRecord> safeSpawns, int count)
         {
             List<DungeonSpawnPointRecord> result = new List<DungeonSpawnPointRecord>();
@@ -1012,6 +1031,8 @@ namespace FrontierDepths.World
             List<EnemyDefinition> definitions,
             System.Random random)
         {
+            using (LoadTimingLogger.Measure("Bounty target injection"))
+            {
             ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
             ProfileState profile = profileService != null ? profileService.Current : null;
             if (profile == null || profile.bounties == null)
@@ -1065,6 +1086,7 @@ namespace FrontierDepths.World
                 BountyObjectiveTracker.MarkSpawned(profile, bounty.bountyId, buildResult.floorIndex, spawn.roomId, spawn.bountyTargetName);
                 profileService.Save();
             }
+            }
         }
 
         private static bool HasBountySpawn(DungeonEncounterPlan plan, string bountyId)
@@ -1116,6 +1138,9 @@ namespace FrontierDepths.World
 
             selected ??= spreadSpawns.Count > 0 ? spreadSpawns[0] : roomSpawns[0];
             EnemyDefinition bountyDefinition = CreateBountyDefinition(baseDefinition, bounty);
+            int behaviorSeed = BuildEnemyBehaviorSeed(buildResult.seed, buildResult.floorIndex, room.nodeId, 97 + plan.spawns.Count, selected.position, bountyDefinition.archetype);
+            int enemyLevel = CalculateEnemyLevel(buildResult.floorIndex, bountyDefinition, behaviorSeed, true, true);
+            bountyDefinition = EnemyVariantCatalog.CreateLeveledDefinition(bountyDefinition, enemyLevel);
             EnemyMobilityRole role = bountyDefinition.attackFamily == EnemyAttackFamily.FastSkirmisher || bountyDefinition.attackFamily == EnemyAttackFamily.Ambusher
                 ? EnemyMobilityRole.Hunter
                 : EnemyMobilityRole.RoomGuard;
@@ -1130,7 +1155,8 @@ namespace FrontierDepths.World
                 mobilityRole = role,
                 variantId = "bounty",
                 roamingRoute = BuildRoamingRoute(buildResult, room, selected.position, role, random),
-                behaviorSeed = BuildEnemyBehaviorSeed(buildResult.seed, buildResult.floorIndex, room.nodeId, 97 + plan.spawns.Count, selected.position, bountyDefinition.archetype),
+                behaviorSeed = behaviorSeed,
+                enemyLevel = enemyLevel,
                 bountyId = bounty.bountyId,
                 bountyTitle = bounty.title,
                 bountyTargetName = bounty.targetName
@@ -1681,6 +1707,20 @@ namespace FrontierDepths.World
             IReadOnlyList<Vector3> roamingRoute,
             int behaviorSeed)
         {
+            return CreateEnemy(parent, position, definition, homeRoom, patrolPoints, mobilityRole, roamingRoute, behaviorSeed, 1);
+        }
+
+        internal static GameObject CreateEnemy(
+            Transform parent,
+            Vector3 position,
+            EnemyDefinition definition,
+            DungeonRoomBuildRecord homeRoom,
+            IReadOnlyList<Vector3> patrolPoints,
+            EnemyMobilityRole mobilityRole,
+            IReadOnlyList<Vector3> roamingRoute,
+            int behaviorSeed,
+            int enemyLevel)
+        {
             EnemyDefinition safeDefinition = definition != null
                 ? definition
                 : EnemyCatalog.CreateDefinition(EnemyArchetype.GoblinGrunt);
@@ -1715,6 +1755,7 @@ namespace FrontierDepths.World
 
             EnemyHealth health = enemy.AddComponent<EnemyHealth>();
             health.Configure(safeDefinition);
+            enemy.AddComponent<EnemyLevelRuntime>().Configure(Mathf.Max(1, enemyLevel), safeDefinition.displayName, Color.Lerp(safeDefinition.bodyColor, Color.white, 0.35f));
             SimpleMeleeEnemyController melee = enemy.AddComponent<SimpleMeleeEnemyController>();
             melee.Configure(safeDefinition);
             if (homeRoom != null)
@@ -2012,6 +2053,7 @@ namespace FrontierDepths.World
         public string variantId = string.Empty;
         public List<Vector3> roamingRoute = new List<Vector3>();
         public int behaviorSeed;
+        public int enemyLevel = 1;
         public string bountyId = string.Empty;
         public string bountyTitle = string.Empty;
         public string bountyTargetName = string.Empty;

@@ -51,7 +51,7 @@ namespace FrontierDepths.Tests.EditMode
             List<RunUpgradeDefinition> choices = RunUpgradeCatalog.CreateRewardChoicesForFloor(run, 1);
 
             Assert.AreEqual(3, choices.Count);
-            Assert.AreEqual(8, RunUpgradeCatalog.All.Count);
+            Assert.GreaterOrEqual(RunUpgradeCatalog.All.Count, 18);
             Assert.AreEqual(3, new HashSet<string>(choices.ConvertAll(choice => choice.upgradeId)).Count);
         }
 

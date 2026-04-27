@@ -20,13 +20,14 @@ namespace FrontierDepths.Progression
             }
 
             ShopOffer offer = shop.offers[index];
+            int effectiveCost = ReputationService.GetDiscountedCost(offer.cost, profileService.Current.townReputation);
             if (offer.purchaseLimit > 0 && profileService.GetPurchaseCount(shop.shopId, offer.offerId) >= offer.purchaseLimit)
             {
                 message = "That offer is sold out for now.";
                 return false;
             }
 
-            if (!profileService.TrySpendGold(offer.cost))
+            if (!profileService.TrySpendGold(effectiveCost))
             {
                 message = "Not enough gold.";
                 return false;
@@ -48,7 +49,7 @@ namespace FrontierDepths.Progression
 
             if (!changed)
             {
-                profileService.AddGold(offer.cost);
+                profileService.AddGold(effectiveCost);
                 if (string.IsNullOrWhiteSpace(message))
                 {
                     message = "Nothing changed.";

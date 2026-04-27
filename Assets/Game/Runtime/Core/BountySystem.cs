@@ -23,6 +23,7 @@ namespace FrontierDepths.Core
         public int maxFloor;
         public int goldReward;
         public int xpReward;
+        public int reputationRequired;
         public string reason;
         public string markerColor;
         public float healthMultiplier = 1.4f;
@@ -71,6 +72,7 @@ namespace FrontierDepths.Core
                 maxFloor = 3,
                 goldReward = 85,
                 xpReward = 35,
+                reputationRequired = 0,
                 reason = "It has been swallowing survey lamps and leaving miners blind in the dark.",
                 markerColor = "#88FF66"
             },
@@ -84,6 +86,7 @@ namespace FrontierDepths.Core
                 maxFloor = 5,
                 goldReward = 140,
                 xpReward = 60,
+                reputationRequired = 0,
                 reason = "Tagged three caravans, stole the powder, and laughed about it.",
                 markerColor = "#FF6538"
             },
@@ -97,6 +100,7 @@ namespace FrontierDepths.Core
                 maxFloor = 8,
                 goldReward = 260,
                 xpReward = 120,
+                reputationRequired = ReputationService.KnownHandThreshold,
                 reason = "Guarding the lower lift with a hammer made from a mine cart axle.",
                 markerColor = "#C84535"
             }
@@ -120,6 +124,22 @@ namespace FrontierDepths.Core
             }
 
             return null;
+        }
+
+        public static bool IsVisible(ProfileState profile, BountyDefinition bounty)
+        {
+            if (bounty == null)
+            {
+                return false;
+            }
+
+            BountyRuntimeState state = profile != null ? BountyObjectiveTracker.GetOrCreate(profile, bounty.bountyId) : null;
+            if (state != null && state.state != BountyState.Available)
+            {
+                return true;
+            }
+
+            return profile == null || profile.townReputation >= Math.Max(0, bounty.reputationRequired);
         }
     }
 

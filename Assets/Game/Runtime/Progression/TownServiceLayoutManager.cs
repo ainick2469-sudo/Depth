@@ -17,14 +17,18 @@ namespace FrontierDepths.Progression
 
         public void EnsureTownLayout(Transform parent)
         {
-            hiddenLegacyCount = 0;
-            skippedDuplicateCount = 0;
-            GetOrCreateRoot(parent != null ? parent : transform);
-            HideLegacyServiceStations();
-            HideCurioPlaceholders();
-            TownRuntimeKioskBuilder.EnsureRuntimeKiosks(parent != null ? parent : transform);
-            LabelExistingDungeonGate();
-            LogSummary();
+            using (LoadTimingLogger.Measure("Town layout build"))
+            {
+                hiddenLegacyCount = 0;
+                skippedDuplicateCount = 0;
+                GetOrCreateRoot(parent != null ? parent : transform);
+                HideLegacyServiceStations();
+                HideLegacyServiceGeometry();
+                HideCurioPlaceholders();
+                TownRuntimeKioskBuilder.EnsureRuntimeKiosks(parent != null ? parent : transform);
+                LabelExistingDungeonGate();
+                LogSummary();
+            }
         }
 
         public static TownServiceLayoutManager GetOrCreate(Transform parent)
@@ -87,6 +91,48 @@ namespace FrontierDepths.Progression
             for (int i = 0; i < roots.Length; i++)
             {
                 HideCurioRecursive(roots[i].transform);
+            }
+        }
+
+        private void HideLegacyServiceGeometry()
+        {
+            GameObject[] roots = gameObject.scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                HideLegacyServiceGeometryRecursive(roots[i].transform);
+            }
+        }
+
+        private void HideLegacyServiceGeometryRecursive(Transform node)
+        {
+            if (node == null ||
+                IsUnderRuntimeKioskRoot(node) ||
+                node.GetComponent<TownServiceLayoutManager>() != null ||
+                node.GetComponent<TownRuntimeKioskBuilder>() != null)
+            {
+                return;
+            }
+
+            string lowerName = node.name.ToLowerInvariant();
+            bool looksLikeLegacyService =
+                lowerName.Contains("blacksmith") ||
+                lowerName.Contains("quartermaster") ||
+                lowerName.Contains("general store") ||
+                lowerName.Contains("generalstore") ||
+                lowerName.Contains("saloon") ||
+                lowerName.Contains("bounty board") ||
+                lowerName.Contains("bountyboard");
+
+            if (looksLikeLegacyService && !lowerName.Contains("dungeon"))
+            {
+                node.gameObject.SetActive(false);
+                hiddenLegacyCount++;
+                return;
+            }
+
+            for (int i = 0; i < node.childCount; i++)
+            {
+                HideLegacyServiceGeometryRecursive(node.GetChild(i));
             }
         }
 

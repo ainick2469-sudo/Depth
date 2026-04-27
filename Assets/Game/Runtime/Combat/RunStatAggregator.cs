@@ -14,6 +14,8 @@ namespace FrontierDepths.Combat
             float killHealFlat,
             float firstShotAfterReloadPercent,
             float ammoPickupPercent,
+            float pistolWhipDamagePercent,
+            float pistolWhipCooldownPercent,
             int chainEveryNthHit,
             float chainDamageFraction,
             IReadOnlyList<RunStatModifierContribution> modifiers)
@@ -25,6 +27,8 @@ namespace FrontierDepths.Combat
             this.killHealFlat = killHealFlat;
             this.firstShotAfterReloadPercent = firstShotAfterReloadPercent;
             this.ammoPickupPercent = ammoPickupPercent;
+            this.pistolWhipDamagePercent = pistolWhipDamagePercent;
+            this.pistolWhipCooldownPercent = pistolWhipCooldownPercent;
             this.chainEveryNthHit = chainEveryNthHit;
             this.chainDamageFraction = chainDamageFraction;
             this.modifiers = modifiers;
@@ -37,6 +41,8 @@ namespace FrontierDepths.Combat
         public readonly float killHealFlat;
         public readonly float firstShotAfterReloadPercent;
         public readonly float ammoPickupPercent;
+        public readonly float pistolWhipDamagePercent;
+        public readonly float pistolWhipCooldownPercent;
         public readonly int chainEveryNthHit;
         public readonly float chainDamageFraction;
         public readonly IReadOnlyList<RunStatModifierContribution> modifiers;
@@ -46,6 +52,8 @@ namespace FrontierDepths.Combat
         public float CritChanceBonus => Mathf.Max(0f, critChanceFlat);
         public float FirstShotAfterReloadMultiplier => 1f + Mathf.Max(0f, firstShotAfterReloadPercent);
         public float AmmoPickupMultiplier => 1f + Mathf.Max(0f, ammoPickupPercent);
+        public float PistolWhipDamageMultiplier => 1f + Mathf.Max(0f, pistolWhipDamagePercent);
+        public float PistolWhipCooldownMultiplier => Mathf.Max(0.25f, 1f - Mathf.Max(0f, pistolWhipCooldownPercent));
         public int KillHealAmount => Mathf.Max(0, Mathf.RoundToInt(killHealFlat));
         public bool HasFirstShotAfterReloadBonus => firstShotAfterReloadPercent > 0f;
         public bool HasChainHit => chainEveryNthHit > 0 && chainDamageFraction > 0f;
@@ -85,6 +93,8 @@ namespace FrontierDepths.Combat
             float killHealFlat = 0f;
             float firstShotAfterReloadPercent = 0f;
             float ammoPickupPercent = 0f;
+            float pistolWhipDamagePercent = 0f;
+            float pistolWhipCooldownPercent = 0f;
             int chainEveryNthHit = 0;
             float chainDamageFraction = 0f;
             List<RunStatModifierContribution> modifiers = new List<RunStatModifierContribution>();
@@ -132,12 +142,18 @@ namespace FrontierDepths.Combat
                             modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.AmmoPickup, 0f, stackedValue, stackCount));
                             break;
                         case RunUpgradeEffectKind.EveryNthHitChain:
-                            chainEveryNthHit = chainEveryNthHit == 0
-                                ? definition.triggerEveryNthHit
-                                : Mathf.Min(chainEveryNthHit, definition.triggerEveryNthHit);
+                            chainEveryNthHit = 1;
                             float stackedChainFraction = RunUpgradeCatalog.GetChainDamageFractionForStack(stackCount);
                             chainDamageFraction = Mathf.Max(chainDamageFraction, stackedChainFraction);
                             modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ChainHit, 0f, stackedChainFraction, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.PistolWhipDamagePercent:
+                            pistolWhipDamagePercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.PistolWhipDamage, 0f, stackedValue, stackCount));
+                            break;
+                        case RunUpgradeEffectKind.PistolWhipCooldownPercent:
+                            pistolWhipCooldownPercent += stackedValue;
+                            modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.PistolWhipCooldown, 0f, stackedValue, stackCount));
                             break;
                     }
                 }
@@ -151,6 +167,8 @@ namespace FrontierDepths.Combat
                 killHealFlat,
                 firstShotAfterReloadPercent,
                 ammoPickupPercent,
+                pistolWhipDamagePercent,
+                pistolWhipCooldownPercent,
                 chainEveryNthHit,
                 chainDamageFraction,
                 modifiers);

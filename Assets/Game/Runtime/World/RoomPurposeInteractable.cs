@@ -91,29 +91,101 @@ namespace FrontierDepths.World
                 GameBootstrap.Instance.ProfileService.AddGold(goldAmount);
             }
 
+            string sideEffect = ApplyPurposeSideEffect(playerHealth, weapon);
             MarkClaimed();
             claimed = true;
-            lastResultMessage = BuildResultMessage(goldAmount, ammoAdded, healed, hpLost);
+            lastResultMessage = BuildResultMessage(goldAmount, ammoAdded, healed, hpLost, sideEffect);
             if (!string.IsNullOrWhiteSpace(resultPrefix))
             {
                 lastResultMessage = $"{resultPrefix} {lastResultMessage}";
             }
-
-            ApplyPurposeSideEffect();
             Debug.Log($"{displayName}: {lastResultMessage}");
         }
 
-        private void ApplyPurposeSideEffect()
+        private string ApplyPurposeSideEffect(PlayerHealth playerHealth, PlayerWeaponController weapon)
         {
-            if (effect == RoomPurposeEffect.Scout)
+            ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
+            switch (effect)
             {
-                FloorState floor = GetCurrentFloor();
-                if (floor != null)
+                case RoomPurposeEffect.Shrine:
+                    AddProfileProgress(profileService, classXp: 18, reputation: 5);
+                    return "+18 class XP, +5 reputation";
+                case RoomPurposeEffect.Elite:
+                    AddProfileProgress(profileService, classXp: 16, reputation: 12);
+                    return "+16 class XP, +12 reputation";
+                case RoomPurposeEffect.Ambush:
+                    AddProfileProgress(profileService, classXp: 12, reputation: 3);
+                    return "+12 class XP, trap marker logged";
+                case RoomPurposeEffect.Wild:
+                    return ApplyWildOutcome(playerHealth, weapon, profileService);
+                case RoomPurposeEffect.Fountain:
+                    return "fountain recovery";
+                case RoomPurposeEffect.Armory:
+                    int armoryAmmo = weapon != null ? weapon.TryAddAmmoToReserve(8, true) : 0;
+                    return armoryAmmo > 0 ? $"+{armoryAmmo} armory ammo" : "weapon cache checked";
+                case RoomPurposeEffect.Sanctuary:
+                    AddProfileProgress(profileService, classXp: 8, reputation: 4);
+                    return "+8 class XP, sanctuary blessing";
+                case RoomPurposeEffect.CursedVault:
+                    AddProfileProgress(profileService, classXp: 24, reputation: 10);
+                    return "+24 class XP, +10 reputation";
+                case RoomPurposeEffect.Scout:
+                    FloorState floor = GetCurrentFloor();
+                    if (floor != null)
+                    {
+                        floor.stairDiscovered = true;
+                        GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                    }
+
+                    AddProfileProgress(profileService, classXp: 6, reputation: 2);
+                    return "stair marked, +6 class XP";
+                case RoomPurposeEffect.Treasury:
+                    return "treasury payout";
+                case RoomPurposeEffect.Cache:
+                    return "safe supplies";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private string ApplyWildOutcome(PlayerHealth playerHealth, PlayerWeaponController weapon, ProfileService profileService)
+        {
+            int roll = Mathf.Abs(purposeId.GetHashCode()) % 4;
+            switch (roll)
+            {
+                case 0:
+                    profileService?.AddGold(22);
+                    return "wild gold surge +22g";
+                case 1:
+                    int ammo = weapon != null ? weapon.TryAddAmmoToReserve(14, true) : 0;
+                    return ammo > 0 ? $"wild ammo surge +{ammo}" : "wild ammo fizzled";
+                case 2:
+                    float heal = playerHealth != null ? playerHealth.Heal(14f) : 0f;
+                    return heal > 0f ? $"wild heal +{heal:0} HP" : "wild heal found no wound";
+                default:
+                    AddProfileProgress(profileService, classXp: 20, reputation: 6);
+                    return "wild insight +20 class XP, +6 reputation";
+            }
+        }
+
+        private static void AddProfileProgress(ProfileService profileService, int classXp, int reputation)
+        {
+            if (profileService == null)
+            {
+                return;
+            }
+
+            if (classXp > 0)
+            {
+                profileService.Current.classXp += classXp;
+                while (profileService.Current.classXp >= (profileService.Current.skillPoints + 1) * 100)
                 {
-                    floor.stairDiscovered = true;
-                    GameBootstrap.Instance?.RunService?.SaveActiveFloorState();
+                    profileService.Current.skillPoints++;
                 }
             }
+
+            ReputationService.AddReputation(profileService.Current, reputation);
+            profileService.Save();
         }
 
         private bool IsClaimed()
@@ -161,7 +233,7 @@ namespace FrontierDepths.World
                 : null;
         }
 
-        private static string BuildResultMessage(int gold, int ammo, float healed, float hpLost)
+        private static string BuildResultMessage(int gold, int ammo, float healed, float hpLost, string sideEffect)
         {
             string message = string.Empty;
             if (gold > 0)
@@ -182,6 +254,11 @@ namespace FrontierDepths.World
             if (hpLost > 0f)
             {
                 message += (message.Length > 0 ? ", " : string.Empty) + $"-{hpLost:0} HP";
+            }
+
+            if (!string.IsNullOrWhiteSpace(sideEffect))
+            {
+                message += (message.Length > 0 ? ", " : string.Empty) + sideEffect;
             }
 
             return string.IsNullOrWhiteSpace(message) ? "Nothing happened." : message;

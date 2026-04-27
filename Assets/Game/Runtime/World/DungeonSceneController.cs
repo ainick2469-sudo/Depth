@@ -90,6 +90,7 @@ namespace FrontierDepths.World
         [SerializeField] private bool allowCombatTestEnemiesWithEncounters;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
+        private readonly Dictionary<string, int> activePurposeCounts = new Dictionary<string, int>();
         private DungeonEncounterDirector encounterDirector;
         private DungeonBuildResult activeBuildResult;
         private DungeonBuildResult currentBuildResult;
@@ -252,6 +253,7 @@ namespace FrontierDepths.World
             int attemptNumber,
             int attemptCount)
         {
+            System.Diagnostics.Stopwatch buildStopwatch = System.Diagnostics.Stopwatch.StartNew();
             ClearRuntimeRoot(true);
 
             activeBuildResult = new DungeonBuildResult
@@ -276,6 +278,7 @@ namespace FrontierDepths.World
                 landmarkNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Landmark),
                 secretNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Secret)
             };
+            activePurposeCounts.Clear();
 
             for (int edgeIndex = 0; edgeIndex < graph.edges.Count; edgeIndex++)
             {
@@ -301,6 +304,8 @@ namespace FrontierDepths.World
             UpdateBuildMetrics(activeBuildResult);
             DungeonBuildResult completed = activeBuildResult;
             activeBuildResult = null;
+            buildStopwatch.Stop();
+            LoadTimingLogger.Log("Dungeon generation", buildStopwatch.ElapsedMilliseconds);
             return completed;
         }
 
@@ -1539,12 +1544,14 @@ namespace FrontierDepths.World
             };
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
-            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(node.nodeKind, activeBuildResult != null ? activeBuildResult.floorIndex : 1, activeBuildResult != null ? activeBuildResult.seed : 0, node.nodeId);
+            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(node.nodeKind, activeBuildResult != null ? activeBuildResult.floorIndex : 1, activeBuildResult != null ? activeBuildResult.seed : 0, node.nodeId, activePurposeCounts);
             if (purpose != null)
             {
                 roomRecord.purposeId = purpose.purposeId;
                 roomRecord.purposeDisplayName = purpose.displayName;
                 roomRecord.purposeIcon = purpose.minimapIcon;
+                activePurposeCounts.TryGetValue(purpose.purposeId, out int count);
+                activePurposeCounts[purpose.purposeId] = count + 1;
             }
             activeBuildResult?.rooms.Add(roomRecord);
 

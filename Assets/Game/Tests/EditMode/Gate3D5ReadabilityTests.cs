@@ -158,8 +158,8 @@ namespace FrontierDepths.Tests.EditMode
             string label = RunUpgradeCatalog.BuildRewardChoiceLabel(run, chainSpark);
 
             StringAssert.Contains("Chain Spark Lv. 1 -> Lv. 2", label);
-            StringAssert.Contains("35", label);
-            StringAssert.Contains("45", label);
+            StringAssert.Contains("20", label);
+            StringAssert.Contains("30", label);
         }
 
         [Test]
@@ -172,8 +172,8 @@ namespace FrontierDepths.Tests.EditMode
 
             RunStatSnapshot snapshot = RunStatAggregator.Build(run);
 
-            Assert.AreEqual(6, snapshot.chainEveryNthHit);
-            Assert.AreEqual(0.55f, snapshot.chainDamageFraction, 0.001f);
+            Assert.AreEqual(1, snapshot.chainEveryNthHit);
+            Assert.AreEqual(0.40f, snapshot.chainDamageFraction, 0.001f);
         }
 
         [Test]

@@ -50,26 +50,29 @@ namespace FrontierDepths.Core
 
         public static GameSettingsState Load()
         {
-            try
+            using (LoadTimingLogger.Measure("Settings load"))
             {
-                if (!File.Exists(SettingsPath))
+                try
+                {
+                    if (!File.Exists(SettingsPath))
+                    {
+                        cached = new GameSettingsState();
+                        Save(cached);
+                        return cached;
+                    }
+
+                    string json = File.ReadAllText(SettingsPath);
+                    cached = JsonUtility.FromJson<GameSettingsState>(json) ?? new GameSettingsState();
+                }
+                catch
                 {
                     cached = new GameSettingsState();
-                    Save(cached);
-                    return cached;
                 }
 
-                string json = File.ReadAllText(SettingsPath);
-                cached = JsonUtility.FromJson<GameSettingsState>(json) ?? new GameSettingsState();
+                cached.Clamp();
+                Save(cached);
+                return cached;
             }
-            catch
-            {
-                cached = new GameSettingsState();
-            }
-
-            cached.Clamp();
-            Save(cached);
-            return cached;
         }
 
         public static void Save(GameSettingsState state = null)

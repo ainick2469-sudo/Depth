@@ -144,6 +144,28 @@ namespace FrontierDepths.Combat
             return clone;
         }
 
+        public static EnemyDefinition CreateLeveledDefinition(EnemyDefinition baseDefinition, int level)
+        {
+            if (baseDefinition == null)
+            {
+                return null;
+            }
+
+            int safeLevel = Mathf.Max(1, level);
+            EnemyDefinition clone = ScriptableObject.CreateInstance<EnemyDefinition>();
+            CopyDefinition(baseDefinition, clone);
+            clone.enemyId = $"{baseDefinition.enemyId}.lv{safeLevel}";
+            clone.displayName = $"{baseDefinition.displayName} Lv. {safeLevel}";
+            int levelsAboveOne = Mathf.Max(0, safeLevel - 1);
+            clone.maxHealth *= 1f + levelsAboveOne * 0.05f;
+            clone.attackDamage *= 1f + levelsAboveOne * 0.03f;
+            clone.moveSpeed *= Mathf.Min(1.18f, 1f + levelsAboveOne * 0.005f);
+            clone.masteryXpValue *= 1f + levelsAboveOne * 0.04f;
+            clone.goldMin = Mathf.RoundToInt(clone.goldMin * (1f + levelsAboveOne * 0.025f));
+            clone.goldMax = Mathf.Max(clone.goldMin + 1, Mathf.RoundToInt(clone.goldMax * (1f + levelsAboveOne * 0.025f)));
+            return clone;
+        }
+
         private static bool IsVariantForArchetype(EnemyVariantDefinition variant, EnemyArchetype archetype)
         {
             if (variant == null || string.IsNullOrWhiteSpace(variant.variantId))

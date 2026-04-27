@@ -64,7 +64,8 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
-            nextWhipTime = currentTime + Mathf.Max(0.05f, cooldownSeconds);
+            RunStatSnapshot stats = RunStatAggregator.Current;
+            nextWhipTime = currentTime + Mathf.Max(0.05f, cooldownSeconds * stats.PistolWhipCooldownMultiplier);
             bool hitApplied = TryResolveHit(out RaycastHit hit, out IDamageable damageable) &&
                               ApplyWhipDamage(hit, damageable);
             PlayWhipFeedback(hitApplied, hit);
@@ -85,7 +86,7 @@ namespace FrontierDepths.Combat
 
             DamageInfo damageInfo = new DamageInfo
             {
-                amount = Mathf.Max(0f, damage),
+                amount = Mathf.Max(0f, damage * RunStatAggregator.Current.PistolWhipDamageMultiplier),
                 source = gameObject,
                 weaponId = "weapon.pistol_whip",
                 hitPoint = hit.point,
@@ -99,6 +100,11 @@ namespace FrontierDepths.Combat
             };
 
             DamageResult result = damageable.ApplyDamage(damageInfo);
+            if (result.applied)
+            {
+                CombatFeedbackService.ShowDamageNumber(hit.point, result.damageApplied, new Color(1f, 0.82f, 0.3f, 1f), result.killedTarget);
+            }
+
             return result.applied;
         }
 

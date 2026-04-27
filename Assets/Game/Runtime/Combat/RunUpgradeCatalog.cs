@@ -15,9 +15,19 @@ namespace FrontierDepths.Combat
         public const string FirstShotAfterReloadUpgradeId = "upgrade.run.first_shot";
         public const string AmmoPickupUpgradeId = "upgrade.run.ammo_scavenger";
         public const string ChainHitUpgradeId = "upgrade.run.chain_spark";
-        public const float ChainHitBaseDamageFraction = 0.35f;
+        public const string BulletPouchUpgradeId = "upgrade.run.bullet_pouch";
+        public const string CloseQuartersUpgradeId = "upgrade.run.close_quarters";
+        public const string QuickJabUpgradeId = "upgrade.run.quick_jab";
+        public const string HotBarrelUpgradeId = "upgrade.run.hot_barrel";
+        public const string RangersMarkUpgradeId = "upgrade.run.rangers_mark";
+        public const string SupplyLuckUpgradeId = "upgrade.run.supply_luck";
+        public const string SteadyAimUpgradeId = "upgrade.run.steady_aim";
+        public const string AdrenalineReloadUpgradeId = "upgrade.run.adrenaline_reload";
+        public const string HuntersClaimUpgradeId = "upgrade.run.hunters_claim";
+        public const string GritUpgradeId = "upgrade.run.grit";
+        public const float ChainHitBaseDamageFraction = 0.20f;
         public const float ChainHitDamageFractionPerExtraStack = 0.10f;
-        public const float ChainHitMaxDamageFraction = 0.75f;
+        public const float ChainHitMaxDamageFraction = 0.80f;
         public const float ChainHitSearchRadius = 14f;
 
         private static readonly RunUpgradeDefinition[] Definitions =
@@ -82,10 +92,90 @@ namespace FrontierDepths.Combat
             {
                 upgradeId = ChainHitUpgradeId,
                 displayName = "Chain Spark",
-                description = "Every 6th weapon hit chains 35% damage to one nearby enemy.",
+                description = "Every weapon hit chains 20% damage to one nearby enemy.",
                 effectKind = RunUpgradeEffectKind.EveryNthHitChain,
-                triggerEveryNthHit = 6,
+                triggerEveryNthHit = 1,
                 chainDamageFraction = ChainHitBaseDamageFraction
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = BulletPouchUpgradeId,
+                displayName = "Bullet Pouch",
+                description = "+25% reserve ammo from pickups.",
+                effectKind = RunUpgradeEffectKind.AmmoPickupPercent,
+                value = 0.25f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = CloseQuartersUpgradeId,
+                displayName = "Close Quarters",
+                description = "+25% Pistol Whip damage.",
+                effectKind = RunUpgradeEffectKind.PistolWhipDamagePercent,
+                value = 0.25f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = QuickJabUpgradeId,
+                displayName = "Quick Jab",
+                description = "-10% Pistol Whip cooldown.",
+                effectKind = RunUpgradeEffectKind.PistolWhipCooldownPercent,
+                value = 0.10f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = HotBarrelUpgradeId,
+                displayName = "Hot Barrel",
+                description = "+6% revolver damage.",
+                effectKind = RunUpgradeEffectKind.RevolverDamagePercent,
+                value = 0.06f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = RangersMarkUpgradeId,
+                displayName = "Ranger's Mark",
+                description = "+4% critical hit chance.",
+                effectKind = RunUpgradeEffectKind.CritChanceFlat,
+                value = 0.04f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = SupplyLuckUpgradeId,
+                displayName = "Supply Luck",
+                description = "+35% reserve ammo from pickups.",
+                effectKind = RunUpgradeEffectKind.AmmoPickupPercent,
+                value = 0.35f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = SteadyAimUpgradeId,
+                displayName = "Steady Aim",
+                description = "+3% critical hit chance.",
+                effectKind = RunUpgradeEffectKind.CritChanceFlat,
+                value = 0.03f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = AdrenalineReloadUpgradeId,
+                displayName = "Adrenaline Reload",
+                description = "+12% reload speed.",
+                effectKind = RunUpgradeEffectKind.ReloadSpeedPercent,
+                value = 0.12f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = HuntersClaimUpgradeId,
+                displayName = "Hunter's Claim",
+                description = "Kills heal +2 HP.",
+                effectKind = RunUpgradeEffectKind.KillHealFlat,
+                value = 2f
+            },
+            new RunUpgradeDefinition
+            {
+                upgradeId = GritUpgradeId,
+                displayName = "Grit",
+                description = "+8 max health.",
+                effectKind = RunUpgradeEffectKind.MaxHealthFlat,
+                value = 8f
             }
         };
 
@@ -200,6 +290,8 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.FirstShotAfterReloadPercent => BuildPercentPreview("First shot after reload", definition.value, currentStack, nextStack),
                 RunUpgradeEffectKind.AmmoPickupPercent => BuildPercentPreview("Ammo reserve pickup", definition.value, currentStack, nextStack),
                 RunUpgradeEffectKind.EveryNthHitChain => BuildChainPreview(currentStack, nextStack),
+                RunUpgradeEffectKind.PistolWhipDamagePercent => BuildPercentPreview("Pistol Whip damage", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.PistolWhipCooldownPercent => BuildPercentPreview("Pistol Whip cooldown reduction", definition.value, currentStack, nextStack),
                 _ => definition.description ?? string.Empty
             };
         }
@@ -215,7 +307,9 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.KillHealFlat => $"kills heal {definition.value * stackCount:0.#} HP",
                 RunUpgradeEffectKind.FirstShotAfterReloadPercent => $"+{definition.value * stackCount * 100f:0.#}% first shot after reload",
                 RunUpgradeEffectKind.AmmoPickupPercent => $"+{definition.value * stackCount * 100f:0.#}% reserve ammo from pickups",
-                RunUpgradeEffectKind.EveryNthHitChain => $"every {Mathf.Max(1, definition.triggerEveryNthHit)}th hit chains {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
+                RunUpgradeEffectKind.EveryNthHitChain => $"every hit chains {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
+                RunUpgradeEffectKind.PistolWhipDamagePercent => $"+{definition.value * stackCount * 100f:0.#}% Pistol Whip damage",
+                RunUpgradeEffectKind.PistolWhipCooldownPercent => $"-{Mathf.Min(75f, definition.value * stackCount * 100f):0.#}% Pistol Whip cooldown",
                 _ => definition.description ?? string.Empty
             };
         }

@@ -15,6 +15,7 @@ namespace FrontierDepths.UI
         private Text messageText;
         private Text settingsText;
         private Text keybindingsText;
+        private SharedSettingsPanelController sharedSettingsPanel;
         private FirstPersonController playerController;
         private int returnConfirmFrame = -999;
         private int quitConfirmFrame = -999;
@@ -50,7 +51,10 @@ namespace FrontierDepths.UI
             playerController = controller ?? FindAnyObjectByType<FirstPersonController>();
             panel.gameObject.SetActive(true);
             settingsPanel.gameObject.SetActive(false);
-            keybindingsPanel.gameObject.SetActive(false);
+            if (keybindingsPanel != null)
+            {
+                keybindingsPanel.gameObject.SetActive(false);
+            }
             pendingRebind = null;
             messageText.text = "Paused";
             playerController?.SetUiCaptured(true);
@@ -104,15 +108,9 @@ namespace FrontierDepths.UI
             CreateButton(panel, "ReturnTown", "Return To Town", new Vector2(0f, -294f), ReturnToTown);
             CreateButton(panel, "QuitMain", "Quit To Main Menu", new Vector2(0f, -346f), QuitToMainMenu);
 
-            settingsPanel = CreateSidePanel("SettingsPanel", new Vector2(500f, 640f), new Vector2(24f, 0f));
-            CreateLabel(settingsPanel, "SettingsTitle", "SETTINGS", UiTheme.HeaderSize, new Vector2(0f, -24f), new Vector2(450f, 34f), TextAnchor.MiddleCenter, UiTheme.Accent);
-            settingsText = CreateLabel(settingsPanel, "SettingsText", string.Empty, UiTheme.BodySize, new Vector2(0f, -64f), new Vector2(440f, 190f), TextAnchor.UpperLeft, UiTheme.Text);
-            CreateSettingsButtons(settingsPanel);
-
-            keybindingsPanel = CreateSidePanel("KeybindingsPanel", new Vector2(560f, 640f), new Vector2(24f, 0f));
-            CreateLabel(keybindingsPanel, "BindingsTitle", "KEYBINDINGS", UiTheme.HeaderSize, new Vector2(0f, -24f), new Vector2(500f, 34f), TextAnchor.MiddleCenter, UiTheme.Accent);
-            keybindingsText = CreateLabel(keybindingsPanel, "BindingsText", string.Empty, UiTheme.SmallSize, new Vector2(-120f, -64f), new Vector2(280f, 510f), TextAnchor.UpperLeft, UiTheme.Text);
-            CreateBindingButtons(keybindingsPanel);
+            settingsPanel = CreateSidePanel("SettingsPanel", new Vector2(590f, 680f), new Vector2(24f, 0f));
+            sharedSettingsPanel = settingsPanel.gameObject.AddComponent<SharedSettingsPanelController>();
+            sharedSettingsPanel.Build("SETTINGS", message => messageText.text = message, () => playerController ?? FindAnyObjectByType<FirstPersonController>(), () => settingsPanel.gameObject.SetActive(false));
         }
 
         private RectTransform CreateSidePanel(string name, Vector2 size, Vector2 offset)
@@ -183,16 +181,16 @@ namespace FrontierDepths.UI
         private void ToggleSettings()
         {
             settingsPanel.gameObject.SetActive(!settingsPanel.gameObject.activeSelf);
-            keybindingsPanel.gameObject.SetActive(false);
             pendingRebind = null;
+            sharedSettingsPanel?.ShowSettings();
             RefreshSettingsText();
         }
 
         private void ToggleKeybindings()
         {
-            keybindingsPanel.gameObject.SetActive(!keybindingsPanel.gameObject.activeSelf);
-            settingsPanel.gameObject.SetActive(false);
+            settingsPanel.gameObject.SetActive(true);
             pendingRebind = null;
+            sharedSettingsPanel?.ShowKeybindings();
             RefreshKeybindingsText();
         }
 
@@ -309,46 +307,12 @@ namespace FrontierDepths.UI
 
         private void RefreshSettingsText()
         {
-            if (settingsText == null)
-            {
-                return;
-            }
-
-            GameSettingsState settings = GameSettingsService.Current;
-            settingsText.text =
-                $"Mouse Sensitivity    {settings.mouseSensitivity:0.0}\n" +
-                $"FOV                  {settings.fov:0}\n" +
-                $"Master Volume        {settings.masterVolume:0.00}\n" +
-                $"SFX Volume           {settings.sfxVolume:0.00}\n" +
-                $"Music Volume         {settings.musicVolume:0.00}\n" +
-                $"Invert Y             {(settings.invertY ? "On" : "Off")}\n" +
-                $"Crosshair Size       {settings.crosshairSize:0}\n" +
-                $"Minimap Size         {settings.minimapSize:0}\n" +
-                $"Minimap Opacity      {settings.minimapOpacity:0.00}\n" +
-                $"Minimap Zoom         {settings.minimapZoom:0.00}";
+            sharedSettingsPanel?.Refresh();
         }
 
         private void RefreshKeybindingsText()
         {
-            if (keybindingsText == null)
-            {
-                return;
-            }
-
-            keybindingsText.text =
-                $"{FormatAction(GameplayInputAction.MoveForward),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveForward)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveBack),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveBack)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveLeft),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveLeft)}\n" +
-                $"{FormatAction(GameplayInputAction.MoveRight),-18} {InputBindingService.GetDisplay(GameplayInputAction.MoveRight)}\n" +
-                $"{FormatAction(GameplayInputAction.Jump),-18} {InputBindingService.GetDisplay(GameplayInputAction.Jump)}\n" +
-                $"{FormatAction(GameplayInputAction.Sprint),-18} {InputBindingService.GetDisplay(GameplayInputAction.Sprint)}\n" +
-                $"{FormatAction(GameplayInputAction.Interact),-18} {InputBindingService.GetDisplay(GameplayInputAction.Interact)}\n" +
-                $"{FormatAction(GameplayInputAction.Fire),-18} {InputBindingService.GetDisplay(GameplayInputAction.Fire)}\n" +
-                $"{FormatAction(GameplayInputAction.Reload),-18} {InputBindingService.GetDisplay(GameplayInputAction.Reload)}\n" +
-                $"{FormatAction(GameplayInputAction.PistolWhip),-18} {InputBindingService.GetDisplay(GameplayInputAction.PistolWhip)}\n" +
-                $"{FormatAction(GameplayInputAction.RunInfo),-18} {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)}\n" +
-                $"{FormatAction(GameplayInputAction.Minimap),-18} {InputBindingService.GetDisplay(GameplayInputAction.Minimap)}\n" +
-                $"{FormatAction(GameplayInputAction.Pause),-18} {InputBindingService.GetDisplay(GameplayInputAction.Pause)}";
+            sharedSettingsPanel?.Refresh();
         }
 
         private static string FormatAction(GameplayInputAction action)

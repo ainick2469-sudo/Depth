@@ -18,14 +18,17 @@ namespace FrontierDepths.UI
         private RectTransform invitePanel;
         private Text runtimeSubtitle;
         private Text runtimeHint;
-        private Text settingsText;
+        private SharedSettingsPanelController sharedSettingsPanel;
 
         private void Start()
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             EnsureMenuCamera();
-            EnsureRuntimeUi();
+            using (LoadTimingLogger.Measure("Main menu UI build"))
+            {
+                EnsureRuntimeUi();
+            }
             Refresh();
         }
 
@@ -109,14 +112,15 @@ namespace FrontierDepths.UI
             CreateButton(menuCard, "Invite", "Invite Friends", new Vector2(0f, -230f), ToggleInvite);
             CreateButton(menuCard, "Quit", "Leave Game", new Vector2(0f, -286f), QuitGame);
 
-            settingsPanel = CreateCard(panel, "SettingsPanel", new Vector2(0f, 0f), new Vector2(430f, 420f));
-            settingsText = CreateLabel(settingsPanel, "SettingsText", string.Empty, 16, new Vector2(0f, -48f), new Vector2(370f, 190f), TextAnchor.UpperLeft, UiTheme.Text);
-            CreateLabel(settingsPanel, "SettingsTitle", "SETTINGS", 24, new Vector2(0f, -20f), new Vector2(360f, 34f), TextAnchor.MiddleCenter, UiTheme.Accent);
-            CreateButton(settingsPanel, "SensitivityMinus", "Sensitivity -", new Vector2(-105f, -250f), () => AdjustSensitivity(-0.1f), 170f);
-            CreateButton(settingsPanel, "SensitivityPlus", "Sensitivity +", new Vector2(105f, -250f), () => AdjustSensitivity(0.1f), 170f);
-            CreateButton(settingsPanel, "FovMinus", "FOV -", new Vector2(-105f, -306f), () => AdjustFov(-5f), 170f);
-            CreateButton(settingsPanel, "FovPlus", "FOV +", new Vector2(105f, -306f), () => AdjustFov(5f), 170f);
-            CreateButton(settingsPanel, "CloseSettings", "Close", new Vector2(0f, -362f), HidePanels, 180f);
+            settingsPanel = CreateCard(panel, "SettingsPanel", new Vector2(0f, 0f), new Vector2(590f, 660f));
+            sharedSettingsPanel = settingsPanel.gameObject.AddComponent<SharedSettingsPanelController>();
+            sharedSettingsPanel.Build("SETTINGS", message =>
+            {
+                if (runtimeHint != null)
+                {
+                    runtimeHint.text = message;
+                }
+            }, null, HidePanels);
             settingsPanel.gameObject.SetActive(false);
 
             invitePanel = CreateCard(panel, "InvitePanel", new Vector2(0f, 0f), new Vector2(430f, 270f));
@@ -209,19 +213,7 @@ namespace FrontierDepths.UI
 
         private void RefreshSettingsText()
         {
-            if (settingsText == null)
-            {
-                return;
-            }
-
-            GameSettingsState settings = GameSettingsService.Current;
-            settingsText.text =
-                $"Mouse Sensitivity: {settings.mouseSensitivity:0.0}\n" +
-                $"FOV: {settings.fov:0}\n" +
-                $"Master Volume: {settings.masterVolume:0.00}\n" +
-                $"SFX Volume: {settings.sfxVolume:0.00}\n" +
-                $"Music Volume: {settings.musicVolume:0.00}\n" +
-                $"Invert Y: {(settings.invertY ? "On" : "Off")}";
+            sharedSettingsPanel?.Refresh();
         }
 
         private static void CreateBackdrop(Transform parent)

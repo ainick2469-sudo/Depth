@@ -124,6 +124,11 @@ namespace FrontierDepths.Progression
             for (int i = 0; i < bounties.Count; i++)
             {
                 BountyDefinition bounty = bounties[i];
+                if (!BountyCatalog.IsVisible(profile, bounty))
+                {
+                    continue;
+                }
+
                 BountyRuntimeState state = profile != null ? BountyObjectiveTracker.GetOrCreate(profile, bounty.bountyId) : null;
                 bool killed = state != null && state.state == BountyState.Killed;
                 offers.Add(new ShopOffer

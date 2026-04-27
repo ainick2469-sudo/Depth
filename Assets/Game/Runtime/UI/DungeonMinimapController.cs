@@ -70,6 +70,8 @@ namespace FrontierDepths.UI
 
         public void Configure(DungeonBuildResult result, Transform playerTransform)
         {
+            using (LoadTimingLogger.Measure("Minimap build"))
+            {
             EnsureUi();
             buildResult = result;
             player = playerTransform;
@@ -102,6 +104,7 @@ namespace FrontierDepths.UI
             UpdatePlayerTracking(true);
             RefreshRevealState();
             UpdatePlayerArrow();
+            }
         }
 
         public void ToggleVisibility()

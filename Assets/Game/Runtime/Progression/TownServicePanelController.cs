@@ -90,7 +90,8 @@ namespace FrontierDepths.Progression
             ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
             ProfileState profile = profileService != null ? profileService.Current : new ProfileState();
             titleText.text = shop.displayName;
-            goldText.text = $"Gold: {profile.gold} | Sigils: {profile.townSigils} | Skill Pts: {profile.skillPoints}";
+            float discount = ReputationService.GetDiscountPercent(profile.townReputation);
+            goldText.text = $"Gold: {profile.gold} | Rep: {profile.townReputation} ({ReputationService.GetTitle(profile.townReputation)}) | Discount: {discount * 100f:0}% | Skill Pts: {profile.skillPoints}";
             resultText.text = string.IsNullOrWhiteSpace(message) ? shop.greeting : message;
 
             for (int i = 0; i < offerButtons.Count; i++)
@@ -103,10 +104,12 @@ namespace FrontierDepths.Progression
             {
                 int offerIndex = i;
                 ShopOffer offer = shop.offers[i];
-                string label = $"{i + 1}. {offer.displayName} - {offer.cost}g\n{BuildOfferDescription(profile, offer)}";
+                int displayCost = ReputationService.GetDiscountedCost(offer.cost, profile.townReputation);
+                string costLabel = displayCost == offer.cost ? $"{displayCost}g" : $"{displayCost}g (was {offer.cost}g)";
+                string label = $"{i + 1}. {offer.displayName} - {costLabel}\n{BuildOfferDescription(profile, offer)}";
                 Button button = CreateButton(panel, $"Offer_{i}", label);
                 bool soldOut = offer.purchaseLimit > 0 && profileService != null && profileService.GetPurchaseCount(shop.shopId, offer.offerId) >= offer.purchaseLimit;
-                button.interactable = profile.gold >= offer.cost && !soldOut && CanUseOffer(profile, offer);
+                button.interactable = profile.gold >= displayCost && !soldOut && CanUseOffer(profile, offer);
                 button.onClick.AddListener(() => selectOffer?.Invoke(offerIndex));
                 RectTransform rect = button.GetComponent<RectTransform>();
                 rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
@@ -194,7 +197,7 @@ namespace FrontierDepths.Progression
             string stateLabel = state != null ? state.state.ToString() : "Available";
             return bounty == null
                 ? $"{offer.description}\nState: {stateLabel}"
-                : $"Target: {bounty.targetName} | Floor {bounty.minFloor}-{bounty.maxFloor} | State: {stateLabel}\n{bounty.reason}\nReward: {bounty.goldReward}g, {bounty.xpReward} XP";
+                : $"Target: {bounty.targetName} | Floor {bounty.minFloor}-{bounty.maxFloor} | State: {stateLabel}\n{bounty.reason}\nReward: {bounty.goldReward}g, {bounty.xpReward} XP, +{ReputationService.GetBountyReputationReward(bounty)} Rep";
         }
 
         private static bool CanUseOffer(ProfileState profile, ShopOffer offer)

@@ -11,7 +11,9 @@ namespace FrontierDepths.Combat
         KillHealFlat,
         FirstShotAfterReloadPercent,
         AmmoPickupPercent,
-        EveryNthHitChain
+        EveryNthHitChain,
+        PistolWhipDamagePercent,
+        PistolWhipCooldownPercent
     }
 
     public enum RunStatId
@@ -23,7 +25,9 @@ namespace FrontierDepths.Combat
         KillHeal,
         FirstShotAfterReload,
         AmmoPickup,
-        ChainHit
+        ChainHit,
+        PistolWhipDamage,
+        PistolWhipCooldown
     }
 
     [Serializable]

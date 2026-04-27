@@ -10,6 +10,7 @@ namespace FrontierDepths.Core
         [SerializeField] private float maxScale = 1.35f;
         [SerializeField] private bool useOcclusion = true;
         [SerializeField] private LayerMask occlusionMask = ~0;
+        [SerializeField] private Transform occlusionRoot;
 
         private TextMesh label;
         private Vector3 baseScale = Vector3.one;
@@ -17,6 +18,7 @@ namespace FrontierDepths.Core
 
         public float MaxVisibleDistance => maxVisibleDistance;
         public bool UseOcclusion => useOcclusion;
+        public Transform OcclusionRoot => occlusionRoot;
 
         private void Awake()
         {
@@ -59,6 +61,11 @@ namespace FrontierDepths.Core
             ConfigureTextDefaults();
         }
 
+        public void ConfigureOcclusionRoot(Transform root)
+        {
+            occlusionRoot = root;
+        }
+
         public static WorldLabelBillboard Create(Transform parent, string name, string text, Vector3 localPosition, Color color, float distance = 28f, bool occlude = true)
         {
             GameObject labelObject = new GameObject(name, typeof(TextMesh), typeof(WorldLabelBillboard));
@@ -67,6 +74,7 @@ namespace FrontierDepths.Core
             labelObject.transform.localScale = Vector3.one;
             WorldLabelBillboard billboard = labelObject.GetComponent<WorldLabelBillboard>();
             billboard.Configure(text, color, distance, occlude);
+            billboard.ConfigureOcclusionRoot(parent);
             return billboard;
         }
 
@@ -98,7 +106,27 @@ namespace FrontierDepths.Core
                 return false;
             }
 
-            return hit.collider != null && !hit.collider.transform.IsChildOf(transform);
+            return hit.collider != null && !IsIgnoredOccluder(hit.collider.transform);
+        }
+
+        private bool IsIgnoredOccluder(Transform hitTransform)
+        {
+            if (hitTransform == null)
+            {
+                return false;
+            }
+
+            if (hitTransform == transform ||
+                hitTransform.IsChildOf(transform) ||
+                transform.IsChildOf(hitTransform))
+            {
+                return true;
+            }
+
+            return occlusionRoot != null &&
+                   (hitTransform == occlusionRoot ||
+                    hitTransform.IsChildOf(occlusionRoot) ||
+                    occlusionRoot.IsChildOf(hitTransform));
         }
 
         private void ConfigureTextDefaults()
