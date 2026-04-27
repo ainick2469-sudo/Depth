@@ -58,7 +58,7 @@ namespace FrontierDepths.UI
 
             if (ammoText != null)
             {
-                ammoText.text = $"{weapon.CurrentAmmo}/{weapon.MagazineSize}";
+                ammoText.text = $"{weapon.CurrentAmmo}/{weapon.ReserveAmmo}";
             }
 
             if (reloadText != null)

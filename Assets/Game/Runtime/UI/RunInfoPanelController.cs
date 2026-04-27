@@ -83,6 +83,7 @@ namespace FrontierDepths.UI
                 builder.AppendLine($"Reload {weapon.BaseReloadDuration:0.00}s -> {weapon.EffectiveReloadDuration:0.00}s (+{stats.reloadSpeedPercent * 100f:0.#}%)");
                 builder.AppendLine($"Crit {weapon.CritChance * 100f:0.#}%");
                 builder.AppendLine($"Range {weapon.MaxRange:0.#}m | full {weapon.FullDamageRange:0.#}m | max falloff {weapon.DamageMultiplierAtMaxRange * 100f:0.#}%");
+                builder.AppendLine($"Ammo {weapon.CurrentAmmo}/{weapon.MagazineSize} | Reserve {weapon.ReserveAmmo}/{weapon.MaxReserveAmmo}");
             }
             else
             {

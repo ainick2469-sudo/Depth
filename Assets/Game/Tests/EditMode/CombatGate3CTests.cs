@@ -44,8 +44,8 @@ namespace FrontierDepths.Tests.EditMode
             try
             {
                 Assert.NotNull(revolver);
-                Assert.AreEqual(18f, revolver.baseDamage);
-                Assert.AreEqual(18f, runtimeFallback.baseDamage);
+                Assert.AreEqual(15f, revolver.baseDamage);
+                Assert.AreEqual(15f, runtimeFallback.baseDamage);
             }
             finally
             {
@@ -94,8 +94,8 @@ namespace FrontierDepths.Tests.EditMode
 
             DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, new[] { new Vector3(40f, 3.5f, 18f) }, 12345);
 
-            Assert.GreaterOrEqual(plan.spawnedCount, 6);
-            Assert.LessOrEqual(plan.spawnedCount, 10);
+            Assert.GreaterOrEqual(plan.spawnedCount, 8);
+            Assert.LessOrEqual(plan.spawnedCount, 12);
             Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.GoblinBrute));
             Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 2));
             Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
@@ -132,8 +132,8 @@ namespace FrontierDepths.Tests.EditMode
 
             DungeonEncounterPlan plan = DungeonEncounterDirector.BuildPlan(build, null, 2468);
 
-            Assert.GreaterOrEqual(plan.spawnedCount, 8);
-            Assert.LessOrEqual(plan.spawnedCount, 12);
+            Assert.GreaterOrEqual(plan.spawnedCount, 10);
+            Assert.LessOrEqual(plan.spawnedCount, 15);
             Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
             Assert.GreaterOrEqual(plan.groupFightCount, 2);
         }
@@ -383,7 +383,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void AmmoPickupCancelsReloadAndDoesNotOverfillMagazine()
+        public void AmmoPickupAddsReserveAndDoesNotOverfill()
         {
             GameObject player = new GameObject("AmmoPickupPlayer");
             GameObject cameraObject = new GameObject("AmmoPickupCamera", typeof(Camera));
@@ -399,16 +399,15 @@ namespace FrontierDepths.Tests.EditMode
                 }
 
                 Assert.AreEqual(0, weapon.CurrentAmmo);
-                Assert.IsTrue(weapon.TryStartReload(4f));
-                Assert.IsTrue(weapon.IsReloading);
+                int reserveBefore = weapon.ReserveAmmo;
 
                 AmmoPickup pickup = pickupObject.AddComponent<AmmoPickup>();
                 pickup.Configure(3);
 
                 Assert.IsTrue(pickup.ApplyToPlayer(player));
-                Assert.AreEqual(3, weapon.CurrentAmmo);
-                Assert.IsFalse(weapon.IsReloading);
-                Assert.LessOrEqual(weapon.CurrentAmmo, weapon.MagazineSize);
+                Assert.AreEqual(0, weapon.CurrentAmmo);
+                Assert.AreEqual(Mathf.Min(weapon.MaxReserveAmmo, reserveBefore + 3), weapon.ReserveAmmo);
+                Assert.LessOrEqual(weapon.ReserveAmmo, weapon.MaxReserveAmmo);
             }
             finally
             {
@@ -433,7 +432,8 @@ namespace FrontierDepths.Tests.EditMode
             AddEncounterRoom(build, "ordinary_a", DungeonNodeKind.Ordinary, 36f, 1450f, 3);
             AddEncounterRoom(build, "ordinary_b", DungeonNodeKind.Ordinary, 76f, 1450f, 3);
             AddEncounterRoom(build, "ordinary_c", DungeonNodeKind.Ordinary, 116f, 1450f, 3);
-            AddEncounterRoom(build, "landmark", DungeonNodeKind.Landmark, 158f, 2100f, 4);
+            AddEncounterRoom(build, "ordinary_d", DungeonNodeKind.Ordinary, 156f, 1450f, 3);
+            AddEncounterRoom(build, "landmark", DungeonNodeKind.Landmark, 198f, 2100f, 4);
             return build;
         }
 

@@ -179,10 +179,10 @@ namespace FrontierDepths.Tests.EditMode
         [Test]
         public void WeaponRangeFalloff_UsesFullRangeMaxRangeAndMinimumMultiplier()
         {
-            Assert.AreEqual(1f, PlayerWeaponController.CalculateRangeDamageMultiplier(20f, 30f, 55f, 0.65f), 0.001f);
-            Assert.AreEqual(1f, PlayerWeaponController.CalculateRangeDamageMultiplier(30f, 30f, 55f, 0.65f), 0.001f);
-            Assert.AreEqual(0.65f, PlayerWeaponController.CalculateRangeDamageMultiplier(55f, 30f, 55f, 0.65f), 0.001f);
-            Assert.AreEqual(0f, PlayerWeaponController.CalculateRangeDamageMultiplier(56f, 30f, 55f, 0.65f), 0.001f);
+            Assert.AreEqual(1f, PlayerWeaponController.CalculateRangeDamageMultiplier(16f, 17f, 45f, 0.5f), 0.001f);
+            Assert.AreEqual(1f, PlayerWeaponController.CalculateRangeDamageMultiplier(17f, 17f, 45f, 0.5f), 0.001f);
+            Assert.AreEqual(0.5f, PlayerWeaponController.CalculateRangeDamageMultiplier(45f, 17f, 45f, 0.5f), 0.001f);
+            Assert.AreEqual(0f, PlayerWeaponController.CalculateRangeDamageMultiplier(46f, 17f, 45f, 0.5f), 0.001f);
         }
 
         [Test]
@@ -197,10 +197,10 @@ namespace FrontierDepths.Tests.EditMode
             try
             {
                 PlayerWeaponController weapon = player.AddComponent<PlayerWeaponController>();
-                DamageInfo info = weapon.CreateDamageInfoForTests(Vector3.zero, Vector3.up, 1f, 0.65f);
+                DamageInfo info = weapon.CreateDamageInfoForTests(Vector3.zero, Vector3.up, 1f, 0.5f);
 
                 Assert.IsTrue(info.isCritical);
-                Assert.AreEqual(18f * 0.65f * RunStatAggregator.CriticalHitMultiplier, info.amount, 0.001f);
+                Assert.AreEqual(15f * 0.5f * RunStatAggregator.CriticalHitMultiplier, info.amount, 0.001f);
             }
             finally
             {
@@ -225,8 +225,9 @@ namespace FrontierDepths.Tests.EditMode
 
                 string text = panel.BuildInfoText();
 
-                StringAssert.Contains("Damage 18 -> 19.8", text);
-                StringAssert.Contains("Range 55", text);
+                StringAssert.Contains("Damage 15 -> 16.5", text);
+                StringAssert.Contains("Range 45", text);
+                StringAssert.Contains("Reserve", text);
             }
             finally
             {

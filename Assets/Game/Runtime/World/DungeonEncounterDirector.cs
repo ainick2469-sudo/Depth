@@ -54,7 +54,14 @@ namespace FrontierDepths.World
             {
                 DungeonEncounterSpawn spawn = plan.spawns[i];
                 DungeonRoomBuildRecord room = buildResult.FindRoom(spawn.roomId);
-                GameObject enemy = CreateEnemy(enemyRoot, spawn.position, spawn.definition, room, BuildRoomPatrolPoints(buildResult, room));
+                GameObject enemy = CreateEnemy(
+                    enemyRoot,
+                    spawn.position,
+                    spawn.definition,
+                    room,
+                    BuildRoomPatrolPoints(buildResult, room),
+                    spawn.mobilityRole,
+                    spawn.roamingRoute);
                 EnemyHealth enemyHealth = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
                 if (enemyHealth == null)
                 {
@@ -111,14 +118,14 @@ namespace FrontierDepths.World
             DungeonEncounterPlan plan = new DungeonEncounterPlan
             {
                 floorIndex = buildResult != null ? buildResult.floorIndex : 0,
-                spawnSource = SpawnSourceEncounterDirector
+                spawnSource = SpawnSourceEncounterDirector,
+                difficultyBand = GetDifficultyBand(buildResult != null ? buildResult.floorIndex : 0),
+                activeCombatCap = GetActiveCombatCap(buildResult != null ? buildResult.floorIndex : 0)
             };
 
-            if (buildResult == null || buildResult.floorIndex > 5)
+            if (buildResult == null)
             {
-                plan.warning = buildResult == null
-                    ? "Encounter Director skipped: dungeon build missing."
-                    : $"Encounter Director Lite has no floor {buildResult.floorIndex} budget yet.";
+                plan.warning = "Encounter Director skipped: dungeon build missing.";
                 return plan;
             }
 
@@ -137,6 +144,8 @@ namespace FrontierDepths.World
             List<EnemyDefinition> definitions = EnemyCatalog.CreateDefinitionsForFloor(buildResult.floorIndex);
             AllocateRooms(plan, candidates, budget, definitions, random);
             plan.emptyEligibleRoomCount = Mathf.Max(0, candidates.Count - plan.assignments.Count);
+            int assignedRoamers = 0;
+            int roamerLimit = GetRoamerLimit(buildResult.floorIndex);
             for (int assignmentIndex = 0; assignmentIndex < plan.assignments.Count; assignmentIndex++)
             {
                 DungeonEncounterRoomAssignment assignment = plan.assignments[assignmentIndex];
@@ -162,6 +171,30 @@ namespace FrontierDepths.World
                     }
 
                     DungeonSpawnPointRecord spawnPoint = spreadSpawns[spawnIndex];
+                    EnemyMobilityRole mobilityRole = ChooseMobilityRole(definition, candidate.room, buildResult.floorIndex, assignedRoamers < roamerLimit, random);
+                    List<Vector3> roamingRoute = BuildRoamingRoute(buildResult, candidate.room, spawnPoint.position, mobilityRole, random);
+                    if ((mobilityRole == EnemyMobilityRole.Roamer || mobilityRole == EnemyMobilityRole.Hunter) && roamingRoute.Count < 2)
+                    {
+                        mobilityRole = EnemyMobilityRole.RoomGuard;
+                    }
+
+                    EnemyVariantDefinition variant = EnemyVariantCatalog.ChooseVariant(definition.archetype, buildResult.floorIndex, random);
+                    EnemyDefinition spawnDefinition = variant != null
+                        ? EnemyVariantCatalog.CreateVariantDefinition(definition, variant)
+                        : definition;
+
+                    if (mobilityRole == EnemyMobilityRole.Roamer || mobilityRole == EnemyMobilityRole.Hunter)
+                    {
+                        assignedRoamers++;
+                        plan.roamerCount++;
+                    }
+
+                    plan.AddMobilityRole(mobilityRole);
+                    if (variant != null)
+                    {
+                        plan.AddVariant(variant.variantId);
+                    }
+
                     assignment.spawnedCount++;
                     plan.spawns.Add(new DungeonEncounterSpawn
                     {
@@ -169,9 +202,12 @@ namespace FrontierDepths.World
                         templateId = assignment.templateId,
                         role = assignment.role,
                         position = spawnPoint.position,
-                        definition = definition
+                        definition = spawnDefinition,
+                        mobilityRole = mobilityRole,
+                        variantId = variant != null ? variant.variantId : string.Empty,
+                        roamingRoute = roamingRoute
                     });
-                    plan.AddArchetype(definition.archetype);
+                    plan.AddArchetype(spawnDefinition.archetype);
                 }
             }
 
@@ -184,25 +220,37 @@ namespace FrontierDepths.World
             return plan;
         }
 
-        public static int GetRoomCapacity(DungeonRoomBuildRecord room, int safeSpawnCount)
+        public static int GetRoomCapacity(DungeonRoomBuildRecord room, int safeSpawnCount, int floorIndex = 1)
         {
             if (room == null || safeSpawnCount <= 0)
             {
                 return 0;
             }
 
-            int footprintCapacity = room.footprintArea >= 1600f ? 3 : (room.footprintArea >= 900f ? 2 : 1);
+            int footprintCapacity = room.footprintArea >= 1600f ? 5 : (room.footprintArea >= 900f ? 3 : 2);
+            if (floorIndex <= 1)
+            {
+                footprintCapacity = Mathf.Min(footprintCapacity, room.footprintArea >= 1600f ? 3 : (room.footprintArea >= 900f ? 2 : 1));
+            }
+            else if (floorIndex <= 2)
+            {
+                footprintCapacity = Mathf.Min(footprintCapacity, room.footprintArea >= 1600f ? 4 : (room.footprintArea >= 900f ? 3 : 2));
+            }
+
             if (room.roomType == DungeonNodeKind.Landmark)
             {
-                footprintCapacity = Mathf.Max(2, footprintCapacity + 1);
+                footprintCapacity = Mathf.Max(floorIndex >= 6 ? 6 : 3, footprintCapacity + (floorIndex >= 6 ? 3 : 2));
             }
 
             if (room.roomType == DungeonNodeKind.Secret)
             {
-                footprintCapacity = Mathf.Min(1, footprintCapacity);
+                footprintCapacity = Mathf.Min(floorIndex >= 3 ? 2 : 1, footprintCapacity);
             }
 
-            return Mathf.Clamp(Mathf.Min(footprintCapacity, safeSpawnCount), 0, room.roomType == DungeonNodeKind.Landmark ? 4 : 3);
+            int maxCapacity = room.roomType == DungeonNodeKind.Landmark
+                ? (floorIndex >= 6 ? 10 : 6)
+                : (floorIndex >= 6 ? 5 : 4);
+            return Mathf.Clamp(Mathf.Min(footprintCapacity, safeSpawnCount), 0, maxCapacity);
         }
 
         public static bool IsSafeRoomType(DungeonNodeKind roomType)
@@ -256,7 +304,7 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                int capacity = GetRoomCapacity(room, safeSpawns.Count);
+                int capacity = GetRoomCapacity(room, safeSpawns.Count, buildResult.floorIndex);
                 if (capacity <= 0)
                 {
                     continue;
@@ -530,7 +578,7 @@ namespace FrontierDepths.World
                 plan.floorIndex,
                 remaining,
                 2,
-                Mathf.Min(landmark.capacity, 4),
+                Mathf.Min(landmark.capacity, plan.floorIndex >= 6 ? 10 : 6),
                 floorOneBatCount,
                 false,
                 random);
@@ -724,18 +772,22 @@ namespace FrontierDepths.World
         {
             return new List<EncounterTemplate>
             {
-                new EncounterTemplate("SoloSlime", 1, 3, 1, EnemyArchetype.Slime),
-                new EncounterTemplate("SoloBat", 1, 4, 1, EnemyArchetype.Bat),
-                new EncounterTemplate("SoloGoblinGrunt", 1, 5, 1, EnemyArchetype.GoblinGrunt),
-                new EncounterTemplate("Easy_2Slimes", 1, 3, 7, EnemyArchetype.Slime, EnemyArchetype.Slime),
-                new EncounterTemplate("Easy_SlimeBat", 1, 4, 7, EnemyArchetype.Slime, EnemyArchetype.Bat),
-                new EncounterTemplate("Medium_GoblinSlime", 1, 5, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_2BatsSlime", 1, 4, 4, EnemyArchetype.Bat, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_2SlimesBat", 1, 4, 5, EnemyArchetype.Slime, EnemyArchetype.Slime, EnemyArchetype.Bat),
-                new EncounterTemplate("Hard_2GoblinGrunts", 2, 5, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt),
-                new EncounterTemplate("Hard_Goblin2Slimes", 2, 5, 5, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime, EnemyArchetype.Slime),
+                new EncounterTemplate("SoloSlime", 1, 0, 1, EnemyArchetype.Slime),
+                new EncounterTemplate("SoloBat", 1, 0, 1, EnemyArchetype.Bat),
+                new EncounterTemplate("SoloGoblinGrunt", 1, 0, 1, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("Easy_2Slimes", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Slime),
+                new EncounterTemplate("Easy_SlimeBat", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Medium_GoblinSlime", 1, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime),
+                new EncounterTemplate("Medium_2BatsSlime", 1, 0, 4, EnemyArchetype.Bat, EnemyArchetype.Bat, EnemyArchetype.Slime),
+                new EncounterTemplate("Medium_2SlimesBat", 1, 0, 5, EnemyArchetype.Slime, EnemyArchetype.Slime, EnemyArchetype.Bat),
+                new EncounterTemplate("Hard_2GoblinGrunts", 2, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt),
+                new EncounterTemplate("Hard_Goblin2Slimes", 2, 0, 5, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime, EnemyArchetype.Slime),
                 new EncounterTemplate("Depth_BruteBat", 3, 0, 4, EnemyArchetype.GoblinBrute, EnemyArchetype.Bat),
-                new EncounterTemplate("Depth_Brute2Slimes", 3, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.Slime, EnemyArchetype.Slime)
+                new EncounterTemplate("Depth_Brute2Slimes", 3, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.Slime, EnemyArchetype.Slime),
+                new EncounterTemplate("Deep_GoblinBatSlime", 4, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
+                new EncounterTemplate("Deep_BruteEscort", 5, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat),
+                new EncounterTemplate("Deep_LargeSkirmish", 6, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
+                new EncounterTemplate("Deep_LandmarkPressure", 6, 0, 3, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime)
             };
         }
 
@@ -874,10 +926,10 @@ namespace FrontierDepths.World
 
             float weight = definition.archetype switch
             {
-                EnemyArchetype.Slime => floorIndex <= 1 ? 55f : (floorIndex == 2 ? 35f : (floorIndex == 3 ? 20f : 10f)),
-                EnemyArchetype.Bat => floorIndex <= 1 ? 25f : (floorIndex == 2 ? 30f : (floorIndex == 3 ? 30f : 25f)),
-                EnemyArchetype.GoblinBrute => floorIndex < 3 ? 0f : (floorIndex == 3 ? 10f : 20f),
-                _ => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex == 3 ? 40f : 45f))
+                EnemyArchetype.Slime => floorIndex <= 1 ? 55f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 18f : 10f)),
+                EnemyArchetype.Bat => floorIndex <= 1 ? 25f : (floorIndex == 2 ? 30f : (floorIndex <= 5 ? 30f : 24f)),
+                EnemyArchetype.GoblinBrute => floorIndex < 3 ? 0f : (floorIndex == 3 ? 10f : (floorIndex <= 5 ? 22f : 30f)),
+                _ => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 45f : 52f))
             };
 
             if (currentGroup != null && currentGroup.Count > 0)
@@ -894,29 +946,223 @@ namespace FrontierDepths.World
             return Mathf.Max(0f, weight);
         }
 
+        private static int GetRoamerLimit(int floorIndex)
+        {
+            if (floorIndex <= 1)
+            {
+                return 1;
+            }
+
+            if (floorIndex == 2)
+            {
+                return 2;
+            }
+
+            if (floorIndex <= 5)
+            {
+                return 4;
+            }
+
+            return 6;
+        }
+
+        private static int GetActiveCombatCap(int floorIndex)
+        {
+            if (floorIndex <= 2)
+            {
+                return 4;
+            }
+
+            if (floorIndex <= 5)
+            {
+                return 6;
+            }
+
+            if (floorIndex <= 8)
+            {
+                return 8;
+            }
+
+            return 10;
+        }
+
+        private static string GetDifficultyBand(int floorIndex)
+        {
+            if (floorIndex <= 2)
+            {
+                return "Recruit";
+            }
+
+            if (floorIndex <= 5)
+            {
+                return "RealDanger";
+            }
+
+            if (floorIndex <= 8)
+            {
+                return "DungeonPushesBack";
+            }
+
+            if (floorIndex <= 15)
+            {
+                return "HostileDepths";
+            }
+
+            return "OverrunDepths";
+        }
+
+        private static EnemyMobilityRole ChooseMobilityRole(
+            EnemyDefinition definition,
+            DungeonRoomBuildRecord room,
+            int floorIndex,
+            bool canUseRoamerSlot,
+            System.Random random)
+        {
+            if (definition == null)
+            {
+                return EnemyMobilityRole.RoomGuard;
+            }
+
+            if (definition.archetype == EnemyArchetype.GoblinBrute)
+            {
+                return EnemyMobilityRole.Sleeper;
+            }
+
+            if (!canUseRoamerSlot || room == null || room.roomType == DungeonNodeKind.Secret)
+            {
+                return definition.defaultMobilityRole == EnemyMobilityRole.Sleeper
+                    ? EnemyMobilityRole.Sleeper
+                    : EnemyMobilityRole.RoomGuard;
+            }
+
+            double roll = random != null ? random.NextDouble() : 0d;
+            return definition.archetype switch
+            {
+                EnemyArchetype.Bat => roll < (floorIndex <= 1 ? 0.35d : 0.65d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
+                EnemyArchetype.GoblinGrunt => floorIndex >= 3 && roll < 0.18d
+                    ? EnemyMobilityRole.Hunter
+                    : (roll < (floorIndex >= 3 ? 0.48d : 0.25d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard),
+                EnemyArchetype.Slime => floorIndex >= 2 && roll < 0.12d ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
+                _ => EnemyMobilityRole.RoomGuard
+            };
+        }
+
+        private static List<Vector3> BuildRoamingRoute(
+            DungeonBuildResult buildResult,
+            DungeonRoomBuildRecord homeRoom,
+            Vector3 startPosition,
+            EnemyMobilityRole mobilityRole,
+            System.Random random)
+        {
+            List<Vector3> route = new List<Vector3>();
+            if (buildResult == null ||
+                homeRoom == null ||
+                (mobilityRole != EnemyMobilityRole.Roamer && mobilityRole != EnemyMobilityRole.Hunter))
+            {
+                return route;
+            }
+
+            List<DungeonRoomBuildRecord> neighbors = FindRoamingNeighborRooms(buildResult, homeRoom);
+            if (neighbors.Count == 0)
+            {
+                return route;
+            }
+
+            DungeonRoomBuildRecord destination = neighbors[Mathf.Clamp(random != null ? random.Next(0, neighbors.Count) : 0, 0, neighbors.Count - 1)];
+            string edgeKey = DungeonBuildResult.GetEdgeKey(homeRoom.nodeId, destination.nodeId);
+            route.Add(startPosition);
+            AddDoorOpeningPoint(route, buildResult, homeRoom.nodeId, edgeKey);
+            List<DungeonCorridorBuildRecord> corridors = buildResult.GetCorridorsForEdge(edgeKey);
+            for (int i = 0; i < corridors.Count; i++)
+            {
+                DungeonCorridorBuildRecord corridor = corridors[i];
+                route.Add(Vector3.Lerp(corridor.start, corridor.end, 0.5f));
+            }
+
+            AddDoorOpeningPoint(route, buildResult, destination.nodeId, edgeKey);
+            List<DungeonSpawnPointRecord> destinationSpawns = buildResult.GetSpawnPoints(destination.nodeId, DungeonSpawnPointCategory.EnemyMelee);
+            route.Add(destinationSpawns.Count > 0 ? destinationSpawns[0].position : destination.bounds.center);
+            return route;
+        }
+
+        private static List<DungeonRoomBuildRecord> FindRoamingNeighborRooms(DungeonBuildResult buildResult, DungeonRoomBuildRecord homeRoom)
+        {
+            List<DungeonRoomBuildRecord> result = new List<DungeonRoomBuildRecord>();
+            for (int i = 0; i < buildResult.graphEdges.Count; i++)
+            {
+                DungeonGraphEdgeRecord edge = buildResult.graphEdges[i];
+                string neighborId = edge.a == homeRoom.nodeId ? edge.b : (edge.b == homeRoom.nodeId ? edge.a : string.Empty);
+                if (string.IsNullOrWhiteSpace(neighborId))
+                {
+                    continue;
+                }
+
+                DungeonRoomBuildRecord neighbor = buildResult.FindRoom(neighborId);
+                if (neighbor == null ||
+                    IsSafeRoomType(neighbor.roomType) ||
+                    neighbor.roomType == DungeonNodeKind.Secret ||
+                    (neighbor.roomType == DungeonNodeKind.Landmark && homeRoom.roomType != DungeonNodeKind.Landmark))
+                {
+                    continue;
+                }
+
+                result.Add(neighbor);
+            }
+
+            return result;
+        }
+
+        private static void AddDoorOpeningPoint(List<Vector3> route, DungeonBuildResult buildResult, string nodeId, string edgeKey)
+        {
+            for (int i = 0; i < buildResult.doorOpenings.Count; i++)
+            {
+                DungeonDoorOpeningRecord opening = buildResult.doorOpenings[i];
+                if (opening.nodeId == nodeId && opening.edgeKey == edgeKey)
+                {
+                    route.Add(opening.center);
+                    return;
+                }
+            }
+        }
+
         private static EncounterBudget GetBudget(int floorIndex, System.Random random)
         {
             int min;
             int max;
             if (floorIndex <= 1)
             {
-                min = 6;
-                max = 10;
-            }
-            else if (floorIndex == 2)
-            {
                 min = 8;
                 max = 12;
             }
-            else if (floorIndex == 3)
+            else if (floorIndex == 2)
             {
                 min = 10;
-                max = 14;
+                max = 15;
+            }
+            else if (floorIndex == 3)
+            {
+                min = 14;
+                max = 20;
+            }
+            else if (floorIndex <= 5)
+            {
+                min = 18;
+                max = 26;
+            }
+            else if (floorIndex <= 8)
+            {
+                min = 24;
+                max = 32;
+            }
+            else if (floorIndex <= 15)
+            {
+                min = 28;
+                max = 40;
             }
             else
             {
-                min = 12;
-                max = 18;
+                min = 36;
+                max = 52;
             }
 
             return new EncounterBudget
@@ -1025,6 +1271,18 @@ namespace FrontierDepths.World
             DungeonRoomBuildRecord homeRoom,
             IReadOnlyList<Vector3> patrolPoints)
         {
+            return CreateEnemy(parent, position, definition, homeRoom, patrolPoints, definition != null ? definition.defaultMobilityRole : EnemyMobilityRole.RoomGuard, null);
+        }
+
+        internal static GameObject CreateEnemy(
+            Transform parent,
+            Vector3 position,
+            EnemyDefinition definition,
+            DungeonRoomBuildRecord homeRoom,
+            IReadOnlyList<Vector3> patrolPoints,
+            EnemyMobilityRole mobilityRole,
+            IReadOnlyList<Vector3> roamingRoute)
+        {
             EnemyDefinition safeDefinition = definition != null
                 ? definition
                 : EnemyCatalog.CreateDefinition(EnemyArchetype.GoblinGrunt);
@@ -1067,6 +1325,9 @@ namespace FrontierDepths.World
             {
                 melee.ConfigureHomeRoom(string.Empty, new Bounds(position, new Vector3(12f, 4f, 12f)), new[] { position });
             }
+
+            melee.ConfigureMobilityRole(mobilityRole);
+            melee.ConfigureRoamingRoute(roamingRoute);
 
             int defaultLayer = LayerMask.NameToLayer("Default");
             DungeonSceneController.SetLayerRecursively(enemy, defaultLayer >= 0 ? defaultLayer : 0);
@@ -1185,12 +1446,17 @@ namespace FrontierDepths.World
         public int emptyEligibleRoomCount;
         public int soloRoomCount;
         public int groupFightCount;
+        public int roamerCount;
+        public int activeCombatCap;
+        public string difficultyBand = string.Empty;
         public string spawnSource = string.Empty;
         public string warning = string.Empty;
         public readonly List<DungeonEncounterRoomAssignment> assignments = new List<DungeonEncounterRoomAssignment>();
         public readonly List<DungeonEncounterSpawn> spawns = new List<DungeonEncounterSpawn>();
         public readonly Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
         public readonly Dictionary<string, int> templateCounts = new Dictionary<string, int>();
+        public readonly Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
+        public readonly Dictionary<string, int> variantCounts = new Dictionary<string, int>();
 
         public void AddArchetype(EnemyArchetype archetype)
         {
@@ -1209,6 +1475,23 @@ namespace FrontierDepths.World
             templateCounts[templateId] = count + 1;
         }
 
+        public void AddMobilityRole(EnemyMobilityRole mobilityRole)
+        {
+            mobilityRoleCounts.TryGetValue(mobilityRole, out int count);
+            mobilityRoleCounts[mobilityRole] = count + 1;
+        }
+
+        public void AddVariant(string variantId)
+        {
+            if (string.IsNullOrWhiteSpace(variantId))
+            {
+                return;
+            }
+
+            variantCounts.TryGetValue(variantId, out int count);
+            variantCounts[variantId] = count + 1;
+        }
+
         public DungeonEncounterSummary ToSummary()
         {
             return new DungeonEncounterSummary
@@ -1221,11 +1504,16 @@ namespace FrontierDepths.World
                 emptyEligibleRoomCount = emptyEligibleRoomCount,
                 soloRoomCount = soloRoomCount,
                 groupFightCount = groupFightCount,
+                roamerCount = roamerCount,
+                activeCombatCap = activeCombatCap,
+                difficultyBand = difficultyBand,
                 spawnSource = spawnSource,
                 warning = warning,
                 roomAssignments = new List<DungeonEncounterRoomAssignment>(assignments),
                 archetypeCounts = new Dictionary<EnemyArchetype, int>(archetypeCounts),
                 templateCounts = new Dictionary<string, int>(templateCounts),
+                mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>(mobilityRoleCounts),
+                variantCounts = new Dictionary<string, int>(variantCounts),
                 enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>()
             };
         }
@@ -1238,6 +1526,9 @@ namespace FrontierDepths.World
         public DungeonEncounterRoomRole role;
         public Vector3 position;
         public EnemyDefinition definition;
+        public EnemyMobilityRole mobilityRole = EnemyMobilityRole.RoomGuard;
+        public string variantId = string.Empty;
+        public List<Vector3> roamingRoute = new List<Vector3>();
     }
 
     public sealed class DungeonEncounterRoomAssignment
@@ -1267,20 +1558,26 @@ namespace FrontierDepths.World
         public int emptyEligibleRoomCount;
         public int soloRoomCount;
         public int groupFightCount;
+        public int roamerCount;
+        public int activeCombatCap;
+        public string difficultyBand = string.Empty;
         public string spawnSource = string.Empty;
         public string warning = string.Empty;
         public List<DungeonEncounterRoomAssignment> roomAssignments = new List<DungeonEncounterRoomAssignment>();
         public Dictionary<EnemyArchetype, int> archetypeCounts = new Dictionary<EnemyArchetype, int>();
         public Dictionary<string, int> templateCounts = new Dictionary<string, int>();
+        public Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
+        public Dictionary<string, int> variantCounts = new Dictionary<string, int>();
         public Dictionary<SimpleMeleeEnemyState, int> enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>();
 
         public string ToDebugString()
         {
             return
                 $"Encounter Director Lite | Floor {floorIndex} | Source {spawnSource} | " +
-                $"Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | " +
+                $"Band {difficultyBand} | Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | ActiveCap {activeCombatCap} | " +
                 $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}/{eligibleRoomCount} | " +
-                $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Templates {FormatTemplates()} | States {FormatStates()}" +
+                $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Roamers {roamerCount} | " +
+                $"Templates {FormatTemplates()} | Roles {FormatRoles()} | Variants {FormatVariants()} | States {FormatStates()}" +
                 (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
         }
 
@@ -1325,6 +1622,38 @@ namespace FrontierDepths.World
 
             List<string> parts = new List<string>();
             foreach (KeyValuePair<SimpleMeleeEnemyState, int> pair in enemyStateCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatRoles()
+        {
+            if (mobilityRoleCounts == null || mobilityRoleCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<EnemyMobilityRole, int> pair in mobilityRoleCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatVariants()
+        {
+            if (variantCounts == null || variantCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<string, int> pair in variantCounts)
             {
                 parts.Add($"{pair.Key}:{pair.Value}");
             }

@@ -33,8 +33,14 @@ namespace FrontierDepths.Combat
         [SerializeField] private bool requireLineOfSightToAttack = true;
         [SerializeField] private LayerMask lineOfSightMask = -1;
         [SerializeField] private EnemyAmbientBehavior ambientBehavior = EnemyAmbientBehavior.Idle;
+        [SerializeField] private EnemyMobilityRole mobilityRole = EnemyMobilityRole.RoomGuard;
+        [SerializeField] private EnemyAlertLevel alertLevel = EnemyAlertLevel.Passive;
         [SerializeField] private float visionConeAngle = 120f;
         [SerializeField] private float idleMoveSpeedMultiplier = 0.55f;
+        [SerializeField] private float patrolSpeedMultiplier = 0.55f;
+        [SerializeField] private float investigateSpeedMultiplier = 0.85f;
+        [SerializeField] private float chaseSpeedMultiplier = 1f;
+        [SerializeField] private float returnHomeSpeedMultiplier = 0.75f;
         [SerializeField] private float patrolWaitSeconds = 1.1f;
         [SerializeField] private float investigateDuration = 4f;
         [SerializeField] private float lostSightGraceDuration = 1f;
@@ -45,6 +51,7 @@ namespace FrontierDepths.Combat
         [SerializeField] private bool enableDebugStuckSnapRecovery;
 
         private readonly List<Vector3> patrolPoints = new List<Vector3>();
+        private readonly List<Vector3> roamingRoutePoints = new List<Vector3>();
         private CharacterController controller;
         private EnemyHealth health;
         private PlayerHealth target;
@@ -77,6 +84,7 @@ namespace FrontierDepths.Combat
         private EnemyArchetype archetype = EnemyArchetype.GoblinGrunt;
         private PlayerHealth windupTarget;
         private int patrolCursor;
+        private int roamingCursor;
         private int stuckRecoveryCount;
 
         public SimpleMeleeEnemyState State => state;
@@ -93,6 +101,12 @@ namespace FrontierDepths.Combat
         public float HearingRadiusMultiplier => hearingRadiusMultiplier;
         public float GroupAlertRadius => groupAlertRadius;
         public EnemyAmbientBehavior AmbientBehavior => ambientBehavior;
+        public EnemyMobilityRole MobilityRole => mobilityRole;
+        public EnemyAlertLevel AlertLevel => alertLevel;
+        public float PatrolSpeedMultiplier => patrolSpeedMultiplier;
+        public float InvestigateSpeedMultiplier => investigateSpeedMultiplier;
+        public float ChaseSpeedMultiplier => chaseSpeedMultiplier;
+        public float ReturnHomeSpeedMultiplier => returnHomeSpeedMultiplier;
         public string HomeRoomId { get; private set; } = string.Empty;
         public Bounds HomeRoomBounds => homeRoomBounds;
         public bool HasHomeRoom => hasHomeRoom;
@@ -117,8 +131,13 @@ namespace FrontierDepths.Combat
             hearingRadiusMultiplier = Mathf.Max(0f, definition.hearingRadiusMultiplier);
             groupAlertRadius = Mathf.Max(0f, definition.groupAlertRadius);
             ambientBehavior = definition.ambientBehavior;
+            mobilityRole = definition.defaultMobilityRole;
             visionConeAngle = Mathf.Clamp(definition.visionConeAngle, 1f, 360f);
             idleMoveSpeedMultiplier = Mathf.Clamp(definition.idleMoveSpeedMultiplier, 0.05f, 1f);
+            patrolSpeedMultiplier = Mathf.Clamp(definition.patrolSpeedMultiplier > 0f ? definition.patrolSpeedMultiplier : idleMoveSpeedMultiplier, 0.05f, 2f);
+            investigateSpeedMultiplier = Mathf.Clamp(definition.investigateSpeedMultiplier, 0.05f, 2f);
+            chaseSpeedMultiplier = Mathf.Clamp(definition.chaseSpeedMultiplier, 0.05f, 2f);
+            returnHomeSpeedMultiplier = Mathf.Clamp(definition.returnHomeSpeedMultiplier, 0.05f, 2f);
             patrolWaitSeconds = Mathf.Max(0f, definition.patrolWaitSeconds);
             investigateDuration = Mathf.Max(0.1f, definition.investigateDuration);
             lostSightGraceDuration = Mathf.Max(0f, definition.lostSightGraceDuration);
@@ -168,6 +187,39 @@ namespace FrontierDepths.Combat
             hasMoveTarget = false;
         }
 
+        public void ConfigureMobilityRole(EnemyMobilityRole role)
+        {
+            mobilityRole = role;
+            if (role == EnemyMobilityRole.Sleeper)
+            {
+                ambientBehavior = EnemyAmbientBehavior.SleepGuard;
+            }
+        }
+
+        public void ConfigureRoamingRoute(IReadOnlyList<Vector3> routePoints)
+        {
+            roamingRoutePoints.Clear();
+            if (routePoints != null)
+            {
+                for (int i = 0; i < routePoints.Count; i++)
+                {
+                    Vector3 point = routePoints[i];
+                    if (roamingRoutePoints.Count == 0 ||
+                        (Planar(roamingRoutePoints[roamingRoutePoints.Count - 1]) - Planar(point)).sqrMagnitude > 1f)
+                    {
+                        roamingRoutePoints.Add(new Vector3(point.x, transform.position.y, point.z));
+                    }
+                }
+            }
+
+            roamingCursor = Mathf.Clamp(roamingCursor, 0, Mathf.Max(0, roamingRoutePoints.Count - 1));
+            if (CanRoamPassively() && roamingRoutePoints.Count > 0)
+            {
+                hasMoveTarget = false;
+                SetState(SimpleMeleeEnemyState.Patrol);
+            }
+        }
+
         internal void SetHomeRoomForTests(string roomId, Bounds bounds, IReadOnlyList<Vector3> roomPatrolPoints)
         {
             ConfigureHomeRoom(roomId, bounds, roomPatrolPoints);
@@ -176,6 +228,16 @@ namespace FrontierDepths.Combat
         internal IReadOnlyList<Vector3> GetPatrolPointsForTests()
         {
             return new List<Vector3>(patrolPoints);
+        }
+
+        internal IReadOnlyList<Vector3> GetRoamingRouteForTests()
+        {
+            return new List<Vector3>(roamingRoutePoints);
+        }
+
+        internal float GetEffectiveMoveSpeedForTests(SimpleMeleeEnemyState testState)
+        {
+            return GetSpeedForState(testState);
         }
 
         internal void TickForTests(float currentTime, float deltaTime)
@@ -385,7 +447,14 @@ namespace FrontierDepths.Combat
             lastSeenTargetTime = currentTime;
             alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
             hasMoveTarget = false;
-            SetState(SimpleMeleeEnemyState.Chase);
+            if (CanEnterActiveCombat())
+            {
+                SetState(SimpleMeleeEnemyState.Chase);
+            }
+            else
+            {
+                StartInvestigatingPosition(lastKnownTargetPosition, currentTime, Mathf.Max(searchDuration, investigateDuration));
+            }
         }
 
         internal void HandleDamagedForTests(DamageInfo damageInfo, DamageResult result, float currentTime)
@@ -501,7 +570,14 @@ namespace FrontierDepths.Combat
             alertUntilTime = Mathf.Max(alertUntilTime, currentTime + Mathf.Max(0.1f, alertMemoryDuration));
             if (!IsAttackState(state))
             {
-                SetState(SimpleMeleeEnemyState.Chase);
+                if (CanEnterActiveCombat())
+                {
+                    SetState(SimpleMeleeEnemyState.Chase);
+                }
+                else
+                {
+                    StartInvestigatingPosition(target.transform.position, currentTime, Mathf.Max(searchDuration, investigateDuration));
+                }
             }
         }
 
@@ -534,7 +610,7 @@ namespace FrontierDepths.Combat
             }
 
             Vector3 chaseTarget = hasLastKnownTargetPosition ? lastKnownTargetPosition : target.transform.position;
-            MoveTowardPoint(chaseTarget, moveSpeed, deltaTime, false, true);
+            MoveTowardPoint(chaseTarget, GetSpeedForState(SimpleMeleeEnemyState.Chase), deltaTime, false, true);
         }
 
         private void TickInvestigate(float currentTime, float deltaTime)
@@ -558,7 +634,7 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            MoveTowardPoint(destination, moveSpeed * Mathf.Lerp(idleMoveSpeedMultiplier, 1f, 0.55f), deltaTime, true, true);
+            MoveTowardPoint(destination, GetSpeedForState(SimpleMeleeEnemyState.Investigate), deltaTime, false, true);
         }
 
         private void TickReturnToRoom(float deltaTime)
@@ -572,7 +648,7 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            MoveTowardPoint(destination, moveSpeed * Mathf.Max(0.25f, idleMoveSpeedMultiplier), deltaTime, true, true);
+            MoveTowardPoint(destination, GetSpeedForState(SimpleMeleeEnemyState.ReturnToRoom), deltaTime, true, true);
         }
 
         private void TickIdle(float deltaTime)
@@ -600,7 +676,8 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            if (!hasMoveTarget || !IsSafeRoomLocalTarget(currentMoveTarget))
+            bool passiveRoam = CanRoamPassively() && roamingRoutePoints.Count > 0;
+            if (!hasMoveTarget || (!passiveRoam && !IsSafeRoomLocalTarget(currentMoveTarget)))
             {
                 ChooseNextPatrolTarget();
             }
@@ -613,7 +690,7 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            MoveTowardPoint(currentMoveTarget, moveSpeed * Mathf.Max(0.05f, idleMoveSpeedMultiplier), deltaTime, true, true);
+            MoveTowardPoint(currentMoveTarget, GetSpeedForState(SimpleMeleeEnemyState.Patrol), deltaTime, !passiveRoam, true);
         }
 
         private void HandleDamaged(EnemyHealth enemyHealth, DamageInfo damageInfo, DamageResult result)
@@ -671,13 +748,30 @@ namespace FrontierDepths.Combat
             }
 
             PlayerHealth sourcePlayer = ResolvePlayerFromSource(gameplayEvent.sourceObject);
+            float planarDistance = Vector3.Distance(Planar(transform.position), Planar(eventPosition));
+            bool eventInHomeRoom = hasHomeRoom && IsInsideHomeRoom(eventPosition, 0f);
+            bool repeatedNearbyGunfire = hasLastHeardPosition &&
+                                         Vector3.Distance(Planar(lastHeardPosition), Planar(eventPosition)) <= 8f &&
+                                         state == SimpleMeleeEnemyState.Investigate;
+
             if (sourcePlayer != null && !sourcePlayer.IsDead && CanSeePlayer(sourcePlayer, currentTime, false))
             {
                 Alert(sourcePlayer, sourcePlayer.transform.position, currentTime);
                 return true;
             }
 
-            StartInvestigatingPosition(eventPosition, currentTime, investigateDuration);
+            float duration = investigateDuration;
+            if (eventInHomeRoom || planarDistance <= radius * 0.35f)
+            {
+                duration = Mathf.Max(duration, searchDuration);
+            }
+
+            if (repeatedNearbyGunfire)
+            {
+                duration += Mathf.Max(1f, investigateDuration * 0.5f);
+            }
+
+            StartInvestigatingPosition(eventPosition, currentTime, duration);
             return true;
         }
 
@@ -920,6 +1014,14 @@ namespace FrontierDepths.Combat
 
         private void ChooseNextPatrolTarget()
         {
+            if (CanRoamPassively() && roamingRoutePoints.Count > 0)
+            {
+                roamingCursor = (roamingCursor + 1) % roamingRoutePoints.Count;
+                currentMoveTarget = roamingRoutePoints[roamingCursor];
+                hasMoveTarget = true;
+                return;
+            }
+
             if (patrolPoints.Count == 0)
             {
                 currentMoveTarget = transform.position;
@@ -960,6 +1062,24 @@ namespace FrontierDepths.Combat
             }
 
             patrolPoints.Add(new Vector3(point.x, transform.position.y, point.z));
+        }
+
+        private bool CanRoamPassively()
+        {
+            return mobilityRole == EnemyMobilityRole.Roamer || mobilityRole == EnemyMobilityRole.Hunter;
+        }
+
+        private float GetSpeedForState(SimpleMeleeEnemyState nextState)
+        {
+            float multiplier = nextState switch
+            {
+                SimpleMeleeEnemyState.Chase => chaseSpeedMultiplier,
+                SimpleMeleeEnemyState.Investigate => investigateSpeedMultiplier,
+                SimpleMeleeEnemyState.ReturnToRoom => returnHomeSpeedMultiplier,
+                SimpleMeleeEnemyState.Patrol => patrolSpeedMultiplier,
+                _ => idleMoveSpeedMultiplier
+            };
+            return moveSpeed * Mathf.Max(0.05f, multiplier);
         }
 
         private bool IsSafeRoomLocalTarget(Vector3 point)
@@ -1075,7 +1195,21 @@ namespace FrontierDepths.Combat
             }
 
             state = nextState;
+            alertLevel = GetAlertLevelForState(nextState);
             ApplyStateColor(state);
+        }
+
+        private static EnemyAlertLevel GetAlertLevelForState(SimpleMeleeEnemyState nextState)
+        {
+            return nextState switch
+            {
+                SimpleMeleeEnemyState.Chase => EnemyAlertLevel.Combat,
+                SimpleMeleeEnemyState.AttackWindup => EnemyAlertLevel.Combat,
+                SimpleMeleeEnemyState.AttackRecover => EnemyAlertLevel.Combat,
+                SimpleMeleeEnemyState.Investigate => EnemyAlertLevel.Investigating,
+                SimpleMeleeEnemyState.ReturnToRoom => EnemyAlertLevel.Suspicious,
+                _ => EnemyAlertLevel.Passive
+            };
         }
 
         private void ApplyStateColor(SimpleMeleeEnemyState nextState)
@@ -1262,6 +1396,68 @@ namespace FrontierDepths.Combat
         {
             return nextState == SimpleMeleeEnemyState.AttackWindup ||
                    nextState == SimpleMeleeEnemyState.AttackRecover;
+        }
+
+        private bool CanEnterActiveCombat()
+        {
+            if (IsActiveCombatState(state))
+            {
+                return true;
+            }
+
+            return CountActiveCombatEnemies() < GetActiveCombatCapForCurrentFloor();
+        }
+
+        private static bool IsActiveCombatState(SimpleMeleeEnemyState nextState)
+        {
+            return nextState == SimpleMeleeEnemyState.Chase ||
+                   nextState == SimpleMeleeEnemyState.AttackWindup ||
+                   nextState == SimpleMeleeEnemyState.AttackRecover;
+        }
+
+        private static int CountActiveCombatEnemies()
+        {
+            int count = 0;
+            List<SimpleMeleeEnemyController> snapshot = new List<SimpleMeleeEnemyController>(ActiveEnemies);
+            for (int i = 0; i < snapshot.Count; i++)
+            {
+                SimpleMeleeEnemyController enemy = snapshot[i];
+                if (enemy == null || enemy.health == null || enemy.health.IsDead)
+                {
+                    continue;
+                }
+
+                if (IsActiveCombatState(enemy.state))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int GetActiveCombatCapForCurrentFloor()
+        {
+            RunState run = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current
+                : null;
+            int floorIndex = run != null ? run.floorIndex : 1;
+            if (floorIndex <= 2)
+            {
+                return 4;
+            }
+
+            if (floorIndex <= 5)
+            {
+                return 6;
+            }
+
+            if (floorIndex <= 8)
+            {
+                return 8;
+            }
+
+            return 10;
         }
 
         private static Vector3 Planar(Vector3 value)

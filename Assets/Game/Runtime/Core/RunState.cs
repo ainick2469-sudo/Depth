@@ -6,13 +6,14 @@ namespace FrontierDepths.Core
     [Serializable]
     public class RunState
     {
-        public int version = 2;
+        public int version = 3;
         public bool isActive;
         public int seed;
         public int floorIndex = 1;
         public string equippedWeaponId = "weapon.frontier_revolver";
         public List<string> acceptedBountyIds = new List<string>();
         public List<RunUpgradeRecord> runUpgrades = new List<RunUpgradeRecord>();
+        public RunWeaponAmmoState weaponAmmo = new RunWeaponAmmoState();
         public FloorState currentFloor = new FloorState();
         public List<FloorState> visitedFloors = new List<FloorState>();
         public PortalAnchorState portalAnchor = PortalAnchorState.Invalid;
@@ -22,6 +23,10 @@ namespace FrontierDepths.Core
         {
             acceptedBountyIds ??= new List<string>();
             runUpgrades ??= new List<RunUpgradeRecord>();
+            bool legacyAmmoState = version < 3 || weaponAmmo == null;
+            weaponAmmo ??= new RunWeaponAmmoState();
+            weaponAmmo.Normalize(equippedWeaponId, legacyAmmoState);
+            version = 3;
             for (int i = runUpgrades.Count - 1; i >= 0; i--)
             {
                 RunUpgradeRecord record = runUpgrades[i];
@@ -171,6 +176,31 @@ namespace FrontierDepths.Core
     {
         public string upgradeId;
         public int stackCount;
+    }
+
+    [Serializable]
+    public class RunWeaponAmmoState
+    {
+        public string weaponId = "weapon.frontier_revolver";
+        public int currentMagazineAmmo = 6;
+        public int reserveAmmo = 30;
+        public int maxReserveAmmo = 60;
+
+        public void Normalize(string fallbackWeaponId, bool useDefaultsForMissingValues = false)
+        {
+            weaponId = string.IsNullOrWhiteSpace(weaponId)
+                ? (string.IsNullOrWhiteSpace(fallbackWeaponId) ? "weapon.frontier_revolver" : fallbackWeaponId)
+                : weaponId;
+            maxReserveAmmo = Math.Max(0, maxReserveAmmo <= 0 ? 60 : maxReserveAmmo);
+            if (useDefaultsForMissingValues)
+            {
+                currentMagazineAmmo = currentMagazineAmmo <= 0 ? 6 : currentMagazineAmmo;
+                reserveAmmo = reserveAmmo <= 0 ? 30 : reserveAmmo;
+            }
+
+            currentMagazineAmmo = Math.Max(0, currentMagazineAmmo);
+            reserveAmmo = Math.Max(0, Math.Min(reserveAmmo, maxReserveAmmo));
+        }
     }
 
     [Serializable]

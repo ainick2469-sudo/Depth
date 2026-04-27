@@ -522,11 +522,32 @@ namespace FrontierDepths.World
                     continue;
                 }
 
-                AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyMelee, 3, EnemyMeleeSpawnMinimumDistance, true, true, true, playerSpawn);
+                AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyMelee, GetEnemyMeleeSpawnCandidateCount(room, activeBuildResult.floorIndex), EnemyMeleeSpawnMinimumDistance, true, true, true, playerSpawn);
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.EnemyRanged, 2, EnemyRangedSpawnMinimumDistance, true, true, true, playerSpawn);
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.EliteEnemy, 1, EliteEnemySpawnMinimumDistance, true, true, true, playerSpawn);
                 AddSpawnCandidates(room, DungeonSpawnPointCategory.TargetDummy, 4, TargetDummySpawnMinimumDistance, true, true, true, playerSpawn);
             }
+        }
+
+        private static int GetEnemyMeleeSpawnCandidateCount(DungeonRoomBuildRecord room, int floorIndex)
+        {
+            if (room == null)
+            {
+                return 3;
+            }
+
+            int count = room.footprintArea >= 1600f ? 6 : (room.footprintArea >= 900f ? 4 : 3);
+            if (room.roomType == DungeonNodeKind.Landmark)
+            {
+                count += floorIndex >= 6 ? 4 : 2;
+            }
+
+            if (floorIndex >= 6)
+            {
+                count += 2;
+            }
+
+            return Mathf.Clamp(count, 3, room.roomType == DungeonNodeKind.Landmark ? 10 : 7);
         }
 
         private void AddSpawnCandidates(
@@ -2935,6 +2956,80 @@ namespace FrontierDepths.World
                 bool requiredReturnRoute = activeBuildResult != null && activeBuildResult.floorIndex == 1;
                 RecordInteractable(node.nodeId, "ReturnLift", stairs, false, true, requiredReturnRoute);
             }
+            else if (node.nodeKind == DungeonNodeKind.Landmark)
+            {
+                CreatePurposePickup(roomRoot, node.nodeId, "LandmarkAmmoCache", EncounterDropKind.Ammo, new Vector3(-2.2f, 1f, 0f), 9);
+                CreatePurposePickup(roomRoot, node.nodeId, "LandmarkGoldCache", EncounterDropKind.Gold, new Vector3(2.2f, 1f, 0f), 12);
+            }
+            else if (node.nodeKind == DungeonNodeKind.Secret)
+            {
+                CreatePurposePickup(roomRoot, node.nodeId, "SecretCache", EncounterDropKind.Gold, new Vector3(0f, 1f, 0f), 18);
+                CreatePurposeMarker(roomRoot, node.nodeId, "SecretMarker", new Vector3(0f, 1.8f, 2.6f), new Color(0.7f, 0.3f, 0.95f, 1f));
+            }
+        }
+
+        private void CreatePurposePickup(
+            Transform roomRoot,
+            string nodeId,
+            string interactableType,
+            EncounterDropKind kind,
+            Vector3 localPosition,
+            int amount)
+        {
+            GameObject pickup = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            pickup.name = $"Interactable_{nodeId}_{interactableType}";
+            pickup.transform.SetParent(roomRoot, false);
+            pickup.transform.localPosition = localPosition;
+            pickup.transform.localScale = Vector3.one * 0.8f;
+
+            Collider collider = pickup.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.isTrigger = true;
+            }
+
+            ApplyColor(pickup.GetComponent<Renderer>(), GetPickupPurposeColor(kind));
+            switch (kind)
+            {
+                case EncounterDropKind.Health:
+                    pickup.AddComponent<HealthPickup>().Configure(amount);
+                    break;
+                case EncounterDropKind.Ammo:
+                    pickup.AddComponent<AmmoPickup>().Configure(amount);
+                    break;
+                default:
+                    pickup.AddComponent<GoldPickup>().Configure(amount);
+                    break;
+            }
+
+            RecordInteractable(nodeId, interactableType, pickup, false, false, false);
+        }
+
+        private void CreatePurposeMarker(Transform roomRoot, string nodeId, string interactableType, Vector3 localPosition, Color color)
+        {
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            marker.name = $"Interactable_{nodeId}_{interactableType}";
+            marker.transform.SetParent(roomRoot, false);
+            marker.transform.localPosition = localPosition;
+            marker.transform.localScale = new Vector3(1.4f, 0.35f, 1.4f);
+            ApplyColor(marker.GetComponent<Renderer>(), color);
+            Collider collider = marker.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.isTrigger = true;
+            }
+
+            RecordInteractable(nodeId, interactableType, marker, false, false, false);
+        }
+
+        private static Color GetPickupPurposeColor(EncounterDropKind kind)
+        {
+            return kind switch
+            {
+                EncounterDropKind.Health => new Color(0.25f, 0.9f, 0.38f, 1f),
+                EncounterDropKind.Ammo => new Color(0.28f, 0.58f, 1f, 1f),
+                _ => new Color(1f, 0.78f, 0.22f, 1f)
+            };
         }
 
         private static Dictionary<Vector2Int, Vector2Int> GetConnectionDirections(DungeonNode node, DungeonLayoutGraph graph)

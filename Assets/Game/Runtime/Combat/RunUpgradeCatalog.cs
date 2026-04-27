@@ -74,7 +74,7 @@ namespace FrontierDepths.Combat
             {
                 upgradeId = AmmoPickupUpgradeId,
                 displayName = "Ammo Scavenger",
-                description = "Ammo pickups refill +50% more magazine ammo.",
+                description = "Ammo pickups add +50% more reserve ammo.",
                 effectKind = RunUpgradeEffectKind.AmmoPickupPercent,
                 value = 0.50f
             },
@@ -198,7 +198,7 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.CritChanceFlat => BuildPercentPreview("Crit chance", definition.value, currentStack, nextStack),
                 RunUpgradeEffectKind.KillHealFlat => BuildFlatPreview("Kill heal", definition.value, currentStack, nextStack, " HP"),
                 RunUpgradeEffectKind.FirstShotAfterReloadPercent => BuildPercentPreview("First shot after reload", definition.value, currentStack, nextStack),
-                RunUpgradeEffectKind.AmmoPickupPercent => BuildPercentPreview("Ammo pickup refill", definition.value, currentStack, nextStack),
+                RunUpgradeEffectKind.AmmoPickupPercent => BuildPercentPreview("Ammo reserve pickup", definition.value, currentStack, nextStack),
                 RunUpgradeEffectKind.EveryNthHitChain => BuildChainPreview(currentStack, nextStack),
                 _ => definition.description ?? string.Empty
             };
@@ -214,7 +214,7 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.CritChanceFlat => $"+{definition.value * stackCount * 100f:0.#}% crit chance",
                 RunUpgradeEffectKind.KillHealFlat => $"kills heal {definition.value * stackCount:0.#} HP",
                 RunUpgradeEffectKind.FirstShotAfterReloadPercent => $"+{definition.value * stackCount * 100f:0.#}% first shot after reload",
-                RunUpgradeEffectKind.AmmoPickupPercent => $"+{definition.value * stackCount * 100f:0.#}% ammo pickup refill",
+                RunUpgradeEffectKind.AmmoPickupPercent => $"+{definition.value * stackCount * 100f:0.#}% reserve ammo from pickups",
                 RunUpgradeEffectKind.EveryNthHitChain => $"every {Mathf.Max(1, definition.triggerEveryNthHit)}th hit chains {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
                 _ => definition.description ?? string.Empty
             };

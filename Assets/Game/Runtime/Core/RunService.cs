@@ -39,6 +39,13 @@ namespace FrontierDepths.Core
                 equippedWeaponId = profileService.Current.equippedWeaponId,
                 acceptedBountyIds = new List<string>(profileService.GetActiveBounties()),
                 runUpgrades = new List<RunUpgradeRecord>(),
+                weaponAmmo = new RunWeaponAmmoState
+                {
+                    weaponId = profileService.Current.equippedWeaponId,
+                    currentMagazineAmmo = 6,
+                    reserveAmmo = 30,
+                    maxReserveAmmo = 60
+                },
                 currentFloor = floorOne,
                 visitedFloors = new List<FloorState> { CloneFloor(floorOne) },
                 portalAnchor = PortalAnchorState.Invalid,

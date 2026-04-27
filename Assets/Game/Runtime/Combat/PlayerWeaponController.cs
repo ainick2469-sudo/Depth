@@ -9,13 +9,15 @@ namespace FrontierDepths.Combat
     {
         private const string DefaultWeaponId = "weapon.frontier_revolver";
         private const string DefaultWeaponName = "Frontier Revolver";
-        private const float DefaultDamage = 18f;
+        private const float DefaultDamage = 15f;
         private const float DefaultFireRate = 2.857f;
         private const int DefaultMagazineSize = 6;
+        private const int DefaultStartingReserveAmmo = 30;
+        private const int DefaultMaxReserveAmmo = 60;
         private const float DefaultReloadDuration = 1.4f;
-        private const float DefaultRange = 55f;
-        private const float DefaultFullDamageRange = 30f;
-        private const float DefaultDamageMultiplierAtMaxRange = 0.65f;
+        private const float DefaultRange = 45f;
+        private const float DefaultFullDamageRange = 17f;
+        private const float DefaultDamageMultiplierAtMaxRange = 0.50f;
         private const float DefaultRevolverHearingRadius = 55f;
         private const int ImpactPoolSize = 12;
         private const int DamageNumberPoolSize = 12;
@@ -85,6 +87,8 @@ namespace FrontierDepths.Combat
         public float CritChance => GetCritChance();
         public int CurrentAmmo => weaponState != null ? weaponState.CurrentAmmo : GetMagazineSize();
         public int MagazineSize => weaponState != null ? weaponState.MagazineSize : GetMagazineSize();
+        public int ReserveAmmo => weaponState != null ? weaponState.ReserveAmmo : GetStartingReserveAmmo();
+        public int MaxReserveAmmo => weaponState != null ? weaponState.MaxReserveAmmo : GetMaxReserveAmmo();
         public bool IsReloading => weaponState != null && weaponState.IsReloading;
         public float ReloadProgress => weaponState != null ? weaponState.GetReloadProgress(Time.time) : 1f;
         public float ReloadDuration => GetReloadDuration();
@@ -153,7 +157,7 @@ namespace FrontierDepths.Combat
 
             if (weaponState == null)
             {
-                weaponState = new WeaponRuntimeState(GetMagazineSize());
+                weaponState = CreateWeaponRuntimeState();
             }
 
             if (weaponState.TryStartQueuedAutoReload(currentTime, GetReloadDuration()))
@@ -223,6 +227,7 @@ namespace FrontierDepths.Combat
             firstShotAfterReloadReady = RunStatAggregator.Current.HasFirstShotAfterReloadBonus;
             ReloadFinished?.Invoke(this);
             PublishWeaponEvent(GameplayEventType.ReloadFinished);
+            SyncAmmoToRun(true);
             return true;
         }
 
@@ -236,7 +241,7 @@ namespace FrontierDepths.Combat
 
             if (weaponState == null)
             {
-                weaponState = new WeaponRuntimeState(GetMagazineSize());
+                weaponState = CreateWeaponRuntimeState();
             }
 
             if (!weaponState.TryFire(currentTime, GetFireCooldown()))
@@ -269,6 +274,7 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            SyncAmmoToRun(false);
             pendingShotDamageMultiplier = firstShotAfterReloadReady
                 ? RunStatAggregator.Current.FirstShotAfterReloadMultiplier
                 : 1f;
@@ -297,7 +303,7 @@ namespace FrontierDepths.Combat
 
             if (weaponState == null)
             {
-                weaponState = new WeaponRuntimeState(GetMagazineSize());
+                weaponState = CreateWeaponRuntimeState();
             }
 
             if (!weaponState.TryStartReload(currentTime, GetReloadDuration()))
@@ -314,7 +320,7 @@ namespace FrontierDepths.Combat
             EnsureRuntimeReady();
             if (weaponState == null)
             {
-                weaponState = new WeaponRuntimeState(GetMagazineSize());
+                weaponState = CreateWeaponRuntimeState();
             }
 
             bool wasReloading = weaponState.IsReloading;
@@ -324,6 +330,28 @@ namespace FrontierDepths.Combat
                 firstShotAfterReloadReady = RunStatAggregator.Current.HasFirstShotAfterReloadBonus;
                 ReloadFinished?.Invoke(this);
                 PublishWeaponEvent(GameplayEventType.ReloadFinished);
+            }
+
+            if (added > 0)
+            {
+                SyncAmmoToRun(true);
+            }
+
+            return added;
+        }
+
+        public int TryAddAmmoToReserve(int amount, bool cancelReloadIfNeeded = true)
+        {
+            EnsureRuntimeReady();
+            if (weaponState == null)
+            {
+                weaponState = CreateWeaponRuntimeState();
+            }
+
+            int added = weaponState.TryAddAmmoToReserve(amount, cancelReloadIfNeeded);
+            if (added > 0)
+            {
+                SyncAmmoToRun(true);
             }
 
             return added;
@@ -665,7 +693,7 @@ namespace FrontierDepths.Combat
             playerHealth = GetComponent<PlayerHealth>();
             ResolveWeaponCamera();
             ResolveWeaponDefinition();
-            weaponState ??= new WeaponRuntimeState(GetMagazineSize());
+            weaponState ??= CreateWeaponRuntimeState();
             EnsureAudio();
             EnsureWeaponBlockout();
             EnsureMuzzleFlash();
@@ -673,6 +701,51 @@ namespace FrontierDepths.Combat
             EnsureDamageNumberPool();
             EnsureTracerPool();
             runtimeReady = true;
+        }
+
+        private WeaponRuntimeState CreateWeaponRuntimeState()
+        {
+            int magazineSize = GetMagazineSize();
+            int maxReserve = GetMaxReserveAmmo();
+            int startingReserve = GetStartingReserveAmmo();
+            RunWeaponAmmoState savedAmmo = GetRunAmmoState();
+            if (savedAmmo != null && string.Equals(savedAmmo.weaponId, GetWeaponId(), StringComparison.Ordinal))
+            {
+                savedAmmo.Normalize(GetWeaponId());
+                return new WeaponRuntimeState(
+                    magazineSize,
+                    Mathf.Clamp(savedAmmo.reserveAmmo, 0, maxReserve),
+                    maxReserve,
+                    Mathf.Clamp(savedAmmo.currentMagazineAmmo, 0, magazineSize));
+            }
+
+            return new WeaponRuntimeState(magazineSize, startingReserve, maxReserve);
+        }
+
+        private RunWeaponAmmoState GetRunAmmoState()
+        {
+            return GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current.weaponAmmo
+                : null;
+        }
+
+        private void SyncAmmoToRun(bool save)
+        {
+            if (weaponState == null || GameBootstrap.Instance == null || GameBootstrap.Instance.RunService == null)
+            {
+                return;
+            }
+
+            RunState run = GameBootstrap.Instance.RunService.Current;
+            run.weaponAmmo ??= new RunWeaponAmmoState();
+            run.weaponAmmo.weaponId = GetWeaponId();
+            run.weaponAmmo.currentMagazineAmmo = weaponState.CurrentAmmo;
+            run.weaponAmmo.reserveAmmo = weaponState.ReserveAmmo;
+            run.weaponAmmo.maxReserveAmmo = weaponState.MaxReserveAmmo;
+            if (save)
+            {
+                GameBootstrap.Instance.RunService.Save();
+            }
         }
 
         private bool IsInDungeonRuntime()
@@ -701,7 +774,7 @@ namespace FrontierDepths.Combat
 
         private void QueueAutoReload(float currentTime, float delay)
         {
-            if (!autoReloadOnEmpty || weaponState == null)
+            if (!autoReloadOnEmpty || weaponState == null || weaponState.ReserveAmmo <= 0)
             {
                 return;
             }
@@ -1155,6 +1228,21 @@ namespace FrontierDepths.Combat
         private int GetMagazineSize()
         {
             return weaponDefinition != null && weaponDefinition.magazineSize > 0 ? weaponDefinition.magazineSize : DefaultMagazineSize;
+        }
+
+        private int GetStartingReserveAmmo()
+        {
+            return weaponDefinition != null && weaponDefinition.startingReserveAmmo >= 0
+                ? weaponDefinition.startingReserveAmmo
+                : DefaultStartingReserveAmmo;
+        }
+
+        private int GetMaxReserveAmmo()
+        {
+            int configured = weaponDefinition != null && weaponDefinition.maxReserveAmmo >= 0
+                ? weaponDefinition.maxReserveAmmo
+                : DefaultMaxReserveAmmo;
+            return Mathf.Max(0, configured);
         }
 
         private float GetReloadDuration()

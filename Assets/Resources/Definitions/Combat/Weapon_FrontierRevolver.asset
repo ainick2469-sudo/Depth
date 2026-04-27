@@ -16,13 +16,15 @@ MonoBehaviour:
   displayName: Frontier Revolver
   description: Starter sidearm for the first descent.
   weaponArchetype: 0
-  baseDamage: 18
+  baseDamage: 15
   fireRate: 2.857
   magazineSize: 6
+  startingReserveAmmo: 30
+  maxReserveAmmo: 60
   reloadDuration: 1.4
-  maxRange: 55
-  fullDamageRange: 30
-  damageMultiplierAtMaxRange: 0.65
+  maxRange: 45
+  fullDamageRange: 17
+  damageMultiplierAtMaxRange: 0.5
   damageType: 0
   deliveryType: 0
   critChance: 0

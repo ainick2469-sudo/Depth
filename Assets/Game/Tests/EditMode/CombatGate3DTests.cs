@@ -118,7 +118,7 @@ namespace FrontierDepths.Tests.EditMode
                 DamageInfo damageInfo = weapon.CreateDamageInfoForTests(Vector3.zero, Vector3.up);
 
                 Assert.IsTrue(damageInfo.isCritical);
-                Assert.AreEqual(18f * 1.10f * RunStatAggregator.CriticalHitMultiplier, damageInfo.amount, 0.001f);
+                Assert.AreEqual(15f * 1.10f * RunStatAggregator.CriticalHitMultiplier, damageInfo.amount, 0.001f);
             }
             finally
             {
@@ -170,12 +170,13 @@ namespace FrontierDepths.Tests.EditMode
                     Assert.IsTrue(weapon.TryFire(i * 0.5f));
                 }
 
+                int reserveBefore = weapon.ReserveAmmo;
                 AmmoPickup pickup = pickupObject.AddComponent<AmmoPickup>();
                 pickup.Configure(2);
 
                 Assert.IsTrue(pickup.ApplyToPlayer(player));
-                Assert.AreEqual(3, weapon.CurrentAmmo);
-                Assert.LessOrEqual(weapon.CurrentAmmo, weapon.MagazineSize);
+                Assert.AreEqual(0, weapon.CurrentAmmo);
+                Assert.AreEqual(Mathf.Min(weapon.MaxReserveAmmo, reserveBefore + 3), weapon.ReserveAmmo);
             }
             finally
             {
