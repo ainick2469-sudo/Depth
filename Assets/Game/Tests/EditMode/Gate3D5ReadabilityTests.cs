@@ -310,6 +310,15 @@ namespace FrontierDepths.Tests.EditMode
                 Vector3 actualForward = rotation * Vector3.forward;
                 Assert.AreEqual(expectedForward.x, actualForward.x, 0.001f);
                 Assert.AreEqual(expectedForward.z, actualForward.z, 0.001f);
+
+                cameraObject.transform.position = new Vector3(10f, 2f, 0f);
+                rotation = CombatFeedbackService.GetDamageNumberBillboardRotationForTests(Vector3.zero, camera);
+                expectedForward = (Vector3.zero - cameraObject.transform.position).normalized;
+                actualForward = rotation * Vector3.forward;
+                Assert.AreEqual(expectedForward.x, actualForward.x, 0.001f);
+                Assert.AreEqual(expectedForward.z, actualForward.z, 0.001f);
+
+                Assert.AreEqual(Quaternion.identity, CombatFeedbackService.GetDamageNumberBillboardRotationForTests(Vector3.zero, null));
             }
             finally
             {

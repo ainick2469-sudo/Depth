@@ -55,6 +55,7 @@ namespace FrontierDepths.Combat
         private AudioClip reloadFinishClip;
         private AudioClip dryFireClip;
         private GameObject muzzleFlash;
+        private WeaponModelView weaponModelView;
         private float muzzleFlashHideTime;
         private int nextImpactMarker;
         private int nextDamageNumber;
@@ -399,6 +400,7 @@ namespace FrontierDepths.Combat
             }
 
             WeaponEquipped?.Invoke(this);
+            EnsureWeaponModelView();
             GameplayEventBus.Publish(new GameplayEvent
             {
                 eventType = GameplayEventType.WeaponSwapped,
@@ -730,6 +732,7 @@ namespace FrontierDepths.Combat
             HideAllFeedback();
             ResolveWeaponCamera();
             ResolveWeaponDefinition();
+            EnsureWeaponModelView();
         }
 
         private void EnsureRuntimeReady()
@@ -746,6 +749,7 @@ namespace FrontierDepths.Combat
             weaponState ??= CreateWeaponRuntimeState();
             EnsureAudio();
             EnsureWeaponBlockout();
+            EnsureWeaponModelView();
             EnsureMuzzleFlash();
             EnsureImpactPool();
             EnsureDamageNumberPool();
@@ -904,6 +908,28 @@ namespace FrontierDepths.Combat
             Transform muzzlePoint = new GameObject("MuzzlePoint").transform;
             muzzlePoint.SetParent(root, false);
             muzzlePoint.localPosition = new Vector3(0f, 0.02f, 0.47f);
+        }
+
+        private void EnsureWeaponModelView()
+        {
+            if (weaponCamera == null)
+            {
+                return;
+            }
+
+            Transform blockoutRoot = weaponCamera.transform.Find("WeaponBlockout");
+            if (blockoutRoot == null)
+            {
+                return;
+            }
+
+            weaponModelView = blockoutRoot.GetComponent<WeaponModelView>();
+            if (weaponModelView == null)
+            {
+                weaponModelView = blockoutRoot.gameObject.AddComponent<WeaponModelView>();
+            }
+
+            weaponModelView.Configure(blockoutRoot, GetWeaponId());
         }
 
         private static void CreateBlockoutPart(string name, Transform parent, PrimitiveType primitiveType, Vector3 localPosition, Vector3 localScale, Quaternion localRotation, Material material)

@@ -18,11 +18,11 @@ namespace FrontierDepths.UI
         [SerializeField] private Text weaponIconLabel;
         [SerializeField] private Text weaponNameText;
         [SerializeField] private Text ammoText;
-        [SerializeField] private RectTransform ammoPipContainer;
+        [SerializeField] private RectTransform chamberRoot;
         [SerializeField] private Text reloadText;
         [SerializeField] private Image hitMarkerImage;
 
-        private readonly List<Image> ammoPips = new List<Image>();
+        private readonly List<Image> chamberFills = new List<Image>();
         private PlayerWeaponController weapon;
         private float nextResolveTime;
         private float nextPollingRefreshTime;
@@ -36,15 +36,19 @@ namespace FrontierDepths.UI
         private Color hitMarkerColor = new Color(1f, 0.95f, 0.62f, 0.95f);
         private Vector2 hitMarkerSize = new Vector2(22f, 22f);
 
-        internal int AmmoPipCountForTests => ammoPips.Count;
-        internal int FilledAmmoPipCountForTests => CountFilledPips();
+        internal int ChamberCountForTests => chamberFills.Count;
+        internal int FilledChamberCountForTests => CountFilledChambers();
+        internal int AmmoPipCountForTests => ChamberCountForTests;
+        internal int FilledAmmoPipCountForTests => FilledChamberCountForTests;
         internal string AmmoTextForTests => ammoText != null ? ammoText.text : string.Empty;
         internal string WeaponNameTextForTests => weaponNameText != null ? weaponNameText.text : string.Empty;
         internal bool HasPanelRootForTests => panelRoot != null;
         internal bool HasBackgroundFrameForTests => backgroundFrameImage != null;
-        internal bool HasAmmoPipContainerForTests => ammoPipContainer != null;
+        internal bool HasAmmoPipContainerForTests => false;
+        internal bool HasChamberIndicatorForTests => chamberRoot != null;
+        internal bool HasOldAmmoPipStripForTests => FindNamedTransform(transform, "AmmoPipContainer") != null;
         internal bool IsIconFallbackVisibleForTests => weaponIconLabel != null && weaponIconLabel.enabled;
-        internal bool UsesAmmoBulletFallbackForTests => ammoPips.Count > 0 && ammoPips[0] != null && ammoPips[0].sprite == null;
+        internal bool UsesAmmoBulletFallbackForTests => chamberFills.Count > 0 && chamberFills[0] != null && chamberFills[0].sprite == null;
 
         private void Awake()
         {
@@ -173,7 +177,7 @@ namespace FrontierDepths.UI
 
         internal void ConfigureAmmoPipsForTests(int magazineSize)
         {
-            ConfigureAmmoPips(magazineSize);
+            ConfigureChambers(WeaponCatalog.FrontierRevolverId, magazineSize);
         }
 
         private void RefreshFromWeaponState()
@@ -204,8 +208,8 @@ namespace FrontierDepths.UI
             }
 
             ConfigureWeaponIcon(lastWeaponId);
-            ConfigureAmmoPips(lastMagazineSize);
-            UpdateAmmoPips(lastCurrentAmmo, lastMagazineSize);
+            ConfigureChambers(lastWeaponId, lastMagazineSize);
+            UpdateChambers(lastCurrentAmmo, lastMagazineSize);
 
             if (reloadText != null)
             {
@@ -250,92 +254,78 @@ namespace FrontierDepths.UI
             };
         }
 
-        private void ConfigureAmmoPips(int magazineSize)
+        private void ConfigureChambers(string weaponId, int magazineSize)
         {
-            int slotCount = magazineSize <= MaxIndividualPips ? Mathf.Max(1, magazineSize) : MaxIndividualPips;
-            if (ammoPips.Count == slotCount)
+            bool revolver = string.Equals(weaponId, WeaponCatalog.FrontierRevolverId, System.StringComparison.Ordinal) && magazineSize == 6;
+            int slotCount = revolver ? 6 : 0;
+            if (chamberFills.Count == slotCount)
             {
                 return;
             }
 
-            ClearAmmoPips();
-            Font font = UiTheme.RuntimeFont;
-            Sprite pipSprite = HudSpriteCatalog.TryGetAmmoBulletSprite() ?? HudSpriteCatalog.TryGetAmmoPip();
-            for (int i = 0; i < slotCount; i++)
+            ClearChambers();
+            if (chamberRoot != null)
             {
-                GameObject pipObject = new GameObject($"AmmoPip_{i}", typeof(RectTransform), typeof(Image));
-                pipObject.transform.SetParent(ammoPipContainer, false);
-                Image pip = pipObject.GetComponent<Image>();
-                pip.sprite = pipSprite;
-                pip.type = Image.Type.Simple;
-                pip.preserveAspect = pipSprite != null;
-                pip.raycastTarget = false;
-                RectTransform rect = pip.rectTransform;
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
-                rect.pivot = new Vector2(0f, 0.5f);
-                rect.sizeDelta = pipSprite != null
-                    ? new Vector2(HudLayoutConstants.AmmoPipSize, HudLayoutConstants.AmmoPipSize)
-                    : new Vector2(7f, 22f);
-                rect.anchoredPosition = new Vector2(i * (HudLayoutConstants.AmmoPipSize + HudLayoutConstants.AmmoPipSpacing), 0f);
-                if (pipSprite == null)
-                {
-                    rect.localEulerAngles = new Vector3(0f, 0f, -18f);
-                }
-
-                ammoPips.Add(pip);
+                chamberRoot.gameObject.SetActive(slotCount > 0);
             }
 
-            if (magazineSize > MaxIndividualPips && ammoPipContainer.Find("AmmoPipCondensedLabel") == null)
+            for (int i = 0; i < slotCount; i++)
             {
-                GameObject labelObject = new GameObject("AmmoPipCondensedLabel", typeof(RectTransform), typeof(Text));
-                labelObject.transform.SetParent(ammoPipContainer, false);
-                Text label = labelObject.GetComponent<Text>();
-                label.font = font;
-                label.fontSize = 12;
-                label.alignment = TextAnchor.MiddleLeft;
-                label.color = new Color(UiTheme.MutedText.r, UiTheme.MutedText.g, UiTheme.MutedText.b, 0.88f);
-                label.text = "SEG";
-                label.raycastTarget = false;
-                RectTransform labelRect = label.rectTransform;
-                labelRect.anchorMin = labelRect.anchorMax = new Vector2(0f, 0.5f);
-                labelRect.pivot = new Vector2(0f, 0.5f);
-                labelRect.sizeDelta = new Vector2(36f, 18f);
-                labelRect.anchoredPosition = new Vector2(slotCount * (HudLayoutConstants.AmmoPipSize + HudLayoutConstants.AmmoPipSpacing) + 4f, 0f);
+                float angle = 90f - i * 60f;
+                float radians = angle * Mathf.Deg2Rad;
+                Vector2 position = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * 25f;
+
+                GameObject chamberObject = new GameObject($"CylinderChamber_{i}", typeof(RectTransform), typeof(Image));
+                chamberObject.transform.SetParent(chamberRoot, false);
+                Image chamber = chamberObject.GetComponent<Image>();
+                chamber.sprite = HudRuntimeSpriteFactory.GetFilledCircleSprite();
+                chamber.type = Image.Type.Simple;
+                chamber.raycastTarget = false;
+                RectTransform rect = chamber.rectTransform;
+                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.sizeDelta = new Vector2(15f, 15f);
+                rect.anchoredPosition = position;
+                chamberFills.Add(chamber);
             }
         }
 
-        private void UpdateAmmoPips(int currentMagazineAmmo, int magazineSize)
+        private void UpdateChambers(int currentMagazineAmmo, int magazineSize)
         {
-            if (ammoPips.Count == 0)
+            if (chamberFills.Count == 0)
             {
                 return;
             }
 
-            int filledSlots = magazineSize <= MaxIndividualPips
-                ? Mathf.Clamp(currentMagazineAmmo, 0, ammoPips.Count)
-                : Mathf.CeilToInt(Mathf.Clamp01(currentMagazineAmmo / (float)Mathf.Max(1, magazineSize)) * ammoPips.Count);
-            for (int i = 0; i < ammoPips.Count; i++)
+            int filledSlots = Mathf.Clamp(currentMagazineAmmo, 0, chamberFills.Count);
+            for (int i = 0; i < chamberFills.Count; i++)
             {
-                Image pip = ammoPips[i];
+                Image pip = chamberFills[i];
                 bool filled = i < filledSlots;
                 pip.enabled = true;
                 pip.color = filled
-                    ? new Color(0.96f, 0.78f, 0.34f, 0.98f)
-                    : new Color(0.22f, 0.2f, 0.16f, 0.38f);
+                    ? new Color(1f, 0.76f, 0.28f, 0.98f)
+                    : new Color(0.06f, 0.055f, 0.045f, 0.5f);
             }
         }
 
-        private void ClearAmmoPips()
+        private void ClearChambers()
         {
-            if (ammoPipContainer != null)
+            if (chamberRoot != null)
             {
-                for (int i = ammoPipContainer.childCount - 1; i >= 0; i--)
+                for (int i = chamberRoot.childCount - 1; i >= 0; i--)
                 {
-                    DestroyUiObject(ammoPipContainer.GetChild(i).gameObject);
+                    Transform child = chamberRoot.GetChild(i);
+                    if (!child.name.StartsWith("CylinderChamber_"))
+                    {
+                        continue;
+                    }
+
+                    DestroyUiObject(child.gameObject);
                 }
             }
 
-            ammoPips.Clear();
+            chamberFills.Clear();
         }
 
         private void HandleHitFeedbackReceived(WeaponHitFeedback feedback)
@@ -390,7 +380,12 @@ namespace FrontierDepths.UI
             weaponIconLabel ??= FindNamedComponent<Text>("WeaponIconLabel");
             weaponNameText ??= FindNamedComponent<Text>("WeaponNameText");
             ammoText ??= FindNamedComponent<Text>("AmmoText");
-            ammoPipContainer ??= FindNamedComponent<RectTransform>("AmmoPipContainer");
+            chamberRoot ??= FindNamedComponent<RectTransform>("CylinderChamberRoot");
+            Transform oldPipStrip = FindNamedTransform(transform, "AmmoPipContainer");
+            if (oldPipStrip != null)
+            {
+                DestroyUiObject(oldPipStrip.gameObject);
+            }
             reloadText ??= FindNamedComponent<Text>("ReloadStatusText");
             hitMarkerImage ??= FindNamedComponent<Image>("WeaponHitMarker");
 
@@ -486,17 +481,21 @@ namespace FrontierDepths.UI
             ammoRect.sizeDelta = new Vector2(190f, 48f);
             ammoRect.anchoredPosition = new Vector2(-32f, 52f);
 
-            if (ammoPipContainer == null)
+            if (chamberRoot == null)
             {
-                GameObject pipContainerObject = new GameObject("AmmoPipContainer", typeof(RectTransform));
-                pipContainerObject.transform.SetParent(panelRoot, false);
-                ammoPipContainer = pipContainerObject.GetComponent<RectTransform>();
+                GameObject chamberRootObject = new GameObject("CylinderChamberRoot", typeof(RectTransform), typeof(Image));
+                chamberRootObject.transform.SetParent(panelRoot, false);
+                chamberRoot = chamberRootObject.GetComponent<RectTransform>();
+                Image cylinderBackground = chamberRootObject.GetComponent<Image>();
+                cylinderBackground.sprite = HudRuntimeSpriteFactory.GetFilledCircleSprite();
+                cylinderBackground.color = new Color(0.04f, 0.035f, 0.03f, 0.78f);
+                cylinderBackground.raycastTarget = false;
             }
 
-            ammoPipContainer.anchorMin = ammoPipContainer.anchorMax = new Vector2(0f, 0f);
-            ammoPipContainer.pivot = new Vector2(0f, 0.5f);
-            ammoPipContainer.sizeDelta = new Vector2(156f, 24f);
-            ammoPipContainer.anchoredPosition = new Vector2(34f, 31f);
+            chamberRoot.anchorMin = chamberRoot.anchorMax = new Vector2(1f, 0f);
+            chamberRoot.pivot = new Vector2(0.5f, 0.5f);
+            chamberRoot.sizeDelta = new Vector2(76f, 76f);
+            chamberRoot.anchoredPosition = new Vector2(-76f, 92f);
 
             if (reloadText == null)
             {
@@ -595,12 +594,12 @@ namespace FrontierDepths.UI
             }
         }
 
-        private int CountFilledPips()
+        private int CountFilledChambers()
         {
             int count = 0;
-            for (int i = 0; i < ammoPips.Count; i++)
+            for (int i = 0; i < chamberFills.Count; i++)
             {
-                if (ammoPips[i] != null && ammoPips[i].color.a > 0.8f)
+                if (chamberFills[i] != null && chamberFills[i].color.a > 0.8f)
                 {
                     count++;
                 }

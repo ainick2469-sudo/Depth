@@ -25,6 +25,8 @@ namespace FrontierDepths.UI
         private RectTransform contentRect;
         private RectTransform playerMarkerLayerRect;
         private CanvasGroup canvasGroup;
+        private Image maskImage;
+        private Mask circularMask;
         private Image frameImage;
         private Text playerArrow;
         private DungeonBuildResult buildResult;
@@ -60,6 +62,8 @@ namespace FrontierDepths.UI
         internal RectTransform FrameLayerForTests => frameLayerRect;
         internal RectTransform ContentMaskForTests => contentMaskRect;
         internal RectTransform ContentRootForTests => contentRect;
+        internal bool HasCircularMaskForTests => circularMask != null && circularMask.enabled && maskImage != null && maskImage.sprite != null && !circularMask.showMaskGraphic;
+        internal bool FrameOverlaysMaskForTests => frameLayerRect != null && contentMaskRect != null && frameLayerRect.parent == contentMaskRect.parent && frameLayerRect.GetSiblingIndex() > contentMaskRect.GetSiblingIndex();
         internal int FrameCountForTests => CountNamedChildren(panelRect, "MinimapFrame");
         internal bool PlayerMarkerUnderContentRootForTests => playerArrow != null && contentRect != null && playerArrow.transform.IsChildOf(contentRect);
 
@@ -475,13 +479,20 @@ namespace FrontierDepths.UI
             frameLayerRect.anchoredPosition = Vector2.zero;
 
             float contentSize = GetContentSize();
-            GameObject contentMaskObject = new GameObject("ContentMaskLayer", typeof(RectTransform), typeof(RectMask2D));
+            GameObject contentMaskObject = new GameObject("CircularMaskViewport", typeof(RectTransform), typeof(Image), typeof(Mask));
             contentMaskObject.transform.SetParent(panelObject.transform, false);
             contentMaskRect = contentMaskObject.GetComponent<RectTransform>();
             contentMaskRect.anchorMin = contentMaskRect.anchorMax = new Vector2(0.5f, 0.5f);
             contentMaskRect.pivot = new Vector2(0.5f, 0.5f);
             contentMaskRect.sizeDelta = new Vector2(contentSize, contentSize);
             contentMaskRect.anchoredPosition = Vector2.zero;
+            maskImage = contentMaskObject.GetComponent<Image>();
+            maskImage.sprite = HudRuntimeSpriteFactory.GetFilledCircleSprite();
+            maskImage.type = Image.Type.Simple;
+            maskImage.color = Color.white;
+            maskImage.raycastTarget = false;
+            circularMask = contentMaskObject.GetComponent<Mask>();
+            circularMask.showMaskGraphic = false;
 
             GameObject contentObject = new GameObject("MinimapContentRoot", typeof(RectTransform));
             contentObject.transform.SetParent(contentMaskObject.transform, false);
@@ -523,6 +534,7 @@ namespace FrontierDepths.UI
             frameRect.sizeDelta = new Vector2(minimapSize, minimapSize);
             frameRect.anchoredPosition = Vector2.zero;
             ConfigureFrameImage();
+            frameLayerRect.SetAsLastSibling();
 
             panelObject.SetActive(false);
         }

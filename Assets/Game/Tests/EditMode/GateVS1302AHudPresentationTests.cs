@@ -53,7 +53,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void WeaponHud_CreatesOnePanelFrameAndPipContainer()
+        public void WeaponHud_CreatesOnePanelFrameAndCylinderChambers()
         {
             GameObject hud = CreateRectObject("Hud");
             GameObject player = CreateWeaponPlayer(out PlayerWeaponController weapon);
@@ -68,11 +68,12 @@ namespace FrontierDepths.Tests.EditMode
 
                 Assert.IsTrue(view.HasPanelRootForTests);
                 Assert.IsTrue(view.HasBackgroundFrameForTests);
-                Assert.IsTrue(view.HasAmmoPipContainerForTests);
+                Assert.IsTrue(view.HasChamberIndicatorForTests);
+                Assert.IsFalse(view.HasOldAmmoPipStripForTests);
                 Assert.AreEqual(1, CountNamedChildren(hud.transform, "WeaponPanelRoot"));
                 Assert.AreEqual(1, CountNamedChildren(hud.transform, "BackgroundFrameImage"));
-                Assert.AreEqual(1, CountNamedChildren(hud.transform, "AmmoPipContainer"));
-                Assert.AreEqual(6, view.AmmoPipCountForTests);
+                Assert.AreEqual(1, CountNamedChildren(hud.transform, "CylinderChamberRoot"));
+                Assert.AreEqual(6, view.ChamberCountForTests);
             }
             finally
             {
@@ -82,7 +83,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void WeaponHud_AmmoPipsTrackLoadedMagazineShotsAndReload()
+        public void WeaponHud_CylinderChambersTrackLoadedMagazineShotsAndReload()
         {
             GameObject hud = CreateRectObject("Hud");
             GameObject player = CreateWeaponPlayer(out PlayerWeaponController weapon);
@@ -94,13 +95,13 @@ namespace FrontierDepths.Tests.EditMode
                 int initialReserve = weapon.ReserveAmmo;
 
                 Assert.AreEqual($"6 / {initialReserve}", view.AmmoTextForTests);
-                Assert.AreEqual(6, view.FilledAmmoPipCountForTests);
+                Assert.AreEqual(6, view.FilledChamberCountForTests);
 
                 Assert.IsTrue(weapon.HandleWeaponInputFrame(0f, true, true, false).fired);
                 view.RefreshFromWeaponStateForTests();
 
                 Assert.AreEqual($"5 / {initialReserve}", view.AmmoTextForTests);
-                Assert.AreEqual(5, view.FilledAmmoPipCountForTests);
+                Assert.AreEqual(5, view.FilledChamberCountForTests);
 
                 Assert.IsTrue(weapon.HandleWeaponInputFrame(0.5f, false, false, true).reloadStarted);
                 view.RefreshFromWeaponStateForTests();
@@ -108,7 +109,7 @@ namespace FrontierDepths.Tests.EditMode
                 view.RefreshFromWeaponStateForTests();
 
                 Assert.AreEqual($"6 / {initialReserve - 1}", view.AmmoTextForTests);
-                Assert.AreEqual(6, view.FilledAmmoPipCountForTests);
+                Assert.AreEqual(6, view.FilledChamberCountForTests);
             }
             finally
             {
@@ -118,7 +119,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void WeaponHud_DryFireDoesNotCreateNegativePips()
+        public void WeaponHud_DryFireDoesNotCreateNegativeChambers()
         {
             GameObject hud = CreateRectObject("Hud");
             GameObject player = CreateWeaponPlayer(out PlayerWeaponController weapon);
@@ -137,7 +138,7 @@ namespace FrontierDepths.Tests.EditMode
                 view.RefreshFromWeaponStateForTests();
 
                 Assert.AreEqual($"0 / {initialReserve}", view.AmmoTextForTests);
-                Assert.AreEqual(0, view.FilledAmmoPipCountForTests);
+                Assert.AreEqual(0, view.FilledChamberCountForTests);
             }
             finally
             {
@@ -147,7 +148,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void WeaponHud_MissingBulletSpriteUsesReadableRuntimeFallback()
+        public void WeaponHud_RemovesOldBulletStripAndUsesRuntimeCylinder()
         {
             GameObject hud = CreateRectObject("Hud");
             GameObject player = CreateWeaponPlayer(out PlayerWeaponController weapon);
@@ -156,12 +157,8 @@ namespace FrontierDepths.Tests.EditMode
                 WeaponHudView view = hud.AddComponent<WeaponHudView>();
                 view.SetWeaponForTests(weapon);
 
-                Assert.AreEqual(6, view.AmmoPipCountForTests);
-                Assert.IsTrue(
-                    HudSpriteCatalog.TryGetAmmoBulletSprite() != null ||
-                    HudSpriteCatalog.TryGetAmmoPip() != null ||
-                    view.UsesAmmoBulletFallbackForTests,
-                    "Weapon HUD should either use a cached ammo sprite or fall back to bullet-shaped runtime pips.");
+                Assert.AreEqual(6, view.ChamberCountForTests);
+                Assert.IsFalse(view.HasOldAmmoPipStripForTests);
             }
             finally
             {
@@ -185,8 +182,8 @@ namespace FrontierDepths.Tests.EditMode
 
                 Assert.AreEqual("Frontier Rifle", view.WeaponNameTextForTests);
                 Assert.AreEqual("5 / 24", view.AmmoTextForTests);
-                Assert.AreEqual(5, view.AmmoPipCountForTests);
-                Assert.AreEqual(5, view.FilledAmmoPipCountForTests);
+                Assert.AreEqual(0, view.ChamberCountForTests);
+                Assert.AreEqual(0, view.FilledChamberCountForTests);
             }
             finally
             {
@@ -225,7 +222,10 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsNotNull(minimap.FrameLayerForTests);
                 Assert.IsNotNull(minimap.ContentMaskForTests);
                 Assert.IsNotNull(minimap.ContentRootForTests);
+                Assert.IsTrue(minimap.HasCircularMaskForTests);
+                Assert.IsTrue(minimap.FrameOverlaysMaskForTests);
                 Assert.IsFalse(minimap.ContentRootForTests.IsChildOf(minimap.FrameLayerForTests));
+                Assert.IsTrue(minimap.ContentRootForTests.IsChildOf(minimap.ContentMaskForTests));
                 Assert.AreEqual(2, minimap.RoomElementCount);
                 Assert.AreEqual(1, minimap.CorridorElementCount);
                 Assert.IsTrue(minimap.ContentRootForTests.GetComponentsInChildren<Text>(true).Any(text => text.name.StartsWith("RoomIcon_")));
@@ -295,6 +295,53 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Object.DestroyImmediate(hud);
                 Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void WeaponModelView_LoadsRevolverPrefabAndDoesNotDuplicate()
+        {
+            GameObject root = new GameObject("WeaponBlockout");
+            GameObject graybox = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                graybox.name = "Frame";
+                graybox.transform.SetParent(root.transform, false);
+                WeaponModelView view = root.AddComponent<WeaponModelView>();
+
+                view.Configure(root.transform, WeaponCatalog.FrontierRevolverId);
+                view.Configure(root.transform, WeaponCatalog.FrontierRevolverId);
+
+                Assert.IsTrue(view.ModelLoadedForTests, "FrontierRevolver_Model prefab should be loadable from Resources.");
+                Assert.AreEqual(1, view.InstanceCountForTests);
+                Assert.IsFalse(graybox.GetComponent<Renderer>().enabled, "Graybox renderers should hide when the imported model loads.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void WeaponModelView_UsesGrayboxFallbackForNonRevolver()
+        {
+            GameObject root = new GameObject("WeaponBlockout");
+            GameObject graybox = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                graybox.name = "Frame";
+                graybox.transform.SetParent(root.transform, false);
+                WeaponModelView view = root.AddComponent<WeaponModelView>();
+
+                view.Configure(root.transform, WeaponCatalog.FrontierRifleId);
+
+                Assert.IsFalse(view.ModelLoadedForTests);
+                Assert.IsTrue(view.IsGrayboxFallbackActiveForTests);
+                Assert.IsTrue(graybox.GetComponent<Renderer>().enabled);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
             }
         }
 

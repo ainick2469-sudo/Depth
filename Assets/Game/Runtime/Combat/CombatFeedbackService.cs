@@ -93,7 +93,7 @@ namespace FrontierDepths.Combat
             }
         }
 
-        private void Update()
+        private void LateUpdate()
         {
             Camera camera = Camera.main;
             for (int i = 0; i < damageNumbers.Length; i++)
