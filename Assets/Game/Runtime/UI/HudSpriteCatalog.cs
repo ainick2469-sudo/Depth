@@ -71,6 +71,11 @@ namespace FrontierDepths.UI
             return LoadSprite("Icons/Ammo/ammo_pip");
         }
 
+        public static Sprite TryGetAmmoBulletSprite()
+        {
+            return LoadSprite("Icons/Ammo/ammo_bullet");
+        }
+
         public static Sprite TryGetFallbackIcon()
         {
             return LoadSprite("Icons/Weapons/fallback_weapon");

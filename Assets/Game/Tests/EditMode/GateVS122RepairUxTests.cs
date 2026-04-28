@@ -132,7 +132,7 @@ namespace FrontierDepths.Tests.EditMode
             Assert.AreEqual(100f, settings.fov);
             Assert.AreEqual(0f, settings.masterVolume);
             Assert.AreEqual(0.1f, settings.minimapOpacity);
-            Assert.AreEqual(3f, settings.minimapZoom);
+            Assert.AreEqual(2.5f, settings.minimapZoom);
         }
 
         private static DungeonBuildResult CreateBuild()

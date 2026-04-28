@@ -12,6 +12,7 @@ namespace FrontierDepths.UI
 
         public RectTransform RootRect => rootRect;
         public string CurrentLabel => label != null ? label.text : string.Empty;
+        public Color FillColorForTests => fill != null ? fill.color : default;
 
         public HudBarView(Transform parent, string name, Font font, Color fillColor, Vector2 anchoredPosition, float width = 230f)
         {
@@ -61,6 +62,12 @@ namespace FrontierDepths.UI
             current = Mathf.Clamp(current, 0f, max);
             fill.rectTransform.sizeDelta = new Vector2(width * Mathf.Clamp01(current / max), 16f);
             label.text = $"{title} {Mathf.CeilToInt(current)}/{Mathf.CeilToInt(max)}";
+        }
+
+        public void SetNormalized(string title, float normalized, string labelText)
+        {
+            fill.rectTransform.sizeDelta = new Vector2(width * Mathf.Clamp01(normalized), 16f);
+            label.text = string.IsNullOrWhiteSpace(labelText) ? title : labelText;
         }
     }
 }

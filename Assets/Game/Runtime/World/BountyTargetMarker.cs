@@ -31,11 +31,20 @@ namespace FrontierDepths.World
             WorldLabelBillboard.Create(
                 transform,
                 "BountyTargetLabel",
-                targetName,
+                $"BOUNTY\n{targetName}",
                 Vector3.up * 2.65f,
                 new Color(1f, 0.32f, 0.22f, 1f),
-                28f,
+                34f,
                 true);
+
+            WorldLabelBillboard.Create(
+                transform,
+                "BountyTargetIcon",
+                "!",
+                Vector3.up * 3.35f,
+                new Color(1f, 0.82f, 0.18f, 1f),
+                38f,
+                false);
         }
     }
 }

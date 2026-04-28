@@ -209,6 +209,12 @@ namespace FrontierDepths.Core
             return IsKeyDown(record.primary) || IsKeyDown(record.secondary);
         }
 
+        public static bool GetKeyUp(GameplayInputAction action)
+        {
+            InputBindingRecord record = Current.Get(action);
+            return IsKeyUp(record.primary) || IsKeyUp(record.secondary);
+        }
+
         public static Vector2 GetMovementVector()
         {
             float x = 0f;
@@ -313,6 +319,11 @@ namespace FrontierDepths.Core
         private static bool IsKeyDown(string keyName)
         {
             return Enum.TryParse(keyName, out KeyCode keyCode) && keyCode != KeyCode.None && Input.GetKeyDown(keyCode);
+        }
+
+        private static bool IsKeyUp(string keyName)
+        {
+            return Enum.TryParse(keyName, out KeyCode keyCode) && keyCode != KeyCode.None && Input.GetKeyUp(keyCode);
         }
 
         private static string PrettyKey(string keyName)

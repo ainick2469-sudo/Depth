@@ -44,6 +44,7 @@ namespace FrontierDepths.UI
         internal bool HasBackgroundFrameForTests => backgroundFrameImage != null;
         internal bool HasAmmoPipContainerForTests => ammoPipContainer != null;
         internal bool IsIconFallbackVisibleForTests => weaponIconLabel != null && weaponIconLabel.enabled;
+        internal bool UsesAmmoBulletFallbackForTests => ammoPips.Count > 0 && ammoPips[0] != null && ammoPips[0].sprite == null;
 
         private void Awake()
         {
@@ -259,7 +260,7 @@ namespace FrontierDepths.UI
 
             ClearAmmoPips();
             Font font = UiTheme.RuntimeFont;
-            Sprite pipSprite = HudSpriteCatalog.TryGetAmmoPip();
+            Sprite pipSprite = HudSpriteCatalog.TryGetAmmoBulletSprite() ?? HudSpriteCatalog.TryGetAmmoPip();
             for (int i = 0; i < slotCount; i++)
             {
                 GameObject pipObject = new GameObject($"AmmoPip_{i}", typeof(RectTransform), typeof(Image));
@@ -272,8 +273,15 @@ namespace FrontierDepths.UI
                 RectTransform rect = pip.rectTransform;
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
                 rect.pivot = new Vector2(0f, 0.5f);
-                rect.sizeDelta = new Vector2(HudLayoutConstants.AmmoPipSize, HudLayoutConstants.AmmoPipSize);
+                rect.sizeDelta = pipSprite != null
+                    ? new Vector2(HudLayoutConstants.AmmoPipSize, HudLayoutConstants.AmmoPipSize)
+                    : new Vector2(7f, 22f);
                 rect.anchoredPosition = new Vector2(i * (HudLayoutConstants.AmmoPipSize + HudLayoutConstants.AmmoPipSpacing), 0f);
+                if (pipSprite == null)
+                {
+                    rect.localEulerAngles = new Vector3(0f, 0f, -18f);
+                }
+
                 ammoPips.Add(pip);
             }
 
@@ -312,8 +320,8 @@ namespace FrontierDepths.UI
                 bool filled = i < filledSlots;
                 pip.enabled = true;
                 pip.color = filled
-                    ? new Color(0.94f, 0.78f, 0.36f, 0.98f)
-                    : new Color(0.18f, 0.17f, 0.14f, 0.62f);
+                    ? new Color(0.96f, 0.78f, 0.34f, 0.98f)
+                    : new Color(0.22f, 0.2f, 0.16f, 0.38f);
             }
         }
 

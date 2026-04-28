@@ -17,6 +17,8 @@ namespace FrontierDepths.UI
         private GameplayInputAction? pendingRebind;
 
         public bool IsShowingKeybindings => keybindingsGroup != null && keybindingsGroup.gameObject.activeSelf;
+        internal int BindingRowCountForTests => bindingRows.Count;
+        internal float SettingsGroupHeightForTests => settingsGroup != null ? settingsGroup.rect.height : 0f;
 
         private void Update()
         {
@@ -60,14 +62,14 @@ namespace FrontierDepths.UI
             settingsGroup = CreateGroup(root, "SharedSettingsRows");
             keybindingsGroup = CreateGroup(root, "SharedKeybindingRows");
 
-            CreateLabel(settingsGroup, "SettingsText", string.Empty, UiTheme.SmallSize, new Vector2(0f, -16f), new Vector2(480f, 205f), TextAnchor.UpperLeft, UiTheme.Text, out settingsText);
+            CreateLabel(settingsGroup, "SettingsText", string.Empty, UiTheme.SmallSize, new Vector2(0f, -12f), new Vector2(480f, 174f), TextAnchor.UpperLeft, UiTheme.Text, out settingsText);
             CreateSettingsButtons(settingsGroup);
 
             CreateBindingRows(keybindingsGroup);
 
             if (closeCallback != null)
             {
-                CreateButton(root, "CloseSharedSettings", "Close", new Vector2(0f, -600f), () => closeCallback(), 180f, 36f, UiTheme.SmallSize);
+                CreateButton(root, "CloseSharedSettings", "Close", new Vector2(0f, -602f), () => closeCallback(), 180f, 32f, UiTheme.SmallSize);
             }
 
             ShowSettings();
@@ -97,35 +99,37 @@ namespace FrontierDepths.UI
 
         private void CreateSettingsButtons(RectTransform parent)
         {
-            float y = -242f;
-            CreateButton(parent, "SensitivityMinus", "Sensitivity -", new Vector2(-122f, y), () => Adjust(s => s.mouseSensitivity -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "SensitivityPlus", "Sensitivity +", new Vector2(122f, y), () => Adjust(s => s.mouseSensitivity += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "FovMinus", "FOV -", new Vector2(-122f, y), () => Adjust(s => s.fov -= 5f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "FovPlus", "FOV +", new Vector2(122f, y), () => Adjust(s => s.fov += 5f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "MasterVolumeMinus", "Master -", new Vector2(-122f, y), () => Adjust(s => s.masterVolume -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "MasterVolumePlus", "Master +", new Vector2(122f, y), () => Adjust(s => s.masterVolume += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "SfxVolumeMinus", "SFX -", new Vector2(-122f, y), () => Adjust(s => s.sfxVolume -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "SfxVolumePlus", "SFX +", new Vector2(122f, y), () => Adjust(s => s.sfxVolume += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "MusicVolumeMinus", "Music -", new Vector2(-122f, y), () => Adjust(s => s.musicVolume -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "MusicVolumePlus", "Music +", new Vector2(122f, y), () => Adjust(s => s.musicVolume += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "CrosshairMinus", "Crosshair -", new Vector2(-122f, y), () => Adjust(s => s.crosshairSize -= 2f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "CrosshairPlus", "Crosshair +", new Vector2(122f, y), () => Adjust(s => s.crosshairSize += 2f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "MapSizeMinus", "Map Size -", new Vector2(-122f, y), () => Adjust(s => s.minimapSize -= 20f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "MapSizePlus", "Map Size +", new Vector2(122f, y), () => Adjust(s => s.minimapSize += 20f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "MapOpacityMinus", "Opacity -", new Vector2(-122f, y), () => Adjust(s => s.minimapOpacity -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "MapOpacityPlus", "Opacity +", new Vector2(122f, y), () => Adjust(s => s.minimapOpacity += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "MapZoomMinus", "Map Zoom -", new Vector2(-122f, y), () => Adjust(s => s.minimapZoom -= 0.1f), 170f, 30f, UiTheme.SmallSize);
-            CreateButton(parent, "MapZoomPlus", "Map Zoom +", new Vector2(122f, y), () => Adjust(s => s.minimapZoom += 0.1f), 170f, 30f, UiTheme.SmallSize);
-            y -= 38f;
-            CreateButton(parent, "InvertY", "Toggle Invert Y", new Vector2(0f, y), () => Adjust(s => s.invertY = !s.invertY), 220f, 30f, UiTheme.SmallSize);
+            float y = -202f;
+            const float step = 34f;
+            const float buttonHeight = 27f;
+            CreateButton(parent, "SensitivityMinus", "Sensitivity -", new Vector2(-122f, y), () => Adjust(s => s.mouseSensitivity -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "SensitivityPlus", "Sensitivity +", new Vector2(122f, y), () => Adjust(s => s.mouseSensitivity += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "FovMinus", "FOV -", new Vector2(-122f, y), () => Adjust(s => s.fov -= 5f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "FovPlus", "FOV +", new Vector2(122f, y), () => Adjust(s => s.fov += 5f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "MasterVolumeMinus", "Master -", new Vector2(-122f, y), () => Adjust(s => s.masterVolume -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "MasterVolumePlus", "Master +", new Vector2(122f, y), () => Adjust(s => s.masterVolume += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "SfxVolumeMinus", "SFX -", new Vector2(-122f, y), () => Adjust(s => s.sfxVolume -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "SfxVolumePlus", "SFX +", new Vector2(122f, y), () => Adjust(s => s.sfxVolume += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "MusicVolumeMinus", "Music -", new Vector2(-122f, y), () => Adjust(s => s.musicVolume -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "MusicVolumePlus", "Music +", new Vector2(122f, y), () => Adjust(s => s.musicVolume += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "CrosshairMinus", "Crosshair -", new Vector2(-122f, y), () => Adjust(s => s.crosshairSize -= 2f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "CrosshairPlus", "Crosshair +", new Vector2(122f, y), () => Adjust(s => s.crosshairSize += 2f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "MapSizeMinus", "Map Size -", new Vector2(-122f, y), () => Adjust(s => s.minimapSize -= 20f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "MapSizePlus", "Map Size +", new Vector2(122f, y), () => Adjust(s => s.minimapSize += 20f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "MapOpacityMinus", "Opacity -", new Vector2(-122f, y), () => Adjust(s => s.minimapOpacity -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "MapOpacityPlus", "Opacity +", new Vector2(122f, y), () => Adjust(s => s.minimapOpacity += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "MapZoomMinus", "Map Zoom -", new Vector2(-122f, y), () => Adjust(s => s.minimapZoom -= 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            CreateButton(parent, "MapZoomPlus", "Map Zoom +", new Vector2(122f, y), () => Adjust(s => s.minimapZoom += 0.1f), 170f, buttonHeight, UiTheme.SmallSize);
+            y -= step;
+            CreateButton(parent, "InvertY", "Toggle Invert Y", new Vector2(0f, y), () => Adjust(s => s.invertY = !s.invertY), 220f, buttonHeight, UiTheme.SmallSize);
         }
 
         private void CreateBindingRows(RectTransform parent)

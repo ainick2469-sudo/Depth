@@ -33,6 +33,8 @@ namespace FrontierDepths.UI
         private PauseMenuController pauseMenuController;
         private HudDebugBoundsController debugBoundsController;
         private DungeonBuildResult configuredMinimapBuild;
+        private float mapKeyPressedAt = -1f;
+        private bool minimapFocusMode;
 
         private void Awake()
         {
@@ -522,6 +524,8 @@ namespace FrontierDepths.UI
 
             if (InputFrameGuard.WasTownServiceInputConsumedThisFrame || !CanToggleGameplayOverlay())
             {
+                minimapFocusMode = false;
+                mapKeyPressedAt = -1f;
                 return;
             }
 
@@ -535,11 +539,7 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap))
-            {
-                fullMapController?.Toggle(playerController);
-                return;
-            }
+            HandleMapTapHoldInput();
 
             if (InputBindingService.GetKeyDown(GameplayInputAction.Minimap))
             {
@@ -549,6 +549,59 @@ namespace FrontierDepths.UI
             if (InputBindingService.GetKeyDown(GameplayInputAction.RunInfo))
             {
                 SetRunInfoVisible(true);
+            }
+        }
+
+        private void HandleMapTapHoldInput()
+        {
+            if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap))
+            {
+                mapKeyPressedAt = Time.unscaledTime;
+                minimapFocusMode = false;
+            }
+
+            if (InputBindingService.GetKey(GameplayInputAction.ToggleFullMap) && mapKeyPressedAt >= 0f)
+            {
+                if (!minimapFocusMode && Time.unscaledTime - mapKeyPressedAt >= 0.25f)
+                {
+                    minimapFocusMode = true;
+                }
+
+                if (minimapFocusMode)
+                {
+                    float zoomDelta = Input.GetAxisRaw("Mouse ScrollWheel");
+                    if (Input.GetKeyDown(KeyCode.Equals) || Input.GetKeyDown(KeyCode.KeypadPlus))
+                    {
+                        zoomDelta += 0.1f;
+                    }
+
+                    if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus))
+                    {
+                        zoomDelta -= 0.1f;
+                    }
+
+                    if (Mathf.Abs(zoomDelta) > 0.001f && minimapController != null)
+                    {
+                        float nextZoom = minimapController.MinimapZoom + zoomDelta;
+                        minimapController.SetZoom(nextZoom);
+                        GameSettingsState settings = GameSettingsService.Current;
+                        settings.minimapZoom = minimapController.MinimapZoom;
+                        GameSettingsService.Save(settings);
+                    }
+                }
+            }
+
+            if (!InputBindingService.GetKeyUp(GameplayInputAction.ToggleFullMap))
+            {
+                return;
+            }
+
+            bool wasHold = minimapFocusMode || (mapKeyPressedAt >= 0f && Time.unscaledTime - mapKeyPressedAt >= 0.25f);
+            mapKeyPressedAt = -1f;
+            minimapFocusMode = false;
+            if (!wasHold)
+            {
+                fullMapController?.Toggle(playerController);
             }
         }
 

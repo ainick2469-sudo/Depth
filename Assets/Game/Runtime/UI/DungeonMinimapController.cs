@@ -51,6 +51,8 @@ namespace FrontierDepths.UI
         public float MinimapSize => minimapSize;
         public float MinimapOpacity => minimapOpacity;
         public float MinimapZoom => minimapZoom;
+        public bool IsPlayerCenteredForTests => playerArrow != null && playerArrow.rectTransform.anchoredPosition == Vector2.zero;
+        public Vector2 CurrentContentPositionForTests => contentRect != null ? contentRect.anchoredPosition : Vector2.zero;
         public MinimapCoordinateMapping Mapping => mapping;
         public float CurrentContentRotationZ => contentRect != null ? contentRect.localEulerAngles.z : 0f;
         public float CurrentPlayerArrowRotationZ => playerArrow != null ? playerArrow.rectTransform.localEulerAngles.z : 0f;
@@ -158,7 +160,7 @@ namespace FrontierDepths.UI
 
         public void SetSize(float value)
         {
-            minimapSize = Mathf.Clamp(value, 120f, 360f);
+            minimapSize = Mathf.Clamp(value, 140f, 380f);
             if (panelRect != null)
             {
                 panelRect.sizeDelta = new Vector2(minimapSize, minimapSize);
@@ -206,7 +208,7 @@ namespace FrontierDepths.UI
 
         public void SetZoom(float value)
         {
-            minimapZoom = Mathf.Clamp(value, 0.5f, 3f);
+            minimapZoom = Mathf.Clamp(value, 0.75f, 2.5f);
             RebuildConfiguredMap();
         }
 
@@ -244,6 +246,24 @@ namespace FrontierDepths.UI
         public bool IsCorridorDiscovered(string edgeKey)
         {
             return discoveredCorridors.Contains(edgeKey);
+        }
+
+        internal bool IsCorridorVisibleForTests(string edgeKey)
+        {
+            if (buildResult == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < buildResult.corridors.Count; i++)
+            {
+                if (buildResult.corridors[i].edgeKey == edgeKey)
+                {
+                    return revealAllDebug || IsCorridorShown(buildResult.corridors[i]);
+                }
+            }
+
+            return false;
         }
 
         public void RevealRoom(string roomId, bool persist = true)
@@ -372,7 +392,7 @@ namespace FrontierDepths.UI
             Bounds bounds = CalculateWorldBounds(result);
             Vector2 worldSize = new Vector2(Mathf.Max(1f, bounds.size.x), Mathf.Max(1f, bounds.size.z));
             Vector2 available = new Vector2(Mathf.Max(1f, mapSize.x - padding * 2f), Mathf.Max(1f, mapSize.y - padding * 2f));
-            float scale = Mathf.Min(available.x / worldSize.x, available.y / worldSize.y) * Mathf.Clamp(zoom, 0.5f, 3f);
+            float scale = Mathf.Min(available.x / worldSize.x, available.y / worldSize.y) * Mathf.Clamp(zoom, 0.75f, 2.5f);
             return new MinimapCoordinateMapping(bounds, mapSize, scale);
         }
 
@@ -590,7 +610,8 @@ namespace FrontierDepths.UI
             {
                 float contentRotation = GetRotatingMapContentZ(player.eulerAngles.y);
                 contentRect.localEulerAngles = new Vector3(0f, 0f, contentRotation);
-                playerArrow.rectTransform.anchoredPosition = RotateMapPointForContent(mapPosition, contentRotation);
+                contentRect.anchoredPosition = -RotateMapPointForContent(mapPosition, contentRotation);
+                playerArrow.rectTransform.anchoredPosition = Vector2.zero;
                 playerArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, GetRotatingMapPlayerArrowZ(player.eulerAngles.y));
             }
             else
@@ -598,9 +619,10 @@ namespace FrontierDepths.UI
                 if (contentRect != null)
                 {
                     contentRect.localEulerAngles = Vector3.zero;
+                    contentRect.anchoredPosition = -mapPosition;
                 }
 
-                playerArrow.rectTransform.anchoredPosition = mapPosition;
+                playerArrow.rectTransform.anchoredPosition = Vector2.zero;
                 playerArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, GetNorthUpPlayerArrowZ(player.eulerAngles.y));
             }
         }
@@ -711,10 +733,23 @@ namespace FrontierDepths.UI
         {
             if (corridor.isSecretCorridor)
             {
-                return visitedRooms.Contains(corridor.fromNodeId) || visitedRooms.Contains(corridor.toNodeId);
+                return discoveredCorridors.Contains(corridor.edgeKey) ||
+                       IsVisitedSecretRoom(corridor.fromNodeId) ||
+                       IsVisitedSecretRoom(corridor.toNodeId);
             }
 
             return discoveredCorridors.Contains(corridor.edgeKey);
+        }
+
+        private bool IsVisitedSecretRoom(string roomId)
+        {
+            if (buildResult == null || !visitedRooms.Contains(roomId))
+            {
+                return false;
+            }
+
+            DungeonRoomBuildRecord room = buildResult.FindRoom(roomId);
+            return room != null && room.roomType == DungeonNodeKind.Secret;
         }
 
         private bool IsSecretEdge(string edgeKey)

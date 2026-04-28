@@ -50,6 +50,47 @@ namespace FrontierDepths.Tests.EditMode
             Assert.AreEqual("NW", DungeonDirectionUtility.GetCardinalLabel(-45f));
         }
 
+        [TestCase(0f, "N")]
+        [TestCase(45f, "NE")]
+        [TestCase(90f, "E")]
+        [TestCase(180f, "S")]
+        [TestCase(270f, "W")]
+        [TestCase(359f, "N")]
+        public void CompassStrip_CentersExpectedHeadingAndWraps(float yaw, string expectedHeading)
+        {
+            GameObject hud = new GameObject("Hud", typeof(RectTransform));
+            try
+            {
+                CompassHudView compass = hud.AddComponent<CompassHudView>();
+                compass.UpdateCompassForTests(yaw);
+
+                Assert.AreEqual(expectedHeading, compass.CenterHeadingForTests);
+                Assert.AreEqual(0f, CompassHudView.GetHeadingOffsetForYaw(yaw, yaw, 4.2f), 0.001f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+            }
+        }
+
+        [Test]
+        public void FirstPersonController_SprintDrainUsesTraversalFriendlyTuning()
+        {
+            GameObject player = new GameObject("Player");
+            try
+            {
+                FirstPersonController controller = player.AddComponent<FirstPersonController>();
+
+                Assert.AreEqual(6f, controller.SprintStaminaDrainPerSecond, 0.001f);
+                Assert.AreEqual(35f, controller.DashStaminaCost, 0.001f);
+                Assert.AreEqual(0f, controller.JumpStaminaCost, 0.001f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+            }
+        }
+
         [Test]
         public void InputDefaults_AddFullMapAndDepthSenseBindingWithoutStealingMinimap()
         {

@@ -51,6 +51,19 @@ namespace FrontierDepths.Combat
 
         internal int PoolSizeForTests => damageNumbers.Length;
 
+        internal static Quaternion GetDamageNumberBillboardRotationForTests(Vector3 markerPosition, Camera camera)
+        {
+            if (camera == null)
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 awayFromCamera = markerPosition - camera.transform.position;
+            return awayFromCamera.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(awayFromCamera.normalized, camera.transform.up)
+                : Quaternion.identity;
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -191,12 +204,7 @@ namespace FrontierDepths.Combat
                 markerObject.transform.position = startPosition + Vector3.up * (0.35f + t * 0.55f);
                 if (camera != null)
                 {
-                    Vector3 away = markerObject.transform.position - camera.transform.position;
-                    away.y = 0f;
-                    if (away.sqrMagnitude > 0.0001f)
-                    {
-                        markerObject.transform.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
-                    }
+                    markerObject.transform.rotation = GetDamageNumberBillboardRotationForTests(markerObject.transform.position, camera);
                 }
             }
         }

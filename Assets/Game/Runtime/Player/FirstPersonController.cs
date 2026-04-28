@@ -18,7 +18,7 @@ namespace FrontierDepths.Core
         [SerializeField] private float dashDuration = 0.15f;
         [SerializeField] private float dashCooldownSeconds = 3f;
         [SerializeField] private float dashStaminaCost = 35f;
-        [SerializeField] private float sprintStaminaDrainPerSecond = 12f;
+        [SerializeField] private float sprintStaminaDrainPerSecond = 6f;
         [SerializeField] private float jumpStaminaCost;
         [SerializeField] private float lookSensitivity = 1.2f;
         [SerializeField] private bool invertY;

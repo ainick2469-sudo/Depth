@@ -14,7 +14,7 @@ namespace FrontierDepths.Core
         public float musicVolume = 1f;
         public bool invertY;
         public float crosshairSize = 14f;
-        public float minimapSize = 190f;
+        public float minimapSize = 220f;
         public float minimapOpacity = 0.9f;
         public float minimapZoom = 1f;
 
@@ -26,9 +26,9 @@ namespace FrontierDepths.Core
             sfxVolume = Mathf.Clamp01(sfxVolume);
             musicVolume = Mathf.Clamp01(musicVolume);
             crosshairSize = Mathf.Clamp(crosshairSize, 6f, 36f);
-            minimapSize = Mathf.Clamp(minimapSize, 120f, 360f);
+            minimapSize = Mathf.Clamp(minimapSize, 140f, 380f);
             minimapOpacity = Mathf.Clamp(minimapOpacity, 0.1f, 1f);
-            minimapZoom = Mathf.Clamp(minimapZoom, 0.5f, 3f);
+            minimapZoom = Mathf.Clamp(minimapZoom, 0.75f, 2.5f);
         }
     }
 

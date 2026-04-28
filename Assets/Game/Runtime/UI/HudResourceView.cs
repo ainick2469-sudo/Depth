@@ -15,6 +15,7 @@ namespace FrontierDepths.UI
         private HudBarView healthBar;
         private HudBarView focusBar;
         private HudBarView staminaBar;
+        private HudBarView xpBar;
         private PlayerHealth playerHealth;
         private PlayerResourceController resources;
         private float nextResolveTime;
@@ -23,6 +24,8 @@ namespace FrontierDepths.UI
         internal int ResourceBarCountForTests => (healthBar != null ? 1 : 0) + (focusBar != null ? 1 : 0) + (staminaBar != null ? 1 : 0);
         internal string ResourceTextForTests => resourceText != null ? resourceText.text : string.Empty;
         internal bool HasResourcePanelForTests => resourcePanelRoot != null && resourcePanelBackground != null;
+        internal Color StaminaFillColorForTests => staminaBar != null ? staminaBar.FillColorForTests : default;
+        internal string XpLabelForTests => xpBar != null ? xpBar.CurrentLabel : string.Empty;
 
         private void Awake()
         {
@@ -34,6 +37,11 @@ namespace FrontierDepths.UI
             EnsureUi();
             ResolveRuntimeObjects();
             ProfileState profile = GameBootstrap.Instance?.ProfileService?.Current;
+            if (profile != null)
+            {
+                UpdateXpBar(profile);
+            }
+
             if (healthBar != null && playerHealth != null)
             {
                 healthBar.Set("HP", playerHealth.CurrentHealth, playerHealth.MaxHealth);
@@ -80,7 +88,7 @@ namespace FrontierDepths.UI
 
         private void EnsureUi()
         {
-            if (resourcePanelRoot != null && resourceText != null && healthBar != null && focusBar != null && staminaBar != null)
+            if (resourcePanelRoot != null && resourceText != null && healthBar != null && focusBar != null && staminaBar != null && xpBar != null)
             {
                 return;
             }
@@ -107,17 +115,18 @@ namespace FrontierDepths.UI
 
             resourcePanelRoot.anchorMin = resourcePanelRoot.anchorMax = new Vector2(0f, 0f);
             resourcePanelRoot.pivot = new Vector2(0f, 0f);
-            resourcePanelRoot.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth + 24f, 184f);
+            resourcePanelRoot.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth + 24f, 210f);
             resourcePanelRoot.anchoredPosition = new Vector2(HudLayoutConstants.HudMargin, HudLayoutConstants.HudMargin);
             if (resourcePanelBackground != null)
             {
-                resourcePanelBackground.color = new Color(0.018f, 0.018f, 0.02f, 0.68f);
+                resourcePanelBackground.color = new Color(0.018f, 0.018f, 0.02f, 0.56f);
                 resourcePanelBackground.raycastTarget = false;
             }
 
-            healthBar ??= new HudBarView(resourcePanelRoot, "HudHealthBar", font, new Color(0.85f, 0.12f, 0.08f, 0.94f), new Vector2(12f, 132f), HudLayoutConstants.ResourcePanelWidth);
-            focusBar ??= new HudBarView(resourcePanelRoot, "HudFocusBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(12f, 106f), HudLayoutConstants.ResourcePanelWidth);
-            staminaBar ??= new HudBarView(resourcePanelRoot, "HudStaminaBar", font, new Color(0.95f, 0.73f, 0.24f, 0.94f), new Vector2(12f, 80f), HudLayoutConstants.ResourcePanelWidth);
+            healthBar ??= new HudBarView(resourcePanelRoot, "HudHealthBar", font, new Color(0.85f, 0.12f, 0.08f, 0.94f), new Vector2(12f, 158f), HudLayoutConstants.ResourcePanelWidth);
+            focusBar ??= new HudBarView(resourcePanelRoot, "HudFocusBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(12f, 132f), HudLayoutConstants.ResourcePanelWidth);
+            staminaBar ??= new HudBarView(resourcePanelRoot, "HudStaminaBar", font, new Color(0.16f, 0.78f, 0.28f, 0.94f), new Vector2(12f, 106f), HudLayoutConstants.ResourcePanelWidth);
+            xpBar ??= new HudBarView(resourcePanelRoot, "HudClassXpBar", font, new Color(1f, 0.82f, 0.18f, 0.58f), new Vector2(12f, 80f), HudLayoutConstants.ResourcePanelWidth);
             GameObject textObject = new GameObject("HudResources", typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(resourcePanelRoot, false);
             resourceText = textObject.GetComponent<Text>();
@@ -131,7 +140,7 @@ namespace FrontierDepths.UI
             RectTransform rect = resourceText.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
             rect.pivot = new Vector2(0f, 0f);
-            rect.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth, 70f);
+            rect.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth, 66f);
             rect.anchoredPosition = new Vector2(12f, 10f);
 
             GameObject statusObject = new GameObject("HudResourceStatus", typeof(RectTransform), typeof(Text));
@@ -150,6 +159,52 @@ namespace FrontierDepths.UI
             statusRect.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth, 24f);
             statusRect.anchoredPosition = new Vector2(12f, -8f);
             statusText.enabled = false;
+        }
+
+        internal static int GetClassLevelForXp(int classXp)
+        {
+            classXp = Mathf.Max(0, classXp);
+            int level = 1;
+            int remaining = classXp;
+            while (remaining >= GetXpNeededForLevel(level))
+            {
+                remaining -= GetXpNeededForLevel(level);
+                level++;
+            }
+
+            return level;
+        }
+
+        internal static int GetXpIntoCurrentLevel(int classXp)
+        {
+            classXp = Mathf.Max(0, classXp);
+            int level = 1;
+            int remaining = classXp;
+            while (remaining >= GetXpNeededForLevel(level))
+            {
+                remaining -= GetXpNeededForLevel(level);
+                level++;
+            }
+
+            return remaining;
+        }
+
+        internal static int GetXpNeededForLevel(int level)
+        {
+            return 100 + Mathf.Max(1, level) * 50;
+        }
+
+        private void UpdateXpBar(ProfileState profile)
+        {
+            if (xpBar == null || profile == null)
+            {
+                return;
+            }
+
+            int level = GetClassLevelForXp(profile.classXp);
+            int current = GetXpIntoCurrentLevel(profile.classXp);
+            int needed = GetXpNeededForLevel(level);
+            xpBar.SetNormalized("Gunslinger XP", current / (float)Mathf.Max(1, needed), $"Gunslinger XP L{level} {current}/{needed}");
         }
 
         private static Transform FindNamedTransform(Transform root, string objectName)

@@ -8,10 +8,10 @@ namespace FrontierDepths.UI
         public const float ResourcePanelWidth = 240f;
         public const float WeaponPanelWidth = 340f;
         public const float WeaponPanelHeight = 170f;
-        public const float MinimapOuterSize = 190f;
+        public const float MinimapOuterSize = 220f;
         public const float MinimapContentPadding = 22f;
-        public const float AmmoPipSize = 12f;
-        public const float AmmoPipSpacing = 4f;
+        public const float AmmoPipSize = 18f;
+        public const float AmmoPipSpacing = 6f;
 
         public const string TopCenterZoneName = "TopCenterZone";
         public const string TopRightZoneName = "TopRightZone";

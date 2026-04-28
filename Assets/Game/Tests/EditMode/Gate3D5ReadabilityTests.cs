@@ -124,6 +124,33 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Minimap_SecretCorridorRevealsOnlyAfterSecretEndpointVisited()
+        {
+            GameObject hud = new GameObject("Hud");
+            GameObject player = new GameObject("Player");
+            try
+            {
+                DungeonBuildResult build = CreateMapBuildResult();
+                DungeonMinimapController minimap = hud.AddComponent<DungeonMinimapController>();
+                minimap.Configure(build, player.transform);
+                string secretEdge = DungeonBuildResult.GetEdgeKey("room.a", "room.secret");
+
+                minimap.NotifyRoomEntered("room.a");
+                Assert.IsFalse(minimap.IsCorridorDiscovered(secretEdge));
+                Assert.IsFalse(minimap.IsCorridorVisibleForTests(secretEdge));
+
+                minimap.NotifyRoomEntered("room.secret");
+                Assert.IsTrue(minimap.IsRoomVisited("room.secret"));
+                Assert.IsTrue(minimap.IsCorridorVisibleForTests(secretEdge));
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void Minimap_StaticGeometryBuildsOncePerConfigure()
         {
             GameObject hud = new GameObject("Hud");
@@ -267,6 +294,54 @@ namespace FrontierDepths.Tests.EditMode
             Assert.Greater(DungeonSceneController.CorridorVisualFloorYOffset, -0.03f);
         }
 
+        [Test]
+        public void DamageNumberBillboard_FacesMainCameraBasis()
+        {
+            GameObject cameraObject = new GameObject("Main Camera", typeof(Camera));
+            try
+            {
+                cameraObject.tag = "MainCamera";
+                cameraObject.transform.position = new Vector3(0f, 1.5f, -10f);
+                Camera camera = cameraObject.GetComponent<Camera>();
+
+                Quaternion rotation = CombatFeedbackService.GetDamageNumberBillboardRotationForTests(Vector3.zero, camera);
+
+                Vector3 expectedForward = (Vector3.zero - cameraObject.transform.position).normalized;
+                Vector3 actualForward = rotation * Vector3.forward;
+                Assert.AreEqual(expectedForward.x, actualForward.x, 0.001f);
+                Assert.AreEqual(expectedForward.z, actualForward.z, 0.001f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        [Test]
+        public void BountyTargetMarker_CreatesReadableLabelAndIconOnce()
+        {
+            GameObject target = new GameObject("BountyTarget");
+            try
+            {
+                BountyTargetMarker marker = target.AddComponent<BountyTargetMarker>();
+                marker.Configure("bounty.test", "Wanted", "Dust Viper");
+                marker.Configure("bounty.test", "Wanted", "Dust Viper");
+
+                Transform label = target.transform.Find("BountyTargetLabel");
+                Transform icon = target.transform.Find("BountyTargetIcon");
+                Assert.IsNotNull(label);
+                Assert.IsNotNull(icon);
+                Assert.AreEqual(1, CountNamedChildren(target.transform, "BountyTargetLabel"));
+                Assert.AreEqual(1, CountNamedChildren(target.transform, "BountyTargetIcon"));
+                StringAssert.Contains("BOUNTY", label.GetComponent<TextMesh>().text);
+                Assert.AreEqual("!", icon.GetComponent<TextMesh>().text);
+            }
+            finally
+            {
+                Object.DestroyImmediate(target);
+            }
+        }
+
         private static DungeonBuildResult CreateMapBuildResult()
         {
             DungeonBuildResult build = new DungeonBuildResult
@@ -335,6 +410,22 @@ namespace FrontierDepths.Tests.EditMode
         private static float NormalizeSignedDegrees(float degrees)
         {
             return Mathf.Repeat(degrees + 180f, 360f) - 180f;
+        }
+
+        private static int CountNamedChildren(Transform root, string objectName)
+        {
+            if (root == null)
+            {
+                return 0;
+            }
+
+            int count = root.name == objectName ? 1 : 0;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                count += CountNamedChildren(root.GetChild(i), objectName);
+            }
+
+            return count;
         }
 
         private static void DestroyRuntimeFeedbackRoot()

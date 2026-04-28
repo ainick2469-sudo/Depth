@@ -147,6 +147,30 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void WeaponHud_MissingBulletSpriteUsesReadableRuntimeFallback()
+        {
+            GameObject hud = CreateRectObject("Hud");
+            GameObject player = CreateWeaponPlayer(out PlayerWeaponController weapon);
+            try
+            {
+                WeaponHudView view = hud.AddComponent<WeaponHudView>();
+                view.SetWeaponForTests(weapon);
+
+                Assert.AreEqual(6, view.AmmoPipCountForTests);
+                Assert.IsTrue(
+                    HudSpriteCatalog.TryGetAmmoBulletSprite() != null ||
+                    HudSpriteCatalog.TryGetAmmoPip() != null ||
+                    view.UsesAmmoBulletFallbackForTests,
+                    "Weapon HUD should either use a cached ammo sprite or fall back to bullet-shaped runtime pips.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void WeaponHud_WeaponSwapUpdatesNameAmmoAndPipCount()
         {
             GameObject hud = CreateRectObject("Hud");
@@ -214,6 +238,34 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void Minimap_ZoomClampsAndKeepsPlayerMarkerCentered()
+        {
+            GameObject hud = CreateRectObject("Hud");
+            GameObject player = new GameObject("Player");
+            try
+            {
+                DungeonMinimapController minimap = hud.AddComponent<DungeonMinimapController>();
+                DungeonBuildResult build = CreateMapBuildResult();
+                minimap.Configure(build, player.transform);
+
+                minimap.SetZoom(10f);
+                Assert.AreEqual(2.5f, minimap.MinimapZoom, 0.001f);
+                minimap.SetZoom(0.1f);
+                Assert.AreEqual(0.75f, minimap.MinimapZoom, 0.001f);
+
+                player.transform.position = new Vector3(12f, 0f, 0f);
+                InvokePrivate(minimap, "Update");
+                Assert.IsTrue(minimap.IsPlayerCenteredForTests);
+                Assert.AreNotEqual(Vector2.zero, minimap.CurrentContentPositionForTests);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void ResourceHud_ShowsHpFocusStamNotManaAndDoesNotDuplicate()
         {
             GameObject hud = CreateRectObject("Hud");
@@ -237,11 +289,45 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(view.HasResourcePanelForTests);
                 Assert.AreEqual(3, view.ResourceBarCountForTests);
                 Assert.AreEqual(1, CountNamedChildren(hud.transform, "HudFocusBar"));
+                Assert.Greater(view.StaminaFillColorForTests.g, view.StaminaFillColorForTests.r);
             }
             finally
             {
                 Object.DestroyImmediate(hud);
                 Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void ResourceHud_ClassXpUsesSimpleGunslingerCurve()
+        {
+            Assert.AreEqual(150, HudResourceView.GetXpNeededForLevel(1));
+            Assert.AreEqual(200, HudResourceView.GetXpNeededForLevel(2));
+            Assert.AreEqual(1, HudResourceView.GetClassLevelForXp(149));
+            Assert.AreEqual(2, HudResourceView.GetClassLevelForXp(150));
+            Assert.AreEqual(25, HudResourceView.GetXpIntoCurrentLevel(175));
+        }
+
+        [Test]
+        public void SharedSettingsPanel_BuildsOnceAndKeepsRowsInsidePanel()
+        {
+            GameObject panel = CreateRectObject("SettingsPanel");
+            try
+            {
+                SharedSettingsPanelController settings = panel.AddComponent<SharedSettingsPanelController>();
+                settings.Build("Settings", _ => { }, () => null, () => { });
+                settings.Build("Settings", _ => { }, () => null, () => { });
+
+                settings.ShowKeybindings();
+                Assert.IsTrue(settings.IsShowingKeybindings);
+                Assert.AreEqual(17, settings.BindingRowCountForTests);
+                Assert.AreEqual(1, CountNamedChildren(panel.transform, "SharedSettingsRows"));
+                Assert.AreEqual(1, CountNamedChildren(panel.transform, "SharedKeybindingRows"));
+                Assert.GreaterOrEqual(settings.SettingsGroupHeightForTests, 500f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(panel);
             }
         }
 
