@@ -18,6 +18,7 @@ namespace FrontierDepths.UI
         private HudBarView xpBar;
         private PlayerHealth playerHealth;
         private PlayerResourceController resources;
+        private ProfileState profileOverrideForTests;
         private float nextResolveTime;
         private float nextTextRefreshTime;
 
@@ -26,6 +27,7 @@ namespace FrontierDepths.UI
         internal bool HasResourcePanelForTests => resourcePanelRoot != null && resourcePanelBackground != null;
         internal Color StaminaFillColorForTests => staminaBar != null ? staminaBar.FillColorForTests : default;
         internal string XpLabelForTests => xpBar != null ? xpBar.CurrentLabel : string.Empty;
+        internal float XpNormalizedForTests => xpBar != null ? xpBar.NormalizedValueForTests : 0f;
 
         private void Awake()
         {
@@ -36,7 +38,7 @@ namespace FrontierDepths.UI
         {
             EnsureUi();
             ResolveRuntimeObjects();
-            ProfileState profile = GameBootstrap.Instance?.ProfileService?.Current;
+            ProfileState profile = profileOverrideForTests ?? GameBootstrap.Instance?.ProfileService?.Current;
             if (profile != null)
             {
                 UpdateXpBar(profile);
@@ -86,6 +88,11 @@ namespace FrontierDepths.UI
             resources ??= FindAnyObjectByType<PlayerResourceController>();
         }
 
+        internal void SetProfileForTests(ProfileState profile)
+        {
+            profileOverrideForTests = profile;
+        }
+
         private void EnsureUi()
         {
             if (resourcePanelRoot != null && resourceText != null && healthBar != null && focusBar != null && staminaBar != null && xpBar != null)
@@ -115,23 +122,23 @@ namespace FrontierDepths.UI
 
             resourcePanelRoot.anchorMin = resourcePanelRoot.anchorMax = new Vector2(0f, 0f);
             resourcePanelRoot.pivot = new Vector2(0f, 0f);
-            resourcePanelRoot.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth + 24f, 210f);
+            resourcePanelRoot.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth + 20f, 196f);
             resourcePanelRoot.anchoredPosition = new Vector2(HudLayoutConstants.HudMargin, HudLayoutConstants.HudMargin);
             if (resourcePanelBackground != null)
             {
-                resourcePanelBackground.color = new Color(0.018f, 0.018f, 0.02f, 0.56f);
+                resourcePanelBackground.color = new Color(0.018f, 0.018f, 0.02f, 0.48f);
                 resourcePanelBackground.raycastTarget = false;
             }
 
-            healthBar ??= new HudBarView(resourcePanelRoot, "HudHealthBar", font, new Color(0.85f, 0.12f, 0.08f, 0.94f), new Vector2(12f, 158f), HudLayoutConstants.ResourcePanelWidth);
-            focusBar ??= new HudBarView(resourcePanelRoot, "HudFocusBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(12f, 132f), HudLayoutConstants.ResourcePanelWidth);
-            staminaBar ??= new HudBarView(resourcePanelRoot, "HudStaminaBar", font, new Color(0.16f, 0.78f, 0.28f, 0.94f), new Vector2(12f, 106f), HudLayoutConstants.ResourcePanelWidth);
-            xpBar ??= new HudBarView(resourcePanelRoot, "HudClassXpBar", font, new Color(1f, 0.82f, 0.18f, 0.58f), new Vector2(12f, 80f), HudLayoutConstants.ResourcePanelWidth);
+            healthBar ??= new HudBarView(resourcePanelRoot, "HudHealthBar", font, new Color(0.85f, 0.12f, 0.08f, 0.94f), new Vector2(10f, 146f), HudLayoutConstants.ResourcePanelWidth);
+            focusBar ??= new HudBarView(resourcePanelRoot, "HudFocusBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(10f, 120f), HudLayoutConstants.ResourcePanelWidth);
+            staminaBar ??= new HudBarView(resourcePanelRoot, "HudStaminaBar", font, new Color(0.16f, 0.78f, 0.28f, 0.94f), new Vector2(10f, 94f), HudLayoutConstants.ResourcePanelWidth);
+            xpBar ??= new HudBarView(resourcePanelRoot, "HudClassXpBar", font, new Color(1f, 0.82f, 0.18f, 0.62f), new Vector2(10f, 68f), HudLayoutConstants.ResourcePanelWidth);
             GameObject textObject = new GameObject("HudResources", typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(resourcePanelRoot, false);
             resourceText = textObject.GetComponent<Text>();
             resourceText.font = font;
-            resourceText.fontSize = 16;
+            resourceText.fontSize = 15;
             resourceText.alignment = TextAnchor.LowerLeft;
             resourceText.color = UiTheme.Text;
             resourceText.raycastTarget = false;
@@ -140,8 +147,8 @@ namespace FrontierDepths.UI
             RectTransform rect = resourceText.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
             rect.pivot = new Vector2(0f, 0f);
-            rect.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth, 66f);
-            rect.anchoredPosition = new Vector2(12f, 10f);
+            rect.sizeDelta = new Vector2(HudLayoutConstants.ResourcePanelWidth, 58f);
+            rect.anchoredPosition = new Vector2(10f, 8f);
 
             GameObject statusObject = new GameObject("HudResourceStatus", typeof(RectTransform), typeof(Text));
             statusObject.transform.SetParent(resourcePanelRoot, false);

@@ -180,7 +180,7 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(weapon.EquipWeapon(WeaponCatalog.FrontierRifleId));
                 view.RefreshFromWeaponStateForTests();
 
-                Assert.AreEqual("Frontier Rifle", view.WeaponNameTextForTests);
+                Assert.AreEqual("FRONTIER RIFLE", view.WeaponNameTextForTests);
                 Assert.AreEqual("5 / 24", view.AmmoTextForTests);
                 Assert.AreEqual(0, view.ChamberCountForTests);
                 Assert.AreEqual(0, view.FilledChamberCountForTests);
@@ -223,6 +223,8 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsNotNull(minimap.ContentMaskForTests);
                 Assert.IsNotNull(minimap.ContentRootForTests);
                 Assert.IsTrue(minimap.HasCircularMaskForTests);
+                Assert.IsTrue(minimap.RootBackgroundHiddenForTests);
+                Assert.IsTrue(minimap.CircularBackgroundUnderMaskForTests);
                 Assert.IsTrue(minimap.FrameOverlaysMaskForTests);
                 Assert.IsFalse(minimap.ContentRootForTests.IsChildOf(minimap.FrameLayerForTests));
                 Assert.IsTrue(minimap.ContentRootForTests.IsChildOf(minimap.ContentMaskForTests));
@@ -314,6 +316,7 @@ namespace FrontierDepths.Tests.EditMode
 
                 Assert.IsTrue(view.ModelLoadedForTests, "FrontierRevolver_Model prefab should be loadable from Resources.");
                 Assert.AreEqual(1, view.InstanceCountForTests);
+                Assert.IsTrue(view.FallbackMaterialsAppliedForTests, "Imported revolver should receive readable fallback materials when imported white.");
                 Assert.IsFalse(graybox.GetComponent<Renderer>().enabled, "Graybox renderers should hide when the imported model loads.");
             }
             finally

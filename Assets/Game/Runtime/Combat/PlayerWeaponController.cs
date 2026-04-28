@@ -752,7 +752,6 @@ namespace FrontierDepths.Combat
             EnsureWeaponModelView();
             EnsureMuzzleFlash();
             EnsureImpactPool();
-            EnsureDamageNumberPool();
             EnsureTracerPool();
             runtimeReady = true;
         }
@@ -1236,10 +1235,6 @@ namespace FrontierDepths.Combat
                 impactMarkers[i]?.Hide();
             }
 
-            for (int i = 0; i < damageNumbers.Length; i++)
-            {
-                damageNumbers[i]?.Hide();
-            }
         }
 
         private void DrawShotRay(Vector3 start, Vector3 end, Color color)
@@ -1268,11 +1263,6 @@ namespace FrontierDepths.Combat
             for (int i = 0; i < impactMarkers.Length; i++)
             {
                 impactMarkers[i]?.Tick(currentTime);
-            }
-
-            for (int i = 0; i < damageNumbers.Length; i++)
-            {
-                damageNumbers[i]?.Tick(currentTime, weaponCamera);
             }
 
             for (int i = 0; i < tracers.Length; i++)

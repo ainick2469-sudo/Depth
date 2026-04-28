@@ -34,6 +34,7 @@ namespace FrontierDepths.Progression
                 if (existing != null)
                 {
                     RemoveRuntimeDungeonGateKiosk(existing);
+                    EnsureRuntimeKioskLabels(existing);
                     return existing;
                 }
 
@@ -45,8 +46,32 @@ namespace FrontierDepths.Progression
                     CreateKiosk(root, Kiosks[i]);
                 }
 
+                EnsureRuntimeKioskLabels(root);
                 return root;
             }
+        }
+
+        public static int EnsureRuntimeKioskLabels(Transform root)
+        {
+            if (root == null)
+            {
+                return 0;
+            }
+
+            int labelCount = 0;
+            for (int i = 0; i < Kiosks.Length; i++)
+            {
+                Transform kiosk = root.Find($"Kiosk_{Kiosks[i].label}");
+                if (kiosk == null)
+                {
+                    continue;
+                }
+
+                EnsureLabel(kiosk, "SignLabel", Kiosks[i].label, new Vector3(0f, 3.7f, -1.35f), 38f);
+                labelCount++;
+            }
+
+            return labelCount;
         }
 
         private static void CreateKiosk(Transform root, KioskDefinition definition)
@@ -60,7 +85,7 @@ namespace FrontierDepths.Progression
             CreateBox(kiosk.transform, "LeftPost", new Vector3(-2.8f, 1.5f, -0.8f), new Vector3(0.35f, 3f, 2.4f), definition.color);
             CreateBox(kiosk.transform, "RightPost", new Vector3(2.8f, 1.5f, -0.8f), new Vector3(0.35f, 3f, 2.4f), definition.color);
             CreateBox(kiosk.transform, "Counter", new Vector3(0f, 0.75f, -1.45f), new Vector3(4.8f, 1f, 0.8f), Color.Lerp(definition.color, Color.white, 0.18f));
-            CreateLabel(kiosk.transform, definition.label, new Vector3(0f, 3.7f, -1.35f));
+            EnsureLabel(kiosk.transform, "SignLabel", definition.label, new Vector3(0f, 3.7f, -1.35f), 38f);
 
             if (!string.IsNullOrWhiteSpace(definition.shopId))
             {
@@ -88,9 +113,14 @@ namespace FrontierDepths.Progression
             }
         }
 
-        private static void CreateLabel(Transform parent, string text, Vector3 localPosition)
+        private static void EnsureLabel(Transform parent, string name, string text, Vector3 localPosition, float distance)
         {
-            WorldLabelBillboard label = WorldLabelBillboard.Create(parent, "SignLabel", text, localPosition, UiTheme.Text, 38f, true);
+            if (parent == null || parent.Find(name) != null)
+            {
+                return;
+            }
+
+            WorldLabelBillboard label = WorldLabelBillboard.Create(parent, name, text, localPosition, UiTheme.Text, distance, true);
             TextMesh textMesh = label.GetComponent<TextMesh>();
             textMesh.characterSize = 0.3f;
             textMesh.fontSize = 46;

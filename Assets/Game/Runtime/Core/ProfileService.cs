@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace FrontierDepths.Core
@@ -18,6 +19,7 @@ namespace FrontierDepths.Core
         }
 
         public ProfileState Current { get; private set; }
+        public event Action<ProfileState, int, string> ClassExperienceChanged;
 
         public void Save()
         {
@@ -46,6 +48,23 @@ namespace FrontierDepths.Core
 
             Current.gold += amount;
             Save();
+        }
+
+        public void AddClassXp(int amount, string reason = "")
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+
+            Current.classXp += amount;
+            while (Current.classXp >= (Current.skillPoints + 1) * 100)
+            {
+                Current.skillPoints++;
+            }
+
+            Save();
+            ClassExperienceChanged?.Invoke(Current, amount, reason ?? string.Empty);
         }
 
         public bool UnlockWeapon(string weaponId)
@@ -129,14 +148,7 @@ namespace FrontierDepths.Core
                 Current.gold += definition.goldReward;
             }
 
-            if (definition.xpReward > 0)
-            {
-                Current.classXp += definition.xpReward;
-                while (Current.classXp >= (Current.skillPoints + 1) * 100)
-                {
-                    Current.skillPoints++;
-                }
-            }
+            AddClassXp(definition.xpReward, "Bounty");
 
             int reputation = ReputationService.AddReputation(Current, ReputationService.GetBountyReputationReward(definition));
             Current.activeBountyIds.Remove(bountyId);

@@ -25,6 +25,8 @@ namespace FrontierDepths.UI
         private RectTransform contentRect;
         private RectTransform playerMarkerLayerRect;
         private CanvasGroup canvasGroup;
+        private Image panelBackground;
+        private Image circularBackground;
         private Image maskImage;
         private Mask circularMask;
         private Image frameImage;
@@ -62,6 +64,8 @@ namespace FrontierDepths.UI
         internal RectTransform FrameLayerForTests => frameLayerRect;
         internal RectTransform ContentMaskForTests => contentMaskRect;
         internal RectTransform ContentRootForTests => contentRect;
+        internal bool RootBackgroundHiddenForTests => panelBackground == null || !panelBackground.enabled || panelBackground.color.a <= 0.01f;
+        internal bool CircularBackgroundUnderMaskForTests => circularBackground != null && contentMaskRect != null && circularBackground.transform.IsChildOf(contentMaskRect);
         internal bool HasCircularMaskForTests => circularMask != null && circularMask.enabled && maskImage != null && maskImage.sprite != null && !circularMask.showMaskGraphic;
         internal bool FrameOverlaysMaskForTests => frameLayerRect != null && contentMaskRect != null && frameLayerRect.parent == contentMaskRect.parent && frameLayerRect.GetSiblingIndex() > contentMaskRect.GetSiblingIndex();
         internal int FrameCountForTests => CountNamedChildren(panelRect, "MinimapFrame");
@@ -462,9 +466,10 @@ namespace FrontierDepths.UI
             panelRect.sizeDelta = new Vector2(minimapSize, minimapSize);
             panelRect.anchoredPosition = new Vector2(-HudLayoutConstants.HudMargin, -HudLayoutConstants.HudMargin);
 
-            Image panelImage = panelObject.GetComponent<Image>();
-            panelImage.color = new Color(0.02f, 0.025f, 0.03f, 0.36f);
-            panelImage.raycastTarget = false;
+            panelBackground = panelObject.GetComponent<Image>();
+            panelBackground.color = Color.clear;
+            panelBackground.enabled = false;
+            panelBackground.raycastTarget = false;
             canvasGroup = panelObject.GetComponent<CanvasGroup>();
             canvasGroup.alpha = minimapOpacity;
             canvasGroup.blocksRaycasts = false;
@@ -493,6 +498,19 @@ namespace FrontierDepths.UI
             maskImage.raycastTarget = false;
             circularMask = contentMaskObject.GetComponent<Mask>();
             circularMask.showMaskGraphic = false;
+
+            GameObject backgroundObject = new GameObject("CircularBackground", typeof(RectTransform), typeof(Image));
+            backgroundObject.transform.SetParent(contentMaskObject.transform, false);
+            circularBackground = backgroundObject.GetComponent<Image>();
+            circularBackground.sprite = HudRuntimeSpriteFactory.GetFilledCircleSprite();
+            circularBackground.type = Image.Type.Simple;
+            circularBackground.color = new Color(0.015f, 0.018f, 0.024f, 0.72f);
+            circularBackground.raycastTarget = false;
+            RectTransform backgroundRect = circularBackground.rectTransform;
+            backgroundRect.anchorMin = Vector2.zero;
+            backgroundRect.anchorMax = Vector2.one;
+            backgroundRect.offsetMin = Vector2.zero;
+            backgroundRect.offsetMax = Vector2.zero;
 
             GameObject contentObject = new GameObject("MinimapContentRoot", typeof(RectTransform));
             contentObject.transform.SetParent(contentMaskObject.transform, false);

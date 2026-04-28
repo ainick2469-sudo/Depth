@@ -58,9 +58,16 @@ namespace FrontierDepths.Combat
                 return Quaternion.identity;
             }
 
-            Vector3 awayFromCamera = markerPosition - camera.transform.position;
-            return awayFromCamera.sqrMagnitude > 0.0001f
-                ? Quaternion.LookRotation(awayFromCamera.normalized, camera.transform.up)
+            Vector3 toCamera = camera.transform.position - markerPosition;
+            toCamera.y = 0f;
+            if (toCamera.sqrMagnitude <= 0.0001f)
+            {
+                toCamera = -camera.transform.forward;
+                toCamera.y = 0f;
+            }
+
+            return toCamera.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(toCamera.normalized, Vector3.up)
                 : Quaternion.identity;
         }
 

@@ -173,11 +173,7 @@ namespace FrontierDepths.World
 
             if (classXp > 0)
             {
-                profileService.Current.classXp += classXp;
-                while (profileService.Current.classXp >= (profileService.Current.skillPoints + 1) * 100)
-                {
-                    profileService.Current.skillPoints++;
-                }
+                profileService.AddClassXp(classXp, "Room Purpose");
             }
 
             ReputationService.AddReputation(profileService.Current, reputation);

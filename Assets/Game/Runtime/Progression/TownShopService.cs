@@ -140,8 +140,7 @@ namespace FrontierDepths.Progression
 
         private bool BuyRumor()
         {
-            profileService.Current.classXp += 15;
-            profileService.Save();
+            profileService.AddClassXp(15, "Rumor");
             return true;
         }
     }

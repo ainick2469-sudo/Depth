@@ -13,10 +13,12 @@ namespace FrontierDepths.Combat
         private string activeWeaponId = string.Empty;
         private bool attemptedLoad;
         private bool modelLoaded;
+        private bool fallbackMaterialsApplied;
 
         internal bool ModelLoadedForTests => modelLoaded;
         internal bool IsGrayboxFallbackActiveForTests => !modelLoaded;
         internal int InstanceCountForTests => weaponBlockoutRoot != null ? CountNamedChildren(weaponBlockoutRoot, ImportedModelName) : 0;
+        internal bool FallbackMaterialsAppliedForTests => fallbackMaterialsApplied;
 
         public void Configure(Transform blockoutRoot, string weaponId)
         {
@@ -53,10 +55,16 @@ namespace FrontierDepths.Combat
                     importedInstance.transform.localPosition = Vector3.zero;
                     importedInstance.transform.localRotation = Quaternion.identity;
                     importedInstance.transform.localScale = Vector3.one;
+                    ApplyReadableFallbackMaterials(importedInstance);
                 }
             }
 
             modelLoaded = importedInstance != null;
+            if (modelLoaded && !fallbackMaterialsApplied)
+            {
+                ApplyReadableFallbackMaterials(importedInstance);
+            }
+
             SetGrayboxRenderersVisible(!modelLoaded);
         }
 
@@ -78,6 +86,67 @@ namespace FrontierDepths.Combat
 
             importedInstance = null;
             attemptedLoad = false;
+            fallbackMaterialsApplied = false;
+        }
+
+        private void ApplyReadableFallbackMaterials(GameObject modelRoot)
+        {
+            fallbackMaterialsApplied = false;
+            if (modelRoot == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = modelRoot.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                Material material = renderer.sharedMaterial;
+                bool needsFallback = material == null || LooksWhite(material.color);
+                if (!needsFallback)
+                {
+                    continue;
+                }
+
+                renderer.sharedMaterial = CreateFallbackMaterial(renderer.name);
+                fallbackMaterialsApplied = true;
+            }
+        }
+
+        private static bool LooksWhite(Color color)
+        {
+            return color.r > 0.86f && color.g > 0.86f && color.b > 0.86f;
+        }
+
+        private static Material CreateFallbackMaterial(string rendererName)
+        {
+            string lowerName = (rendererName ?? string.Empty).ToLowerInvariant();
+            Color color = lowerName.Contains("grip") || lowerName.Contains("handle")
+                ? new Color(0.16f, 0.09f, 0.045f, 1f)
+                : lowerName.Contains("barrel") || lowerName.Contains("cylinder")
+                    ? new Color(0.42f, 0.43f, 0.42f, 1f)
+                    : new Color(0.11f, 0.12f, 0.125f, 1f);
+
+            Shader shader = Shader.Find("Standard") ?? Shader.Find("Diffuse") ?? Shader.Find("Universal Render Pipeline/Lit");
+            Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
+            material.name = "RuntimeRevolverFallbackMaterial";
+            material.color = color;
+            if (material.HasProperty("_Metallic"))
+            {
+                material.SetFloat("_Metallic", lowerName.Contains("grip") || lowerName.Contains("handle") ? 0.05f : 0.55f);
+            }
+
+            if (material.HasProperty("_Glossiness"))
+            {
+                material.SetFloat("_Glossiness", 0.35f);
+            }
+
+            return material;
         }
 
         private void SetGrayboxRenderersVisible(bool visible)

@@ -306,14 +306,18 @@ namespace FrontierDepths.Tests.EditMode
 
                 Quaternion rotation = CombatFeedbackService.GetDamageNumberBillboardRotationForTests(Vector3.zero, camera);
 
-                Vector3 expectedForward = (Vector3.zero - cameraObject.transform.position).normalized;
+                Vector3 expectedForward = cameraObject.transform.position - Vector3.zero;
+                expectedForward.y = 0f;
+                expectedForward.Normalize();
                 Vector3 actualForward = rotation * Vector3.forward;
                 Assert.AreEqual(expectedForward.x, actualForward.x, 0.001f);
                 Assert.AreEqual(expectedForward.z, actualForward.z, 0.001f);
 
                 cameraObject.transform.position = new Vector3(10f, 2f, 0f);
                 rotation = CombatFeedbackService.GetDamageNumberBillboardRotationForTests(Vector3.zero, camera);
-                expectedForward = (Vector3.zero - cameraObject.transform.position).normalized;
+                expectedForward = cameraObject.transform.position - Vector3.zero;
+                expectedForward.y = 0f;
+                expectedForward.Normalize();
                 actualForward = rotation * Vector3.forward;
                 Assert.AreEqual(expectedForward.x, actualForward.x, 0.001f);
                 Assert.AreEqual(expectedForward.z, actualForward.z, 0.001f);

@@ -13,6 +13,7 @@ namespace FrontierDepths.UI
         public RectTransform RootRect => rootRect;
         public string CurrentLabel => label != null ? label.text : string.Empty;
         public Color FillColorForTests => fill != null ? fill.color : default;
+        public float NormalizedValueForTests => fill != null ? Mathf.Clamp01(fill.rectTransform.sizeDelta.x / Mathf.Max(1f, width)) : 0f;
 
         public HudBarView(Transform parent, string name, Font font, Color fillColor, Vector2 anchoredPosition, float width = 230f)
         {

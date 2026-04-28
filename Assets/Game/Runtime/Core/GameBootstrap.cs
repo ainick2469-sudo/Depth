@@ -13,6 +13,7 @@ namespace FrontierDepths.Core
         public InventoryService InventoryService { get; private set; }
         public RunService RunService { get; private set; }
         public SceneFlowService SceneFlowService { get; private set; }
+        public ClassExperienceRuntime ClassExperienceRuntime { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void EnsureExists()
@@ -41,6 +42,7 @@ namespace FrontierDepths.Core
             ProfileService ??= new ProfileService(SaveService);
             InventoryService ??= new InventoryService(ProfileService);
             RunService ??= new RunService(SaveService, ProfileService);
+            ClassExperienceRuntime ??= new ClassExperienceRuntime(ProfileService);
             SceneFlowService ??= new SceneFlowService(this);
         }
 

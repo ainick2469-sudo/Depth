@@ -37,6 +37,7 @@ namespace FrontierDepths.Progression
                 HideLegacyServiceGeometry();
                 HideCurioPlaceholders();
                 TownRuntimeKioskBuilder.EnsureRuntimeKiosks(parent != null ? parent : transform);
+                LabelRuntimeKiosks(parent != null ? parent : transform);
                 LabelExistingDungeonGate();
                 LogSummary();
             }
@@ -209,8 +210,7 @@ namespace FrontierDepths.Progression
                 return;
             }
 
-            Transform labelRoot = gateObject.transform.Find("DungeonGateLabel");
-            if (labelRoot != null)
+            if (gateObject.transform.Find("DungeonGateLabel") != null)
             {
                 skippedDuplicateCount++;
                 return;
@@ -224,6 +224,15 @@ namespace FrontierDepths.Progression
                 UiTheme.Accent,
                 42f,
                 true);
+        }
+
+        private void LabelRuntimeKiosks(Transform parent)
+        {
+            Transform kioskRoot = parent != null ? parent.Find(TownRuntimeKioskBuilder.RootName) : null;
+            if (kioskRoot != null)
+            {
+                TownRuntimeKioskBuilder.EnsureRuntimeKioskLabels(kioskRoot);
+            }
         }
 
         private void LogSummary()

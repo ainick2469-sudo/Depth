@@ -17,6 +17,7 @@ namespace FrontierDepths.UI
         [SerializeField] private Image weaponIconImage;
         [SerializeField] private Text weaponIconLabel;
         [SerializeField] private Text weaponNameText;
+        [SerializeField] private Text weaponSubtitleText;
         [SerializeField] private Text ammoText;
         [SerializeField] private RectTransform chamberRoot;
         [SerializeField] private Text reloadText;
@@ -42,6 +43,7 @@ namespace FrontierDepths.UI
         internal int FilledAmmoPipCountForTests => FilledChamberCountForTests;
         internal string AmmoTextForTests => ammoText != null ? ammoText.text : string.Empty;
         internal string WeaponNameTextForTests => weaponNameText != null ? weaponNameText.text : string.Empty;
+        internal string WeaponSubtitleTextForTests => weaponSubtitleText != null ? weaponSubtitleText.text : string.Empty;
         internal bool HasPanelRootForTests => panelRoot != null;
         internal bool HasBackgroundFrameForTests => backgroundFrameImage != null;
         internal bool HasAmmoPipContainerForTests => false;
@@ -199,7 +201,14 @@ namespace FrontierDepths.UI
 
             if (weaponNameText != null)
             {
-                weaponNameText.text = weapon.WeaponName;
+                weaponNameText.text = GetDisplayWeaponName(weapon.WeaponName);
+            }
+
+            if (weaponSubtitleText != null)
+            {
+                weaponSubtitleText.text = lastWeaponId == WeaponCatalog.FrontierRevolverId
+                    ? "Gunslinger Sidearm"
+                    : "Frontier Longarm";
             }
 
             if (ammoText != null)
@@ -252,6 +261,13 @@ namespace FrontierDepths.UI
                 WeaponCatalog.FrontierRevolverId => "REV",
                 _ => "WEPN"
             };
+        }
+
+        private static string GetDisplayWeaponName(string weaponName)
+        {
+            return string.IsNullOrWhiteSpace(weaponName)
+                ? "FRONTIER REVOLVER"
+                : weaponName.ToUpperInvariant();
         }
 
         private void ConfigureChambers(string weaponId, int magazineSize)
@@ -379,6 +395,7 @@ namespace FrontierDepths.UI
             weaponIconImage ??= FindNamedComponent<Image>("WeaponIconImage");
             weaponIconLabel ??= FindNamedComponent<Text>("WeaponIconLabel");
             weaponNameText ??= FindNamedComponent<Text>("WeaponNameText");
+            weaponSubtitleText ??= FindNamedComponent<Text>("WeaponSubtitleText");
             ammoText ??= FindNamedComponent<Text>("AmmoText");
             chamberRoot ??= FindNamedComponent<RectTransform>("CylinderChamberRoot");
             Transform oldPipStrip = FindNamedTransform(transform, "AmmoPipContainer");
@@ -419,7 +436,7 @@ namespace FrontierDepths.UI
 
             if (weaponNameText == null)
             {
-                weaponNameText = CreateText("WeaponNameText", panelRoot, font, 19, TextAnchor.MiddleCenter);
+                weaponNameText = CreateText("WeaponNameText", panelRoot, font, 18, TextAnchor.MiddleCenter);
             }
 
             RectTransform nameRect = weaponNameText.rectTransform;
@@ -427,7 +444,20 @@ namespace FrontierDepths.UI
             nameRect.anchorMax = new Vector2(0.92f, 1f);
             nameRect.pivot = new Vector2(0.5f, 1f);
             nameRect.sizeDelta = new Vector2(0f, 30f);
-            nameRect.anchoredPosition = new Vector2(0f, -18f);
+            nameRect.anchoredPosition = new Vector2(0f, -14f);
+
+            if (weaponSubtitleText == null)
+            {
+                weaponSubtitleText = CreateText("WeaponSubtitleText", panelRoot, font, 13, TextAnchor.MiddleCenter);
+            }
+
+            RectTransform subtitleRect = weaponSubtitleText.rectTransform;
+            subtitleRect.anchorMin = new Vector2(0.08f, 1f);
+            subtitleRect.anchorMax = new Vector2(0.92f, 1f);
+            subtitleRect.pivot = new Vector2(0.5f, 1f);
+            subtitleRect.sizeDelta = new Vector2(0f, 20f);
+            subtitleRect.anchoredPosition = new Vector2(0f, -38f);
+            weaponSubtitleText.color = new Color(0.82f, 0.72f, 0.5f, 0.92f);
 
             if (weaponIconRoot == null)
             {
@@ -441,8 +471,8 @@ namespace FrontierDepths.UI
 
             weaponIconRoot.anchorMin = weaponIconRoot.anchorMax = new Vector2(0f, 0f);
             weaponIconRoot.pivot = new Vector2(0f, 0f);
-            weaponIconRoot.sizeDelta = new Vector2(96f, 76f);
-            weaponIconRoot.anchoredPosition = new Vector2(32f, 54f);
+            weaponIconRoot.sizeDelta = new Vector2(88f, 64f);
+            weaponIconRoot.anchoredPosition = new Vector2(28f, 50f);
 
             if (weaponIconImage == null)
             {
@@ -472,14 +502,14 @@ namespace FrontierDepths.UI
 
             if (ammoText == null)
             {
-                ammoText = CreateText("AmmoText", panelRoot, font, 32, TextAnchor.MiddleRight);
+                ammoText = CreateText("AmmoText", panelRoot, font, 30, TextAnchor.MiddleRight);
             }
 
             RectTransform ammoRect = ammoText.rectTransform;
             ammoRect.anchorMin = ammoRect.anchorMax = new Vector2(1f, 0f);
             ammoRect.pivot = new Vector2(1f, 0f);
-            ammoRect.sizeDelta = new Vector2(190f, 48f);
-            ammoRect.anchoredPosition = new Vector2(-32f, 52f);
+            ammoRect.sizeDelta = new Vector2(180f, 42f);
+            ammoRect.anchoredPosition = new Vector2(-28f, 48f);
 
             if (chamberRoot == null)
             {
@@ -495,7 +525,7 @@ namespace FrontierDepths.UI
             chamberRoot.anchorMin = chamberRoot.anchorMax = new Vector2(1f, 0f);
             chamberRoot.pivot = new Vector2(0.5f, 0.5f);
             chamberRoot.sizeDelta = new Vector2(76f, 76f);
-            chamberRoot.anchoredPosition = new Vector2(-76f, 92f);
+            chamberRoot.anchoredPosition = new Vector2(-74f, 92f);
 
             if (reloadText == null)
             {
@@ -526,6 +556,7 @@ namespace FrontierDepths.UI
             hitMarkerImage.enabled = false;
 
             ConfigureText(weaponNameText);
+            ConfigureText(weaponSubtitleText);
             ConfigureText(ammoText);
             ConfigureText(reloadText);
             ConfigureText(weaponIconLabel);
