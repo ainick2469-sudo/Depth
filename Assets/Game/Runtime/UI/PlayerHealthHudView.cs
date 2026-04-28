@@ -50,7 +50,7 @@ namespace FrontierDepths.UI
             ShowHud();
             if (healthText != null)
             {
-                healthText.text = $"HP {Mathf.CeilToInt(playerHealth.CurrentHealth)}/{Mathf.CeilToInt(playerHealth.MaxHealth)}";
+                healthText.enabled = false;
             }
 
             if (deathText != null)

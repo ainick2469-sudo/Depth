@@ -117,6 +117,17 @@ namespace FrontierDepths.World
         public Vector2Int gridPosition;
         public DungeonRoomTemplateKind roomTemplate = DungeonRoomTemplateKind.SquareChamber;
         public int rotationQuarterTurns;
+        public string zoneId = string.Empty;
+        public DungeonZoneType zoneType = DungeonZoneType.None;
+        public DungeonRoomRole roomRole = DungeonRoomRole.None;
+        public int criticalPathIndex = -1;
+        public bool isOptional;
+        public int dangerTier;
+        public string lockId = string.Empty;
+        public string requiredKeyId = string.Empty;
+        public string grantsKeyId = string.Empty;
+        public string bountyId = string.Empty;
+        public string questId = string.Empty;
     }
 
     [Serializable]
@@ -149,6 +160,44 @@ namespace FrontierDepths.World
         Secret,
         TransitUp,
         TransitDown
+    }
+
+    public enum DungeonZoneType
+    {
+        None,
+        Entrance,
+        ForgottenHalls,
+        PrisonBlock,
+        Treasury,
+        Shrine,
+        CatacombWing,
+        BossWing,
+        SecretNetwork,
+        Armory,
+        CursedDepths
+    }
+
+    public enum DungeonRoomRole
+    {
+        None,
+        Start,
+        Return,
+        Combat,
+        Hub,
+        Treasure,
+        Shrine,
+        PrisonCell,
+        Armory,
+        Scout,
+        Bounty,
+        Elite,
+        MiniBoss,
+        Boss,
+        BossGate,
+        KeyItem,
+        LockedGate,
+        Secret,
+        Exit
     }
 
     public enum DungeonRoomTemplateKind

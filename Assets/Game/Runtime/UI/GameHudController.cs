@@ -28,6 +28,7 @@ namespace FrontierDepths.UI
         private TownHubController townHub;
         private DungeonSceneController dungeonScene;
         private DungeonMinimapController minimapController;
+        private DungeonMapPanelController fullMapController;
         private RunInfoPanelController runInfoPanelController;
         private PauseMenuController pauseMenuController;
         private DungeonBuildResult configuredMinimapBuild;
@@ -74,6 +75,7 @@ namespace FrontierDepths.UI
             HidePrompt();
             runInfoPanelController?.SetVisible(false);
             pauseMenuController?.Hide();
+            fullMapController?.SetVisible(false, playerController);
             configuredMinimapBuild = null;
         }
 
@@ -255,7 +257,10 @@ namespace FrontierDepths.UI
             EnsureHudResourceView();
             EnsureControlHintHudView();
             EnsureDashHudView();
+            EnsureCompassHudView();
+            EnsureDepthSenseController();
             EnsureDungeonMinimapController();
+            EnsureDungeonMapPanelController();
             EnsureRunInfoPanelController();
         }
 
@@ -307,12 +312,37 @@ namespace FrontierDepths.UI
             }
         }
 
+        private void EnsureCompassHudView()
+        {
+            if (GetComponent<CompassHudView>() == null)
+            {
+                gameObject.AddComponent<CompassHudView>();
+            }
+        }
+
+        private void EnsureDepthSenseController()
+        {
+            if (GetComponent<DepthSenseController>() == null)
+            {
+                gameObject.AddComponent<DepthSenseController>();
+            }
+        }
+
         private void EnsureDungeonMinimapController()
         {
             minimapController = GetComponent<DungeonMinimapController>();
             if (minimapController == null)
             {
                 minimapController = gameObject.AddComponent<DungeonMinimapController>();
+            }
+        }
+
+        private void EnsureDungeonMapPanelController()
+        {
+            fullMapController = GetComponent<DungeonMapPanelController>();
+            if (fullMapController == null)
+            {
+                fullMapController = gameObject.AddComponent<DungeonMapPanelController>();
             }
         }
 
@@ -408,6 +438,7 @@ namespace FrontierDepths.UI
         private void RefreshDungeonHudBindings()
         {
             EnsureDungeonMinimapController();
+            EnsureDungeonMapPanelController();
             EnsureRunInfoPanelController();
             if (dungeonScene == null)
             {
@@ -425,15 +456,18 @@ namespace FrontierDepths.UI
                 configuredMinimapBuild = build;
                 ApplySettingsToMinimap();
                 minimapController.Configure(build, playerController != null ? playerController.transform : null);
+                fullMapController.Configure(build, playerController != null ? playerController.transform : null, minimapController);
             }
             else if (build == null && configuredMinimapBuild != null)
             {
                 configuredMinimapBuild = null;
                 minimapController.Configure(null, null);
+                fullMapController.Configure(null, null, minimapController);
             }
             else if (build == null && minimapController != null && minimapController.IsConfigured)
             {
                 minimapController.Configure(null, null);
+                fullMapController.Configure(null, null, minimapController);
             }
         }
 
@@ -452,6 +486,17 @@ namespace FrontierDepths.UI
 
         private void HandleOverlayInput()
         {
+            if (fullMapController != null && fullMapController.IsVisible)
+            {
+                if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap) ||
+                    InputBindingService.GetKeyDown(GameplayInputAction.Pause))
+                {
+                    fullMapController.SetVisible(false, playerController);
+                }
+
+                return;
+            }
+
             if (InputFrameGuard.WasTownServiceInputConsumedThisFrame || !CanToggleGameplayOverlay())
             {
                 return;
@@ -464,6 +509,12 @@ namespace FrontierDepths.UI
                     SetRunInfoVisible(false);
                 }
 
+                return;
+            }
+
+            if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap))
+            {
+                fullMapController?.Toggle(playerController);
                 return;
             }
 

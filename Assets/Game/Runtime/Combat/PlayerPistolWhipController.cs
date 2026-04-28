@@ -10,15 +10,19 @@ namespace FrontierDepths.Combat
         public const float DefaultRange = 2f;
         public const float DefaultRadius = 0.35f;
         public const float DefaultCooldownSeconds = 0.9f;
+        public const float DefaultStaminaCost = 15f;
+        public const float EmergencyDamageMultiplier = 0.45f;
 
         [SerializeField] private Camera aimCamera;
         [SerializeField] private float damage = DefaultDamage;
         [SerializeField] private float range = DefaultRange;
         [SerializeField] private float spherecastRadius = DefaultRadius;
         [SerializeField] private float cooldownSeconds = DefaultCooldownSeconds;
+        [SerializeField] private float staminaCost = DefaultStaminaCost;
         [SerializeField] private LayerMask hitMask = -1;
 
         private FirstPersonController playerController;
+        private PlayerResourceController resources;
         private PlayerHealth playerHealth;
         private AudioSource whipAudioSource;
         private AudioClip swingClip;
@@ -35,6 +39,7 @@ namespace FrontierDepths.Combat
         public float Range => range;
         public float CooldownSeconds => cooldownSeconds;
         public float NextWhipTime => nextWhipTime;
+        public float StaminaCost => Mathf.Max(0f, staminaCost);
 
         private void Awake()
         {
@@ -65,9 +70,10 @@ namespace FrontierDepths.Combat
             }
 
             RunStatSnapshot stats = RunStatAggregator.Current;
+            bool fullStrength = TrySpendWhipStamina();
             nextWhipTime = currentTime + Mathf.Max(0.05f, cooldownSeconds * stats.PistolWhipCooldownMultiplier);
             bool hitApplied = TryResolveHit(out RaycastHit hit, out IDamageable damageable) &&
-                              ApplyWhipDamage(hit, damageable);
+                              ApplyWhipDamage(hit, damageable, fullStrength);
             PlayWhipFeedback(hitApplied, hit);
             return hitApplied;
         }
@@ -77,16 +83,17 @@ namespace FrontierDepths.Combat
             return TryWhip(currentTime);
         }
 
-        private bool ApplyWhipDamage(RaycastHit hit, IDamageable damageable)
+        private bool ApplyWhipDamage(RaycastHit hit, IDamageable damageable, bool fullStrength)
         {
             if (damageable == null)
             {
                 return false;
             }
 
+            float strengthMultiplier = fullStrength ? 1f : EmergencyDamageMultiplier;
             DamageInfo damageInfo = new DamageInfo
             {
-                amount = Mathf.Max(0f, damage * RunStatAggregator.Current.PistolWhipDamageMultiplier),
+                amount = Mathf.Max(0f, damage * RunStatAggregator.Current.PistolWhipDamageMultiplier * strengthMultiplier),
                 source = gameObject,
                 weaponId = "weapon.pistol_whip",
                 hitPoint = hit.point,
@@ -95,7 +102,7 @@ namespace FrontierDepths.Combat
                 deliveryType = DamageDeliveryType.Melee,
                 canCrit = false,
                 isCritical = false,
-                knockbackForce = 1.5f,
+                knockbackForce = fullStrength ? 1.5f : 0f,
                 tags = new[] { GameplayTag.Melee }
             };
 
@@ -165,6 +172,7 @@ namespace FrontierDepths.Combat
         private void ResolveComponents()
         {
             playerController ??= GetComponent<FirstPersonController>();
+            resources ??= GetComponent<PlayerResourceController>();
             playerHealth ??= GetComponent<PlayerHealth>();
             aimCamera ??= playerController != null ? playerController.PlayerCamera : GetComponentInChildren<Camera>();
             EnsureFeedbackObjects();
@@ -172,6 +180,24 @@ namespace FrontierDepths.Combat
             {
                 hitMask = PlayerWeaponController.DefaultWeaponRaycastMask;
             }
+        }
+
+        private bool TrySpendWhipStamina()
+        {
+            ResolveComponents();
+            float cost = StaminaCost;
+            if (resources == null || cost <= 0f)
+            {
+                return true;
+            }
+
+            if (resources.TrySpendStamina(cost, "Pistol Whip"))
+            {
+                return true;
+            }
+
+            resources.SetStatusMessage("Low stamina: weak emergency bash.");
+            return false;
         }
 
         private void EnsureFeedbackObjects()

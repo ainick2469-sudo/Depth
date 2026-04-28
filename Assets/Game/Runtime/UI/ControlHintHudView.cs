@@ -24,7 +24,7 @@ namespace FrontierDepths.UI
 
             bool dungeon = SceneManager.GetActiveScene().name == GameSceneCatalog.DungeonRuntime;
             hintText.text = dungeon
-                ? $"{InputBindingService.GetDisplay(GameplayInputAction.Fire)} Fire  |  {InputBindingService.GetDisplay(GameplayInputAction.Reload)} Reload  |  {InputBindingService.GetDisplay(GameplayInputAction.Dash)} Dash  |  {InputBindingService.GetDisplay(GameplayInputAction.Inventory)} Inventory  |  {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)} Stats"
+                ? $"{InputBindingService.GetDisplay(GameplayInputAction.Fire)} Fire  |  {InputBindingService.GetDisplay(GameplayInputAction.Reload)} Reload  |  {InputBindingService.GetDisplay(GameplayInputAction.Dash)} Dash  |  {InputBindingService.GetDisplay(GameplayInputAction.ToggleFullMap)} Map  |  {InputBindingService.GetDisplay(GameplayInputAction.ManaSense)} Sense  |  {InputBindingService.GetDisplay(GameplayInputAction.Inventory)} Inventory  |  {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)} Stats"
                 : $"{InputBindingService.GetDisplay(GameplayInputAction.Interact)} Interact  |  {InputBindingService.GetDisplay(GameplayInputAction.Inventory)} Inventory  |  {InputBindingService.GetDisplay(GameplayInputAction.RunInfo)} Stats  |  {InputBindingService.GetDisplay(GameplayInputAction.Pause)} Pause";
         }
 

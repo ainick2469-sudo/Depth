@@ -180,6 +180,7 @@ namespace FrontierDepths.World
             AssignSpecialRooms(graph, occupied, random, floorIndex, ref nextSecretId);
             AssignTemplates(graph, random);
             SyncLegacyIds(graph);
+            DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
             return graph;
         }
 
@@ -207,6 +208,7 @@ namespace FrontierDepths.World
             graph.transitDownNodeId = "transit_down";
             SyncLegacyIds(graph);
             AssignTemplates(graph, random);
+            DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
             return graph;
         }
 

@@ -153,6 +153,17 @@ namespace FrontierDepths.World
         public string label;
         public DungeonNodeKind roomType;
         public DungeonRoomTemplateKind templateKind;
+        public string zoneId = string.Empty;
+        public DungeonZoneType zoneType = DungeonZoneType.None;
+        public DungeonRoomRole roomRole = DungeonRoomRole.None;
+        public int criticalPathIndex = -1;
+        public bool isOptional;
+        public int dangerTier;
+        public string lockId = string.Empty;
+        public string requiredKeyId = string.Empty;
+        public string grantsKeyId = string.Empty;
+        public string bountyId = string.Empty;
+        public string questId = string.Empty;
         public string purposeId = string.Empty;
         public string purposeDisplayName = string.Empty;
         public string purposeIcon = string.Empty;

@@ -21,6 +21,8 @@ namespace FrontierDepths.Core
         Dash,
         EquipPrimary,
         EquipSecondary,
+        ToggleFullMap,
+        ManaSense,
         RunInfo,
         Minimap,
         Pause
@@ -273,8 +275,10 @@ namespace FrontierDepths.Core
                 GameplayInputAction.Dash => Record(action, KeyCode.LeftControl, KeyCode.LeftAlt),
                 GameplayInputAction.EquipPrimary => Record(action, KeyCode.Alpha1),
                 GameplayInputAction.EquipSecondary => Record(action, KeyCode.Alpha2),
+                GameplayInputAction.ToggleFullMap => Record(action, KeyCode.M),
+                GameplayInputAction.ManaSense => Record(action, KeyCode.C),
                 GameplayInputAction.RunInfo => Record(action, KeyCode.G),
-                GameplayInputAction.Minimap => Record(action, KeyCode.M),
+                GameplayInputAction.Minimap => Record(action, KeyCode.None),
                 GameplayInputAction.Pause => Record(action, KeyCode.Escape),
                 _ => Record(action, KeyCode.None)
             };

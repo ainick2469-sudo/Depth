@@ -82,6 +82,7 @@ namespace FrontierDepths.World
             GameObject playerObject = interactor != null ? interactor.gameObject : null;
             PlayerHealth playerHealth = playerObject != null ? playerObject.GetComponentInParent<PlayerHealth>() : null;
             PlayerWeaponController weapon = playerObject != null ? playerObject.GetComponentInParent<PlayerWeaponController>() : null;
+            PlayerResourceController resources = playerObject != null ? playerObject.GetComponentInParent<PlayerResourceController>() : null;
 
             float hpLost = ApplyNonLethalRisk(playerHealth);
             float healed = playerHealth != null ? playerHealth.Heal(healAmount) : 0f;
@@ -91,7 +92,7 @@ namespace FrontierDepths.World
                 GameBootstrap.Instance.ProfileService.AddGold(goldAmount);
             }
 
-            string sideEffect = ApplyPurposeSideEffect(playerHealth, weapon);
+            string sideEffect = ApplyPurposeSideEffect(playerHealth, weapon, resources);
             MarkClaimed();
             claimed = true;
             lastResultMessage = BuildResultMessage(goldAmount, ammoAdded, healed, hpLost, sideEffect);
@@ -102,14 +103,15 @@ namespace FrontierDepths.World
             Debug.Log($"{displayName}: {lastResultMessage}");
         }
 
-        private string ApplyPurposeSideEffect(PlayerHealth playerHealth, PlayerWeaponController weapon)
+        private string ApplyPurposeSideEffect(PlayerHealth playerHealth, PlayerWeaponController weapon, PlayerResourceController resources)
         {
             ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
             switch (effect)
             {
                 case RoomPurposeEffect.Shrine:
                     AddProfileProgress(profileService, classXp: 18, reputation: 5);
-                    return "+18 class XP, +5 reputation";
+                    float shrineMana = resources != null ? resources.RestoreMana(20f) : 0f;
+                    return shrineMana > 0f ? $"+18 class XP, +5 reputation, +{shrineMana:0} mana" : "+18 class XP, +5 reputation";
                 case RoomPurposeEffect.Elite:
                     AddProfileProgress(profileService, classXp: 16, reputation: 12);
                     return "+16 class XP, +12 reputation";
@@ -119,7 +121,9 @@ namespace FrontierDepths.World
                 case RoomPurposeEffect.Wild:
                     return ApplyWildOutcome(playerHealth, weapon, profileService);
                 case RoomPurposeEffect.Fountain:
-                    return "fountain recovery";
+                    float fountainMana = resources != null ? resources.RestoreMana(35f) : 0f;
+                    float fountainStamina = resources != null ? resources.RestoreStamina(35f) : 0f;
+                    return $"fountain recovery +{fountainMana:0} mana, +{fountainStamina:0} stamina";
                 case RoomPurposeEffect.Armory:
                     int armoryAmmo = weapon != null ? weapon.TryAddAmmoToReserve(8, true) : 0;
                     return armoryAmmo > 0 ? $"+{armoryAmmo} armory ammo" : "weapon cache checked";

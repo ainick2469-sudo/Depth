@@ -1542,6 +1542,7 @@ namespace FrontierDepths.World
                 centerCell = DungeonRoomTemplateLibrary.GetCenterCell(node.roomTemplate, node.rotationQuarterTurns),
                 bounds = GetRoomBounds(roomRoot.transform.position, floorCells)
             };
+            DungeonMetadataUtility.CopyNodeMetadata(node, roomRecord);
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
             RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(node.nodeKind, activeBuildResult != null ? activeBuildResult.floorIndex : 1, activeBuildResult != null ? activeBuildResult.seed : 0, node.nodeId, activePurposeCounts);
@@ -1550,6 +1551,7 @@ namespace FrontierDepths.World
                 roomRecord.purposeId = purpose.purposeId;
                 roomRecord.purposeDisplayName = purpose.displayName;
                 roomRecord.purposeIcon = purpose.minimapIcon;
+                DungeonMetadataUtility.ApplyPurposeMetadata(roomRecord, purpose, activeBuildResult != null ? activeBuildResult.floorIndex : 1);
                 activePurposeCounts.TryGetValue(purpose.purposeId, out int count);
                 activePurposeCounts[purpose.purposeId] = count + 1;
             }
@@ -2214,7 +2216,30 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | CorridorOver36 {buildResult.percentCorridorsOverTarget:0.#}% | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | {BuildMetadataSummary(buildResult)} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | CorridorOver36 {buildResult.percentCorridorsOverTarget:0.#}% | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+        }
+
+        private static string BuildMetadataSummary(DungeonBuildResult buildResult)
+        {
+            if (buildResult == null || buildResult.rooms.Count == 0)
+            {
+                return "Metadata none";
+            }
+
+            Dictionary<DungeonZoneType, int> zones = new Dictionary<DungeonZoneType, int>();
+            Dictionary<DungeonRoomRole, int> roles = new Dictionary<DungeonRoomRole, int>();
+            int dangerMax = 0;
+            for (int i = 0; i < buildResult.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = buildResult.rooms[i];
+                zones.TryGetValue(room.zoneType, out int zoneCount);
+                zones[room.zoneType] = zoneCount + 1;
+                roles.TryGetValue(room.roomRole, out int roleCount);
+                roles[room.roomRole] = roleCount + 1;
+                dangerMax = Mathf.Max(dangerMax, room.dangerTier);
+            }
+
+            return $"Zones {zones.Count} Roles {roles.Count} MaxDanger {dangerMax}";
         }
 
         private void SetVisibleInteractablesEnabled(bool enabled)

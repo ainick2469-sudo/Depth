@@ -4,6 +4,7 @@ namespace FrontierDepths.Core
 {
     [RequireComponent(typeof(CharacterController))]
     [RequireComponent(typeof(PlayerInteractor))]
+    [RequireComponent(typeof(PlayerResourceController))]
     public sealed class FirstPersonController : MonoBehaviour
     {
         private const float GroundSnapVelocity = -2f;
@@ -16,6 +17,9 @@ namespace FrontierDepths.Core
         [SerializeField] private float dashDistance = 6f;
         [SerializeField] private float dashDuration = 0.15f;
         [SerializeField] private float dashCooldownSeconds = 3f;
+        [SerializeField] private float dashStaminaCost = 35f;
+        [SerializeField] private float sprintStaminaDrainPerSecond = 12f;
+        [SerializeField] private float jumpStaminaCost;
         [SerializeField] private float lookSensitivity = 1.2f;
         [SerializeField] private bool invertY;
         [SerializeField] private float footstepDistance = 2.25f;
@@ -24,6 +28,7 @@ namespace FrontierDepths.Core
 
         private CharacterController controller;
         private PlayerInteractor interactor;
+        private PlayerResourceController resources;
         private AudioSource feedbackAudioSource;
         private float pitch;
         private float verticalVelocity;
@@ -52,11 +57,15 @@ namespace FrontierDepths.Core
         public float DashCooldownDuration => Mathf.Max(0.1f, dashCooldownSeconds * dashCooldownMultiplier);
         public float DashCooldownRemaining => Mathf.Max(0f, nextDashTime - Time.time);
         public bool IsDashing => Time.time < dashEndTime;
+        public float DashStaminaCost => Mathf.Max(0f, dashStaminaCost);
+        public float SprintStaminaDrainPerSecond => Mathf.Max(0f, sprintStaminaDrainPerSecond);
+        public float JumpStaminaCost => Mathf.Max(0f, jumpStaminaCost);
 
         private void Awake()
         {
             controller = GetComponent<CharacterController>();
             interactor = GetComponent<PlayerInteractor>();
+            resources = GetComponent<PlayerResourceController>() ?? gameObject.AddComponent<PlayerResourceController>();
             playerCamera ??= GetComponentInChildren<Camera>();
             feedbackAudioSource = GetComponent<AudioSource>();
             if (feedbackAudioSource == null)
@@ -234,7 +243,9 @@ namespace FrontierDepths.Core
             Vector2 moveInput = InputBindingService.GetMovementVector();
             Vector3 desired = transform.right * moveInput.x + transform.forward * moveInput.y;
             desired = Vector3.ClampMagnitude(desired, 1f);
-            float speed = walkSpeed * (InputBindingService.GetKey(GameplayInputAction.Sprint) ? sprintMultiplier : 1f);
+            bool wantsSprint = InputBindingService.GetKey(GameplayInputAction.Sprint) && desired.sqrMagnitude > 0.001f;
+            bool canSprint = wantsSprint && TrySpendStamina(sprintStaminaDrainPerSecond * Time.deltaTime, "Sprint");
+            float speed = walkSpeed * (canSprint ? sprintMultiplier : 1f);
             if (Time.time < temporaryMoveSpeedUntil)
             {
                 speed *= temporaryMoveSpeedMultiplier;
@@ -249,7 +260,7 @@ namespace FrontierDepths.Core
                 verticalVelocity = GroundSnapVelocity;
             }
 
-            if (InputBindingService.GetKeyDown(GameplayInputAction.Jump) && groundedBeforeMove)
+            if (InputBindingService.GetKeyDown(GameplayInputAction.Jump) && groundedBeforeMove && TrySpendStamina(jumpStaminaCost, "Jump"))
             {
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
                 GameplayEventBus.Publish(new GameplayEvent
@@ -282,9 +293,29 @@ namespace FrontierDepths.Core
 
         private void HandleDashInput()
         {
-            if (!InputBindingService.GetKeyDown(GameplayInputAction.Dash) || Time.time < nextDashTime)
+            if (!InputBindingService.GetKeyDown(GameplayInputAction.Dash))
             {
                 return;
+            }
+
+            TryStartDash(Time.time);
+        }
+
+        internal bool TryStartDashForTests(float currentTime)
+        {
+            return TryStartDash(currentTime);
+        }
+
+        private bool TryStartDash(float currentTime)
+        {
+            if (currentTime < nextDashTime)
+            {
+                return false;
+            }
+
+            if (!TrySpendStamina(dashStaminaCost, "Dash"))
+            {
+                return false;
             }
 
             Vector2 moveInput = InputBindingService.GetMovementVector();
@@ -298,8 +329,8 @@ namespace FrontierDepths.Core
             direction.Normalize();
             float duration = Mathf.Clamp(dashDuration, 0.05f, 0.35f);
             dashVelocity = direction * (Mathf.Max(0.5f, dashDistance) / duration);
-            dashEndTime = Time.time + duration;
-            nextDashTime = Time.time + DashCooldownDuration;
+            dashEndTime = currentTime + duration;
+            nextDashTime = currentTime + DashCooldownDuration;
             GameplayEventBus.Publish(new GameplayEvent
             {
                 eventType = GameplayEventType.PlayerDashed,
@@ -307,6 +338,19 @@ namespace FrontierDepths.Core
                 worldPosition = transform.position,
                 timestamp = Time.unscaledTime
             });
+            return true;
+        }
+
+        private bool TrySpendStamina(float amount, string reason)
+        {
+            amount = Mathf.Max(0f, amount);
+            if (amount <= 0f)
+            {
+                return true;
+            }
+
+            resources ??= GetComponent<PlayerResourceController>();
+            return resources == null || resources.TrySpendStamina(amount, reason);
         }
 
         private void HandleFeedback(Vector3 desired, bool groundedAfterMove, float preMoveVerticalVelocity)

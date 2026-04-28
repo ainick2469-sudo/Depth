@@ -683,7 +683,18 @@ namespace FrontierDepths.UI
             Color baseColor = GetPurposeMinimapColor(room);
             if (baseColor == default)
             {
-                baseColor = room.roomType switch
+                baseColor = room.roomRole switch
+                {
+                    DungeonRoomRole.Start => new Color(0.45f, 0.58f, 0.72f, 1f),
+                    DungeonRoomRole.Return => new Color(0.55f, 0.82f, 0.95f, 1f),
+                    DungeonRoomRole.Exit => new Color(0.95f, 0.75f, 0.2f, 1f),
+                    DungeonRoomRole.Treasure => new Color(1f, 0.78f, 0.18f, 1f),
+                    DungeonRoomRole.Shrine => new Color(0.68f, 0.35f, 0.95f, 1f),
+                    DungeonRoomRole.Armory => new Color(0.22f, 0.92f, 0.95f, 1f),
+                    DungeonRoomRole.Elite => new Color(0.92f, 0.18f, 0.14f, 1f),
+                    DungeonRoomRole.Secret => new Color(0.62f, 0.38f, 0.82f, 1f),
+                    DungeonRoomRole.Scout => new Color(0.22f, 0.78f, 0.68f, 1f),
+                    _ => room.roomType switch
                 {
                     DungeonNodeKind.TransitDown => new Color(0.95f, 0.75f, 0.2f, 1f),
                     DungeonNodeKind.TransitUp => new Color(0.55f, 0.82f, 0.95f, 1f),
@@ -691,6 +702,7 @@ namespace FrontierDepths.UI
                     DungeonNodeKind.Secret => new Color(0.62f, 0.38f, 0.82f, 1f),
                     DungeonNodeKind.EntryHub => new Color(0.45f, 0.58f, 0.72f, 1f),
                     _ => new Color(0.58f, 0.6f, 0.64f, 1f)
+                }
                 };
             }
 
@@ -729,13 +741,25 @@ namespace FrontierDepths.UI
                 return room.purposeIcon;
             }
 
-            return room.roomType switch
+            return room.roomRole switch
+            {
+                DungeonRoomRole.Start => "S",
+                DungeonRoomRole.Return => "U",
+                DungeonRoomRole.Exit => "D",
+                DungeonRoomRole.Treasure => "T",
+                DungeonRoomRole.Shrine => "S",
+                DungeonRoomRole.Armory => "A",
+                DungeonRoomRole.Elite => "E",
+                DungeonRoomRole.Secret => "?",
+                DungeonRoomRole.Scout => "M",
+                _ => room.roomType switch
             {
                 DungeonNodeKind.TransitDown => "D",
                 DungeonNodeKind.TransitUp => "U",
                 DungeonNodeKind.Landmark => "*",
                 DungeonNodeKind.Secret => "?",
                 _ => string.Empty
+            }
             };
         }
 
