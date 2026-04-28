@@ -22,6 +22,7 @@ namespace FrontierDepths.UI
         private RectTransform panelRect;
         private RectTransform contentRect;
         private CanvasGroup canvasGroup;
+        private Image frameImage;
         private Text playerArrow;
         private DungeonBuildResult buildResult;
         private Transform player;
@@ -158,6 +159,11 @@ namespace FrontierDepths.UI
             if (contentRect != null)
             {
                 contentRect.sizeDelta = new Vector2(minimapSize, minimapSize);
+            }
+
+            if (frameImage != null)
+            {
+                frameImage.rectTransform.sizeDelta = new Vector2(minimapSize + 28f, minimapSize + 28f);
             }
 
             RebuildConfiguredMap();
@@ -435,7 +441,35 @@ namespace FrontierDepths.UI
             arrowRect.pivot = new Vector2(0.5f, 0.5f);
             arrowRect.sizeDelta = new Vector2(24f, 24f);
 
+            GameObject frameObject = new GameObject("MinimapFrame", typeof(RectTransform), typeof(Image));
+            frameObject.transform.SetParent(panelObject.transform, false);
+            frameImage = frameObject.GetComponent<Image>();
+            frameImage.raycastTarget = false;
+            RectTransform frameRect = frameImage.rectTransform;
+            frameRect.anchorMin = frameRect.anchorMax = new Vector2(0.5f, 0.5f);
+            frameRect.pivot = new Vector2(0.5f, 0.5f);
+            frameRect.sizeDelta = new Vector2(minimapSize + 28f, minimapSize + 28f);
+            frameRect.anchoredPosition = Vector2.zero;
+            ConfigureFrameImage();
+
             panelObject.SetActive(false);
+        }
+
+        private void ConfigureFrameImage()
+        {
+            if (frameImage == null)
+            {
+                return;
+            }
+
+            Sprite frameSprite = HudSpriteCatalog.GetMinimapFrameSprite();
+            frameImage.sprite = frameSprite;
+            frameImage.type = Image.Type.Simple;
+            frameImage.preserveAspect = frameSprite != null;
+            frameImage.color = frameSprite != null
+                ? new Color(1f, 1f, 1f, 0.94f)
+                : new Color(1f, 1f, 1f, 0f);
+            frameImage.enabled = frameSprite != null;
         }
 
         private void BuildStaticGeometry()

@@ -1,0 +1,152 @@
+[
+  {
+    "file": "Assets/DungeonHUD/Panels/inventory_panel_frame_large.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Panels/inventory_panel_frame_large.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/inventory_panel_frame_large.png",
+    "category": "Panels",
+    "game_ready_size_px": [
+      1578,
+      2048
+    ],
+    "source_size_px": [
+      1578,
+      2048
+    ],
+    "description": "Tall grid-friendly large inventory panel frame with black leather interior, aged brass/iron trim, blue glow accents, and clean usable center."
+  },
+  {
+    "file": "Assets/DungeonHUD/Panels/character_stat_panel_frame.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Panels/character_stat_panel_frame.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/character_stat_panel_frame.png",
+    "category": "Panels",
+    "game_ready_size_px": [
+      1614,
+      2048
+    ],
+    "source_size_px": [
+      1614,
+      2048
+    ],
+    "description": "Character/stat panel frame with portrait medallion, stacked stat rows, and lower information panel."
+  },
+  {
+    "file": "Assets/DungeonHUD/Panels/quest_tracker_panel_frame.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Panels/quest_tracker_panel_frame.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/quest_tracker_panel_frame.png",
+    "category": "Panels",
+    "game_ready_size_px": [
+      785,
+      2048
+    ],
+    "source_size_px": [
+      785,
+      2048
+    ],
+    "description": "Slim vertical parchment-style quest tracker panel with objective rows and bullet spaces."
+  },
+  {
+    "file": "Assets/DungeonHUD/Panels/weapon_ammo_panel_frame.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Panels/weapon_ammo_panel_frame.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/weapon_ammo_panel_frame.png",
+    "category": "Panels",
+    "game_ready_size_px": [
+      2048,
+      1310
+    ],
+    "source_size_px": [
+      2048,
+      1310
+    ],
+    "description": "Compact mechanical weapon/ammo HUD panel with revolver-cylinder and cartridge-slot motifs."
+  },
+  {
+    "file": "Assets/DungeonHUD/Bars/health_bar_frame_fill.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Bars/health_bar_frame_fill.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/health_bar_frame_fill.png",
+    "category": "Bars",
+    "game_ready_size_px": [
+      2048,
+      446
+    ],
+    "source_size_px": [
+      2172,
+      473
+    ],
+    "description": "Crimson player health bar with aggressive gothic-western frame and horned skull end caps."
+  },
+  {
+    "file": "Assets/DungeonHUD/Bars/mana_bar_frame_fill.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Bars/mana_bar_frame_fill.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/mana_bar_frame_fill.png",
+    "category": "Bars",
+    "game_ready_size_px": [
+      2048,
+      463
+    ],
+    "source_size_px": [
+      2172,
+      491
+    ],
+    "description": "Arcane blue mana bar with ornate brass/iron frame and magical crystal accents."
+  },
+  {
+    "file": "Assets/DungeonHUD/Bars/stamina_grit_bar_frame_fill.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Bars/stamina_grit_bar_frame_fill.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/stamina_grit_bar_frame_fill.png",
+    "category": "Bars",
+    "game_ready_size_px": [
+      2048,
+      358
+    ],
+    "source_size_px": [
+      2120,
+      371
+    ],
+    "description": "Amber stamina/grit bar with rugged brass, leather, and western survival styling."
+  },
+  {
+    "file": "Assets/DungeonHUD/Slots/inventory_slot_empty.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Slots/inventory_slot_empty.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/inventory_slot_empty.png",
+    "category": "Slots",
+    "game_ready_size_px": [
+      512,
+      512
+    ],
+    "source_size_px": [
+      1222,
+      1202
+    ],
+    "description": "Empty inventory slot with dark leather center, aged metal trim, and blue gem accents."
+  },
+  {
+    "file": "Assets/DungeonHUD/Slots/inventory_slot_selected.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Slots/inventory_slot_selected.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/inventory_slot_selected.png",
+    "category": "Slots",
+    "game_ready_size_px": [
+      512,
+      512
+    ],
+    "source_size_px": [
+      1222,
+      1247
+    ],
+    "description": "Selected inventory slot with stronger magical blue glow and emphasized ornate border."
+  },
+  {
+    "file": "Assets/DungeonHUD/Icons/Map/circular_minimap_frame.png",
+    "unity_ready_file": "Assets/DungeonHUD/UnityReady/Icons/Map/circular_minimap_frame.png",
+    "source_highres_file": "Assets/DungeonHUD/Source/TransparentHighRes/circular_minimap_frame.png",
+    "category": "Icons/Map",
+    "game_ready_size_px": [
+      1024,
+      1024
+    ],
+    "source_size_px": [
+      1254,
+      1254
+    ],
+    "description": "Circular minimap frame with cartography/compass engraving, brass/iron ring, and blue crystal accents."
+  }
+]

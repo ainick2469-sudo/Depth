@@ -6,7 +6,7 @@ namespace FrontierDepths.UI
 {
     public sealed class DepthSenseController : MonoBehaviour
     {
-        public const float ManaCost = 25f;
+        public const float FocusCost = 25f;
 
         private FirstPersonController playerController;
         private PlayerResourceController resources;
@@ -25,26 +25,38 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            TryUseDepthSense();
+            TryUseDepthSense(dungeonScene != null ? dungeonScene.CurrentBuildResult : null, playerController.transform.position);
         }
 
-        private bool TryUseDepthSense()
+        internal bool TryUseDepthSenseForTests(DungeonBuildResult build, DungeonMinimapController minimapController, PlayerResourceController resourceController, Vector3 origin)
         {
-            DungeonBuildResult build = dungeonScene != null ? dungeonScene.CurrentBuildResult : null;
+            minimap = minimapController;
+            resources = resourceController;
+            return TryUseDepthSense(build, origin);
+        }
+
+        private bool TryUseDepthSense(DungeonBuildResult build, Vector3 origin)
+        {
             if (build == null || minimap == null || resources == null)
             {
-                resources?.SetStatusMessage("Depth Sense: the depths are quiet.");
+                resources?.SetStatusMessage("No clear signal.");
                 return false;
             }
 
-            DungeonRoomBuildRecord target = FindSenseTarget(build);
+            DungeonRoomBuildRecord target = FindSenseTarget(build, origin);
             if (target == null)
             {
-                resources.SetStatusMessage("Depth Sense: the depths are quiet.");
+                resources.SetStatusMessage("No clear signal.");
                 return false;
             }
 
-            if (!resources.TrySpendMana(ManaCost, "Depth Sense"))
+            if (resources.CurrentFocus + 0.001f < FocusCost)
+            {
+                resources.SetStatusMessage("Not enough Focus for Depth Sense.");
+                return false;
+            }
+
+            if (!resources.TrySpendFocus(FocusCost, "Depth Sense"))
             {
                 return false;
             }
@@ -54,13 +66,12 @@ namespace FrontierDepths.UI
             return true;
         }
 
-        private DungeonRoomBuildRecord FindSenseTarget(DungeonBuildResult build)
+        private DungeonRoomBuildRecord FindSenseTarget(DungeonBuildResult build, Vector3 origin)
         {
             DungeonRoomBuildRecord best = null;
             float bestDistance = float.MaxValue;
-            Vector3 origin = playerController != null ? playerController.transform.position : Vector3.zero;
 
-            for (int pass = 0; pass < 3; pass++)
+            for (int pass = 0; pass < 4; pass++)
             {
                 best = null;
                 bestDistance = float.MaxValue;
@@ -74,11 +85,12 @@ namespace FrontierDepths.UI
 
                     bool eligible = pass switch
                     {
-                        0 => room.roomRole == DungeonRoomRole.Exit || room.roomType == DungeonNodeKind.TransitDown,
-                        1 => !string.IsNullOrWhiteSpace(room.bountyId) || room.roomRole == DungeonRoomRole.Bounty,
-                        _ => !string.IsNullOrWhiteSpace(room.purposeId) || room.roomRole == DungeonRoomRole.Treasure ||
+                        0 => !string.IsNullOrWhiteSpace(room.bountyId) || room.roomRole == DungeonRoomRole.Bounty,
+                        1 => room.roomRole == DungeonRoomRole.Exit || room.roomType == DungeonNodeKind.TransitDown,
+                        2 => !string.IsNullOrWhiteSpace(room.purposeId) || room.roomRole == DungeonRoomRole.Treasure ||
                              room.roomRole == DungeonRoomRole.Shrine || room.roomRole == DungeonRoomRole.Scout ||
-                             room.roomRole == DungeonRoomRole.Armory || room.roomRole == DungeonRoomRole.Elite
+                             room.roomRole == DungeonRoomRole.Armory || room.roomRole == DungeonRoomRole.Elite,
+                        _ => room.roomRole == DungeonRoomRole.Hub || room.roomRole == DungeonRoomRole.Secret
                     };
                     if (!eligible)
                     {

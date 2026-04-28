@@ -11,7 +11,7 @@ namespace FrontierDepths.UI
         private Text resourceText;
         private Text statusText;
         private HudBarView healthBar;
-        private HudBarView manaBar;
+        private HudBarView focusBar;
         private HudBarView staminaBar;
         private PlayerHealth playerHealth;
         private PlayerResourceController resources;
@@ -35,7 +35,7 @@ namespace FrontierDepths.UI
 
             if (resources != null)
             {
-                manaBar?.Set("MANA", resources.CurrentMana, resources.MaxMana);
+                focusBar?.Set("FOCUS", resources.CurrentFocus, resources.MaxFocus);
                 staminaBar?.Set("STAM", resources.CurrentStamina, resources.MaxStamina);
                 if (statusText != null)
                 {
@@ -74,14 +74,14 @@ namespace FrontierDepths.UI
 
         private void EnsureUi()
         {
-            if (resourceText != null && healthBar != null && manaBar != null && staminaBar != null)
+            if (resourceText != null && healthBar != null && focusBar != null && staminaBar != null)
             {
                 return;
             }
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             healthBar ??= new HudBarView(transform, "HudHealthBar", font, new Color(0.85f, 0.12f, 0.08f, 0.94f), new Vector2(28f, 154f));
-            manaBar ??= new HudBarView(transform, "HudManaBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(28f, 128f));
+            focusBar ??= new HudBarView(transform, "HudFocusBar", font, new Color(0.18f, 0.42f, 0.98f, 0.94f), new Vector2(28f, 128f));
             staminaBar ??= new HudBarView(transform, "HudStaminaBar", font, new Color(0.95f, 0.73f, 0.24f, 0.94f), new Vector2(28f, 102f));
             GameObject textObject = new GameObject("HudResources", typeof(RectTransform), typeof(Text));
             textObject.transform.SetParent(transform, false);

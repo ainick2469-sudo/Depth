@@ -25,10 +25,13 @@ namespace FrontierDepths.Tests.EditMode
                 resources.TickForTests(1f, now + 2f);
                 Assert.Greater(resources.CurrentStamina, 65f);
 
-                Assert.IsTrue(resources.TrySpendMana(25f, "Depth Sense"));
-                Assert.AreEqual(75f, resources.CurrentMana, 0.01f);
-                resources.RestoreMana(10f);
-                Assert.AreEqual(85f, resources.CurrentMana, 0.01f);
+                Assert.IsTrue(resources.TrySpendFocus(25f, "Depth Sense"));
+                Assert.AreEqual(75f, resources.CurrentFocus, 0.01f);
+                resources.RestoreFocus(10f);
+                Assert.AreEqual(85f, resources.CurrentFocus, 0.01f);
+
+                Assert.IsTrue(resources.TrySpendMana(20f, "Future Spell"));
+                Assert.AreEqual(80f, resources.CurrentMana, 0.01f);
             }
             finally
             {
@@ -48,7 +51,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void InputDefaults_AddFullMapAndManaSenseWithoutStealingMinimap()
+        public void InputDefaults_AddFullMapAndDepthSenseBindingWithoutStealingMinimap()
         {
             Assert.AreEqual(KeyCode.M.ToString(), InputBindingService.GetDefaultRecord(GameplayInputAction.ToggleFullMap).primary);
             Assert.AreEqual(KeyCode.C.ToString(), InputBindingService.GetDefaultRecord(GameplayInputAction.ManaSense).primary);

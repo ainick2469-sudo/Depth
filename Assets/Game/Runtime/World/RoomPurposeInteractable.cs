@@ -110,8 +110,8 @@ namespace FrontierDepths.World
             {
                 case RoomPurposeEffect.Shrine:
                     AddProfileProgress(profileService, classXp: 18, reputation: 5);
-                    float shrineMana = resources != null ? resources.RestoreMana(20f) : 0f;
-                    return shrineMana > 0f ? $"+18 class XP, +5 reputation, +{shrineMana:0} mana" : "+18 class XP, +5 reputation";
+                    float shrineFocus = resources != null ? resources.RestoreFocus(20f) : 0f;
+                    return shrineFocus > 0f ? $"+18 class XP, +5 reputation, +{shrineFocus:0} focus" : "+18 class XP, +5 reputation";
                 case RoomPurposeEffect.Elite:
                     AddProfileProgress(profileService, classXp: 16, reputation: 12);
                     return "+16 class XP, +12 reputation";
@@ -121,9 +121,9 @@ namespace FrontierDepths.World
                 case RoomPurposeEffect.Wild:
                     return ApplyWildOutcome(playerHealth, weapon, profileService);
                 case RoomPurposeEffect.Fountain:
-                    float fountainMana = resources != null ? resources.RestoreMana(35f) : 0f;
+                    float fountainFocus = resources != null ? resources.RestoreFocus(35f) : 0f;
                     float fountainStamina = resources != null ? resources.RestoreStamina(35f) : 0f;
-                    return $"fountain recovery +{fountainMana:0} mana, +{fountainStamina:0} stamina";
+                    return $"fountain recovery +{fountainFocus:0} focus, +{fountainStamina:0} stamina";
                 case RoomPurposeEffect.Armory:
                     int armoryAmmo = weapon != null ? weapon.TryAddAmmoToReserve(8, true) : 0;
                     return armoryAmmo > 0 ? $"+{armoryAmmo} armory ammo" : "weapon cache checked";

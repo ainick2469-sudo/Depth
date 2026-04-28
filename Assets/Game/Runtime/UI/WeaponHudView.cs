@@ -1,4 +1,5 @@
 using FrontierDepths.Combat;
+using FrontierDepths.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ namespace FrontierDepths.UI
         [SerializeField] private Text ammoText;
         [SerializeField] private Text reloadText;
         [SerializeField] private Image hitMarkerImage;
+        [SerializeField] private Image panelFrameImage;
 
         private PlayerWeaponController weapon;
         private float nextResolveTime;
@@ -151,6 +153,21 @@ namespace FrontierDepths.UI
             ammoText ??= FindNamedComponent<Text>("WeaponAmmo");
             reloadText ??= FindNamedComponent<Text>("WeaponReload");
             hitMarkerImage ??= FindNamedComponent<Image>("WeaponHitMarker");
+            panelFrameImage ??= FindNamedComponent<Image>("WeaponPanelFrame");
+
+            if (panelFrameImage == null)
+            {
+                GameObject frameObject = new GameObject("WeaponPanelFrame", typeof(RectTransform), typeof(Image));
+                frameObject.transform.SetParent(transform, false);
+                panelFrameImage = frameObject.GetComponent<Image>();
+                RectTransform rect = panelFrameImage.rectTransform;
+                rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
+                rect.pivot = new Vector2(1f, 0f);
+                rect.sizeDelta = new Vector2(316f, 204f);
+                rect.anchoredPosition = new Vector2(-18f, 12f);
+                panelFrameImage.raycastTarget = false;
+                panelFrameImage.transform.SetAsFirstSibling();
+            }
 
             if (weaponNameText == null)
             {
@@ -159,7 +176,7 @@ namespace FrontierDepths.UI
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
                 rect.pivot = new Vector2(1f, 0f);
                 rect.sizeDelta = new Vector2(280f, 30f);
-                rect.anchoredPosition = new Vector2(-32f, 88f);
+                rect.anchoredPosition = new Vector2(-48f, 106f);
             }
 
             if (ammoText == null)
@@ -169,7 +186,7 @@ namespace FrontierDepths.UI
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
                 rect.pivot = new Vector2(1f, 0f);
                 rect.sizeDelta = new Vector2(220f, 48f);
-                rect.anchoredPosition = new Vector2(-32f, 36f);
+                rect.anchoredPosition = new Vector2(-54f, 46f);
             }
 
             if (reloadText == null)
@@ -179,7 +196,7 @@ namespace FrontierDepths.UI
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
                 rect.pivot = new Vector2(1f, 0f);
                 rect.sizeDelta = new Vector2(220f, 36f);
-                rect.anchoredPosition = new Vector2(-32f, 124f);
+                rect.anchoredPosition = new Vector2(-48f, 140f);
             }
 
             if (hitMarkerImage == null)
@@ -203,6 +220,8 @@ namespace FrontierDepths.UI
                 hitMarkerImage.color = new Color(1f, 0.95f, 0.62f, 0.95f);
                 hitMarkerImage.enabled = false;
             }
+
+            ConfigurePanelFrame();
         }
 
         private Text CreateText(string name, Font font, int size, TextAnchor alignment)
@@ -229,8 +248,30 @@ namespace FrontierDepths.UI
             text.raycastTarget = false;
         }
 
+        private void ConfigurePanelFrame()
+        {
+            if (panelFrameImage == null)
+            {
+                return;
+            }
+
+            Sprite panelSprite = HudSpriteCatalog.GetWeaponPanelSprite();
+            panelFrameImage.sprite = panelSprite;
+            panelFrameImage.type = Image.Type.Simple;
+            panelFrameImage.preserveAspect = panelSprite != null;
+            panelFrameImage.color = panelSprite != null
+                ? new Color(1f, 1f, 1f, 0.92f)
+                : new Color(UiTheme.Panel.r, UiTheme.Panel.g, UiTheme.Panel.b, 0.76f);
+            panelFrameImage.enabled = true;
+        }
+
         private void ShowWeaponHud()
         {
+            if (panelFrameImage != null)
+            {
+                panelFrameImage.enabled = true;
+            }
+
             SetTextVisible(weaponNameText, true);
             SetTextVisible(ammoText, true);
         }
@@ -240,6 +281,11 @@ namespace FrontierDepths.UI
             SetTextVisible(weaponNameText, false);
             SetTextVisible(ammoText, false);
             SetTextVisible(reloadText, false);
+            if (panelFrameImage != null)
+            {
+                panelFrameImage.enabled = false;
+            }
+
             if (hitMarkerImage != null)
             {
                 hitMarkerImage.enabled = false;

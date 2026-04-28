@@ -247,6 +247,7 @@ namespace FrontierDepths.UI
                 GameplayInputAction.PistolWhip => "Pistol Whip",
                 GameplayInputAction.EquipPrimary => "Equip Slot 1",
                 GameplayInputAction.EquipSecondary => "Equip Slot 2",
+                GameplayInputAction.ManaSense => "Depth Sense",
                 GameplayInputAction.RunInfo => "Run Info",
                 _ => action.ToString()
             };
