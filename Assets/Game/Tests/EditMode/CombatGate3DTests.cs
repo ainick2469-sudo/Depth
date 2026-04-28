@@ -272,6 +272,99 @@ namespace FrontierDepths.Tests.EditMode
             }
         }
 
+        [Test]
+        public void ChainHit_DoesNotChainWhenUpgradeIsMissing()
+        {
+            RunState run = CreateRunState();
+            RunStatAggregator.SetOverrideForTests(RunStatAggregator.Build(run));
+
+            GameObject player = new GameObject("NoChainPlayer");
+            GameObject original = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            GameObject nearby = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                PlayerWeaponController weapon = player.AddComponent<PlayerWeaponController>();
+                EnemyHealth originalHealth = original.AddComponent<EnemyHealth>();
+                originalHealth.Configure(100f, Color.red);
+                EnemyHealth nearbyHealth = nearby.AddComponent<EnemyHealth>();
+                nearbyHealth.Configure(100f, Color.blue);
+                original.transform.position = Vector3.zero;
+                nearby.transform.position = Vector3.right * 6f;
+
+                DamageInfo damageInfo = new DamageInfo
+                {
+                    amount = 20f,
+                    source = player,
+                    weaponId = "weapon.frontier_revolver",
+                    hitPoint = original.transform.position,
+                    damageType = DamageType.Physical,
+                    deliveryType = DamageDeliveryType.Raycast
+                };
+                DamageResult result = new DamageResult { applied = true, damageApplied = 20f };
+
+                for (int i = 0; i < 6; i++)
+                {
+                    Assert.IsFalse(weapon.TryApplyChainHit(damageInfo, result, original));
+                }
+
+                Assert.AreEqual(100f, nearbyHealth.CurrentHealth);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(original);
+                Object.DestroyImmediate(nearby);
+            }
+        }
+
+        [Test]
+        public void ChainHit_SkipsDeadNearbyEnemies()
+        {
+            RunState run = CreateRunState();
+            run.AddOrStackUpgrade(RunUpgradeCatalog.ChainHitUpgradeId);
+            RunStatAggregator.SetOverrideForTests(RunStatAggregator.Build(run));
+
+            GameObject player = new GameObject("DeadChainPlayer");
+            GameObject original = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            GameObject deadNearby = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                PlayerWeaponController weapon = player.AddComponent<PlayerWeaponController>();
+                EnemyHealth originalHealth = original.AddComponent<EnemyHealth>();
+                originalHealth.Configure(100f, Color.red);
+                EnemyHealth deadHealth = deadNearby.AddComponent<EnemyHealth>();
+                deadHealth.Configure(1f, Color.blue);
+                deadHealth.ApplyDamage(new DamageInfo { amount = 5f, source = player, hitPoint = deadNearby.transform.position });
+                original.transform.position = Vector3.zero;
+                deadNearby.transform.position = Vector3.right * 6f;
+
+                DamageInfo damageInfo = new DamageInfo
+                {
+                    amount = 20f,
+                    source = player,
+                    weaponId = "weapon.frontier_revolver",
+                    hitPoint = original.transform.position,
+                    damageType = DamageType.Physical,
+                    deliveryType = DamageDeliveryType.Raycast
+                };
+                DamageResult result = new DamageResult { applied = true, damageApplied = 20f };
+
+                for (int i = 0; i < 5; i++)
+                {
+                    Assert.IsFalse(weapon.TryApplyChainHit(damageInfo, result, original));
+                }
+
+                Assert.IsFalse(weapon.TryApplyChainHit(damageInfo, result, original));
+                Assert.IsTrue(deadHealth.IsDead);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(original);
+                Object.DestroyImmediate(deadNearby);
+            }
+        }
+
         private static RunState CreateRunState()
         {
             RunState run = new RunState

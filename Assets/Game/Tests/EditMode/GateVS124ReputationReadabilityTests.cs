@@ -52,7 +52,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void RunUpgradeCatalog_ChainSparkIsAlwaysOnAtTwentyPercent()
+        public void RunUpgradeCatalog_ChainSparkTriggersEverySixthHitAtThirtyFivePercent()
         {
             RunState run = new RunState();
             run.Normalize();
@@ -61,8 +61,8 @@ namespace FrontierDepths.Tests.EditMode
             RunStatSnapshot stats = RunStatAggregator.Build(run);
 
             Assert.IsTrue(stats.HasChainHit);
-            Assert.AreEqual(1, stats.chainEveryNthHit);
-            Assert.AreEqual(0.20f, stats.chainDamageFraction, 0.001f);
+            Assert.AreEqual(6, stats.chainEveryNthHit);
+            Assert.AreEqual(0.35f, stats.chainDamageFraction, 0.001f);
         }
 
         [Test]

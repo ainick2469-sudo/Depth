@@ -132,5 +132,32 @@ namespace FrontierDepths.Tests.EditMode
                 }
             }
         }
+
+        [Test]
+        public void HealthPickupMagnet_DoesNotDestroyWhenHealthIsFull()
+        {
+            GameObject player = new GameObject("FullHealthPlayer", typeof(PlayerHealth));
+            GameObject pickup = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            try
+            {
+                PlayerHealth health = player.GetComponent<PlayerHealth>();
+                health.ResetHealth();
+                HealthPickup healthPickup = pickup.AddComponent<HealthPickup>();
+                healthPickup.Configure(10f);
+                PickupMagnetController magnet = pickup.GetComponent<PickupMagnetController>();
+
+                Assert.IsFalse(magnet.TryCollect(player));
+                Assert.AreEqual("Health full.", healthPickup.LastBlockedReason);
+                Assert.NotNull(pickup);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+                if (pickup != null)
+                {
+                    Object.DestroyImmediate(pickup);
+                }
+            }
+        }
     }
 }

@@ -31,7 +31,11 @@ namespace FrontierDepths.Combat
             }
 
             GameObject root = new GameObject(RootName, typeof(CombatFeedbackService));
-            DontDestroyOnLoad(root);
+            if (Application.isPlaying)
+            {
+                DontDestroyOnLoad(root);
+            }
+
             Instance = root.GetComponent<CombatFeedbackService>();
             Instance.EnsureInitialized();
             return Instance;
@@ -51,12 +55,29 @@ namespace FrontierDepths.Combat
         {
             if (Instance != null && Instance != this)
             {
-                Destroy(gameObject);
+                DestroyServiceObject(gameObject);
                 return;
             }
 
             Instance = this;
             EnsureInitialized();
+        }
+
+        private static void DestroyServiceObject(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(target);
+            }
+            else
+            {
+                DestroyImmediate(target);
+            }
         }
 
         private void Update()

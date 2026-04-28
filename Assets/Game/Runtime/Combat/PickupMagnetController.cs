@@ -73,7 +73,7 @@ namespace FrontierDepths.Combat
 
             if (applied)
             {
-                Destroy(gameObject);
+                DestroyPickupObject(gameObject);
             }
             else if (!string.IsNullOrWhiteSpace(blockedReason) && Time.time >= nextBlockedMessageTime)
             {
@@ -82,6 +82,23 @@ namespace FrontierDepths.Combat
             }
 
             return applied;
+        }
+
+        internal static void DestroyPickupObject(GameObject pickupObject)
+        {
+            if (pickupObject == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(pickupObject);
+            }
+            else
+            {
+                DestroyImmediate(pickupObject);
+            }
         }
 
         private void ResolvePlayer()

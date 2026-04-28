@@ -30,7 +30,7 @@ namespace FrontierDepths.Combat
         public const string TrailblazerUpgradeId = "upgrade.run.trailblazer";
         public const string RoomReaderUpgradeId = "upgrade.run.room_reader";
         public const string RicochetBrandUpgradeId = "upgrade.run.ricochet_brand";
-        public const float ChainHitBaseDamageFraction = 0.20f;
+        public const float ChainHitBaseDamageFraction = 0.35f;
         public const float ChainHitDamageFractionPerExtraStack = 0.10f;
         public const float ChainHitMaxDamageFraction = 0.80f;
         public const float ChainHitSearchRadius = 14f;
@@ -104,10 +104,10 @@ namespace FrontierDepths.Combat
             {
                 upgradeId = ChainHitUpgradeId,
                 displayName = "Chain Spark",
-                description = "Every weapon hit chains 20% damage to one nearby enemy.",
+                description = "Every sixth weapon hit chains 35% damage to one nearby enemy.",
                 effectKind = RunUpgradeEffectKind.EveryNthHitChain,
                 category = RunUpgradeCategory.Chain,
-                triggerEveryNthHit = 1,
+                triggerEveryNthHit = 6,
                 chainDamageFraction = ChainHitBaseDamageFraction
             },
             new RunUpgradeDefinition
@@ -386,7 +386,7 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.KillHealFlat => $"kills heal {definition.value * stackCount:0.#} HP",
                 RunUpgradeEffectKind.FirstShotAfterReloadPercent => $"+{definition.value * stackCount * 100f:0.#}% first shot after reload",
                 RunUpgradeEffectKind.AmmoPickupPercent => $"+{definition.value * stackCount * 100f:0.#}% reserve ammo from pickups",
-                RunUpgradeEffectKind.EveryNthHitChain => $"every hit chains {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
+                RunUpgradeEffectKind.EveryNthHitChain => $"every {Mathf.Max(1, definition.triggerEveryNthHit):0} hits chain {GetChainDamageFractionForStack(stackCount) * 100f:0.#}% damage",
                 RunUpgradeEffectKind.PistolWhipDamagePercent => $"+{definition.value * stackCount * 100f:0.#}% Pistol Whip damage",
                 RunUpgradeEffectKind.PistolWhipCooldownPercent => $"-{Mathf.Min(75f, definition.value * stackCount * 100f):0.#}% Pistol Whip cooldown",
                 RunUpgradeEffectKind.ReserveAmmoCapacityFlat => $"+{definition.value * stackCount:0.#} reserve ammo capacity",

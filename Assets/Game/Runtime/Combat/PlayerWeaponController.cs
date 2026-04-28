@@ -1571,6 +1571,14 @@ namespace FrontierDepths.Combat
                 return false;
             }
 
+            runUpgradeWeaponHitCounter++;
+            int triggerEveryNthHit = Mathf.Max(1, stats.chainEveryNthHit);
+            if (runUpgradeWeaponHitCounter < triggerEveryNthHit)
+            {
+                return false;
+            }
+
+            runUpgradeWeaponHitCounter = 0;
             EnemyHealth chainTarget = FindNearestChainTarget(originalEnemy, damageInfo.hitPoint, RunUpgradeCatalog.ChainHitSearchRadius + stats.chainRangeFlat);
             if (chainTarget == null)
             {

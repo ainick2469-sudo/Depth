@@ -46,7 +46,7 @@ namespace FrontierDepths.Combat
         {
             if (other != null && ApplyToPlayer(other.gameObject))
             {
-                Destroy(gameObject);
+                PickupMagnetController.DestroyPickupObject(gameObject);
             }
         }
 

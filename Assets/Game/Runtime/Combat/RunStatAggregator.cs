@@ -184,7 +184,10 @@ namespace FrontierDepths.Combat
                             modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.AmmoPickup, 0f, stackedValue, stackCount));
                             break;
                         case RunUpgradeEffectKind.EveryNthHitChain:
-                            chainEveryNthHit = 1;
+                            int chainCadence = Mathf.Max(1, definition.triggerEveryNthHit);
+                            chainEveryNthHit = chainEveryNthHit > 0
+                                ? Mathf.Min(chainEveryNthHit, chainCadence)
+                                : chainCadence;
                             float stackedChainFraction = RunUpgradeCatalog.GetChainDamageFractionForStack(stackCount);
                             chainDamageFraction = Mathf.Max(chainDamageFraction, stackedChainFraction);
                             modifiers.Add(new RunStatModifierContribution(definition.SourceId, RunStatId.ChainHit, 0f, stackedChainFraction, stackCount));
