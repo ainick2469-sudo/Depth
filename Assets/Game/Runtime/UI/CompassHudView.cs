@@ -56,8 +56,9 @@ namespace FrontierDepths.UI
             }
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Transform parent = HudLayoutConstants.GetZoneOrRoot(transform, HudLayoutConstants.TopCenterZoneName);
             GameObject compassObject = new GameObject("Compass", typeof(RectTransform), typeof(Text));
-            compassObject.transform.SetParent(transform, false);
+            compassObject.transform.SetParent(parent != null ? parent : transform, false);
             compassText = compassObject.GetComponent<Text>();
             compassText.font = font;
             compassText.fontSize = 18;
@@ -73,7 +74,7 @@ namespace FrontierDepths.UI
             compassRect.anchoredPosition = new Vector2(0f, -18f);
 
             GameObject floorObject = new GameObject("FloorLabel", typeof(RectTransform), typeof(Text));
-            floorObject.transform.SetParent(transform, false);
+            floorObject.transform.SetParent(parent != null ? parent : transform, false);
             floorText = floorObject.GetComponent<Text>();
             floorText.font = font;
             floorText.fontSize = 15;

@@ -31,6 +31,7 @@ namespace FrontierDepths.UI
         private DungeonMapPanelController fullMapController;
         private RunInfoPanelController runInfoPanelController;
         private PauseMenuController pauseMenuController;
+        private HudDebugBoundsController debugBoundsController;
         private DungeonBuildResult configuredMinimapBuild;
 
         private void Awake()
@@ -216,6 +217,7 @@ namespace FrontierDepths.UI
 
         private void EnsureHudElements()
         {
+            EnsureHudZones();
             promptText ??= FindNamedComponent<Text>("Prompt");
             statusText ??= FindNamedComponent<Text>("Status");
             panelBackground ??= FindNamedComponent<Image>("PanelBackground");
@@ -262,6 +264,18 @@ namespace FrontierDepths.UI
             EnsureDungeonMinimapController();
             EnsureDungeonMapPanelController();
             EnsureRunInfoPanelController();
+            EnsureHudDebugBoundsController();
+        }
+
+        private void EnsureHudZones()
+        {
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.TopCenterZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.TopRightZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.BottomLeftZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.BottomCenterZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.BottomRightZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.CenterZoneName);
+            HudLayoutConstants.EnsureZone(transform, HudLayoutConstants.OverlayZoneName);
         }
 
         private void EnsureWeaponHudView()
@@ -352,6 +366,15 @@ namespace FrontierDepths.UI
             if (runInfoPanelController == null)
             {
                 runInfoPanelController = gameObject.AddComponent<RunInfoPanelController>();
+            }
+        }
+
+        private void EnsureHudDebugBoundsController()
+        {
+            debugBoundsController = GetComponent<HudDebugBoundsController>();
+            if (debugBoundsController == null)
+            {
+                debugBoundsController = gameObject.AddComponent<HudDebugBoundsController>();
             }
         }
 

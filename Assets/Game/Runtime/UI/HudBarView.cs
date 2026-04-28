@@ -5,16 +5,20 @@ namespace FrontierDepths.UI
 {
     public sealed class HudBarView
     {
+        private readonly RectTransform rootRect;
         private readonly Image fill;
         private readonly Text label;
         private readonly float width;
+
+        public RectTransform RootRect => rootRect;
+        public string CurrentLabel => label != null ? label.text : string.Empty;
 
         public HudBarView(Transform parent, string name, Font font, Color fillColor, Vector2 anchoredPosition, float width = 230f)
         {
             this.width = width;
             GameObject root = new GameObject(name, typeof(RectTransform), typeof(Image));
             root.transform.SetParent(parent, false);
-            RectTransform rootRect = root.GetComponent<RectTransform>();
+            rootRect = root.GetComponent<RectTransform>();
             rootRect.anchorMin = rootRect.anchorMax = new Vector2(0f, 0f);
             rootRect.pivot = new Vector2(0f, 0f);
             rootRect.sizeDelta = new Vector2(width, 20f);

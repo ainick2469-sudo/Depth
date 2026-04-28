@@ -44,17 +44,18 @@ namespace FrontierDepths.UI
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             GameObject textObject = new GameObject("DashCooldown", typeof(RectTransform), typeof(Text));
-            textObject.transform.SetParent(transform, false);
+            Transform parent = HudLayoutConstants.GetZoneOrRoot(transform, HudLayoutConstants.BottomCenterZoneName);
+            textObject.transform.SetParent(parent != null ? parent : transform, false);
             dashText = textObject.GetComponent<Text>();
             dashText.font = font;
             dashText.fontSize = 18;
-            dashText.alignment = TextAnchor.LowerRight;
+            dashText.alignment = TextAnchor.LowerCenter;
             dashText.raycastTarget = false;
             RectTransform rect = dashText.rectTransform;
-            rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(1f, 0f);
-            rect.sizeDelta = new Vector2(240f, 28f);
-            rect.anchoredPosition = new Vector2(-32f, 154f);
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(320f, 28f);
+            rect.anchoredPosition = new Vector2(0f, 54f);
         }
     }
 }

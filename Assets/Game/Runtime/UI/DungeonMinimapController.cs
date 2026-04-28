@@ -9,8 +9,8 @@ namespace FrontierDepths.UI
     public sealed class DungeonMinimapController : MonoBehaviour
     {
         private const string PanelName = "DungeonMinimap";
-        private const float DefaultSize = 190f;
-        private const float DefaultPadding = 14f;
+        private const float DefaultSize = HudLayoutConstants.MinimapOuterSize;
+        private const float DefaultPadding = 6f;
         public const float PlayerArrowIconOffsetDegrees = 90f; // The current ">" glyph points right at 0 degrees.
 
         private readonly Dictionary<string, RoomElement> roomElements = new Dictionary<string, RoomElement>();
@@ -20,7 +20,10 @@ namespace FrontierDepths.UI
         private readonly HashSet<string> discoveredCorridors = new HashSet<string>();
 
         private RectTransform panelRect;
+        private RectTransform frameLayerRect;
+        private RectTransform contentMaskRect;
         private RectTransform contentRect;
+        private RectTransform playerMarkerLayerRect;
         private CanvasGroup canvasGroup;
         private Image frameImage;
         private Text playerArrow;
@@ -52,6 +55,11 @@ namespace FrontierDepths.UI
         public float CurrentContentRotationZ => contentRect != null ? contentRect.localEulerAngles.z : 0f;
         public float CurrentPlayerArrowRotationZ => playerArrow != null ? playerArrow.rectTransform.localEulerAngles.z : 0f;
         public Vector2 CurrentPlayerArrowPosition => playerArrow != null ? playerArrow.rectTransform.anchoredPosition : Vector2.zero;
+        internal RectTransform FrameLayerForTests => frameLayerRect;
+        internal RectTransform ContentMaskForTests => contentMaskRect;
+        internal RectTransform ContentRootForTests => contentRect;
+        internal int FrameCountForTests => CountNamedChildren(panelRect, "MinimapFrame");
+        internal bool PlayerMarkerUnderContentRootForTests => playerArrow != null && contentRect != null && playerArrow.transform.IsChildOf(contentRect);
 
         private void Awake()
         {
@@ -103,7 +111,7 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            mapping = CalculateCoordinateMapping(buildResult, new Vector2(minimapSize, minimapSize), DefaultPadding, minimapZoom);
+            mapping = CalculateCoordinateMapping(buildResult, new Vector2(GetContentSize(), GetContentSize()), DefaultPadding, minimapZoom);
             BuildStaticGeometry();
             SetVisible(visible);
             ImportActiveFloorDiscovery();
@@ -156,14 +164,32 @@ namespace FrontierDepths.UI
                 panelRect.sizeDelta = new Vector2(minimapSize, minimapSize);
             }
 
+            if (frameLayerRect != null)
+            {
+                frameLayerRect.sizeDelta = new Vector2(minimapSize, minimapSize);
+            }
+
+            if (contentMaskRect != null)
+            {
+                float contentSize = GetContentSize();
+                contentMaskRect.sizeDelta = new Vector2(contentSize, contentSize);
+            }
+
             if (contentRect != null)
             {
-                contentRect.sizeDelta = new Vector2(minimapSize, minimapSize);
+                float contentSize = GetContentSize();
+                contentRect.sizeDelta = new Vector2(contentSize, contentSize);
+            }
+
+            if (playerMarkerLayerRect != null)
+            {
+                float contentSize = GetContentSize();
+                playerMarkerLayerRect.sizeDelta = new Vector2(contentSize, contentSize);
             }
 
             if (frameImage != null)
             {
-                frameImage.rectTransform.sizeDelta = new Vector2(minimapSize + 28f, minimapSize + 28f);
+                frameImage.rectTransform.sizeDelta = new Vector2(minimapSize, minimapSize);
             }
 
             RebuildConfiguredMap();
@@ -403,32 +429,58 @@ namespace FrontierDepths.UI
             }
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Transform parent = HudLayoutConstants.GetZoneOrRoot(transform, HudLayoutConstants.TopRightZoneName);
             GameObject panelObject = new GameObject(PanelName, typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
-            panelObject.transform.SetParent(transform, false);
+            panelObject.transform.SetParent(parent != null ? parent : transform, false);
             panelRect = panelObject.GetComponent<RectTransform>();
             panelRect.anchorMin = panelRect.anchorMax = new Vector2(1f, 1f);
             panelRect.pivot = new Vector2(1f, 1f);
             panelRect.sizeDelta = new Vector2(minimapSize, minimapSize);
-            panelRect.anchoredPosition = new Vector2(-22f, -22f);
+            panelRect.anchoredPosition = new Vector2(-HudLayoutConstants.HudMargin, -HudLayoutConstants.HudMargin);
 
             Image panelImage = panelObject.GetComponent<Image>();
-            panelImage.color = new Color(0.02f, 0.025f, 0.03f, 0.72f);
+            panelImage.color = new Color(0.02f, 0.025f, 0.03f, 0.36f);
             panelImage.raycastTarget = false;
             canvasGroup = panelObject.GetComponent<CanvasGroup>();
             canvasGroup.alpha = minimapOpacity;
             canvasGroup.blocksRaycasts = false;
             canvasGroup.interactable = false;
 
-            GameObject contentObject = new GameObject("MinimapContent", typeof(RectTransform));
-            contentObject.transform.SetParent(panelObject.transform, false);
+            GameObject frameLayerObject = new GameObject("FrameLayer", typeof(RectTransform));
+            frameLayerObject.transform.SetParent(panelObject.transform, false);
+            frameLayerRect = frameLayerObject.GetComponent<RectTransform>();
+            frameLayerRect.anchorMin = frameLayerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            frameLayerRect.pivot = new Vector2(0.5f, 0.5f);
+            frameLayerRect.sizeDelta = new Vector2(minimapSize, minimapSize);
+            frameLayerRect.anchoredPosition = Vector2.zero;
+
+            float contentSize = GetContentSize();
+            GameObject contentMaskObject = new GameObject("ContentMaskLayer", typeof(RectTransform), typeof(RectMask2D));
+            contentMaskObject.transform.SetParent(panelObject.transform, false);
+            contentMaskRect = contentMaskObject.GetComponent<RectTransform>();
+            contentMaskRect.anchorMin = contentMaskRect.anchorMax = new Vector2(0.5f, 0.5f);
+            contentMaskRect.pivot = new Vector2(0.5f, 0.5f);
+            contentMaskRect.sizeDelta = new Vector2(contentSize, contentSize);
+            contentMaskRect.anchoredPosition = Vector2.zero;
+
+            GameObject contentObject = new GameObject("MinimapContentRoot", typeof(RectTransform));
+            contentObject.transform.SetParent(contentMaskObject.transform, false);
             contentRect = contentObject.GetComponent<RectTransform>();
             contentRect.anchorMin = contentRect.anchorMax = new Vector2(0.5f, 0.5f);
             contentRect.pivot = new Vector2(0.5f, 0.5f);
-            contentRect.sizeDelta = new Vector2(minimapSize, minimapSize);
+            contentRect.sizeDelta = new Vector2(contentSize, contentSize);
             contentRect.anchoredPosition = Vector2.zero;
 
+            GameObject playerMarkerLayerObject = new GameObject("PlayerMarkerLayer", typeof(RectTransform));
+            playerMarkerLayerObject.transform.SetParent(contentMaskObject.transform, false);
+            playerMarkerLayerRect = playerMarkerLayerObject.GetComponent<RectTransform>();
+            playerMarkerLayerRect.anchorMin = playerMarkerLayerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            playerMarkerLayerRect.pivot = new Vector2(0.5f, 0.5f);
+            playerMarkerLayerRect.sizeDelta = new Vector2(contentSize, contentSize);
+            playerMarkerLayerRect.anchoredPosition = Vector2.zero;
+
             GameObject playerObject = new GameObject("PlayerArrow", typeof(RectTransform), typeof(Text));
-            playerObject.transform.SetParent(panelObject.transform, false);
+            playerObject.transform.SetParent(playerMarkerLayerObject.transform, false);
             playerArrow = playerObject.GetComponent<Text>();
             playerArrow.font = font;
             playerArrow.fontSize = 18;
@@ -442,13 +494,13 @@ namespace FrontierDepths.UI
             arrowRect.sizeDelta = new Vector2(24f, 24f);
 
             GameObject frameObject = new GameObject("MinimapFrame", typeof(RectTransform), typeof(Image));
-            frameObject.transform.SetParent(panelObject.transform, false);
+            frameObject.transform.SetParent(frameLayerObject.transform, false);
             frameImage = frameObject.GetComponent<Image>();
             frameImage.raycastTarget = false;
             RectTransform frameRect = frameImage.rectTransform;
             frameRect.anchorMin = frameRect.anchorMax = new Vector2(0.5f, 0.5f);
             frameRect.pivot = new Vector2(0.5f, 0.5f);
-            frameRect.sizeDelta = new Vector2(minimapSize + 28f, minimapSize + 28f);
+            frameRect.sizeDelta = new Vector2(minimapSize, minimapSize);
             frameRect.anchoredPosition = Vector2.zero;
             ConfigureFrameImage();
 
@@ -462,14 +514,19 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            Sprite frameSprite = HudSpriteCatalog.GetMinimapFrameSprite();
+            Sprite frameSprite = HudSpriteCatalog.TryGetMinimapFrame();
             frameImage.sprite = frameSprite;
             frameImage.type = Image.Type.Simple;
             frameImage.preserveAspect = frameSprite != null;
             frameImage.color = frameSprite != null
                 ? new Color(1f, 1f, 1f, 0.94f)
-                : new Color(1f, 1f, 1f, 0f);
-            frameImage.enabled = frameSprite != null;
+                : new Color(0.94f, 0.64f, 0.28f, 0.42f);
+            frameImage.enabled = true;
+        }
+
+        private float GetContentSize()
+        {
+            return Mathf.Max(48f, minimapSize - HudLayoutConstants.MinimapContentPadding * 2f);
         }
 
         private void BuildStaticGeometry()
@@ -583,7 +640,7 @@ namespace FrontierDepths.UI
             }
 
             ClearGeometry();
-            mapping = CalculateCoordinateMapping(buildResult, new Vector2(minimapSize, minimapSize), DefaultPadding, minimapZoom);
+            mapping = CalculateCoordinateMapping(buildResult, new Vector2(GetContentSize(), GetContentSize()), DefaultPadding, minimapZoom);
             BuildStaticGeometry();
             RefreshRevealState();
             UpdatePlayerArrow();
@@ -725,7 +782,10 @@ namespace FrontierDepths.UI
                     DungeonRoomRole.Treasure => new Color(1f, 0.78f, 0.18f, 1f),
                     DungeonRoomRole.Shrine => new Color(0.68f, 0.35f, 0.95f, 1f),
                     DungeonRoomRole.Armory => new Color(0.22f, 0.92f, 0.95f, 1f),
+                    DungeonRoomRole.Bounty => new Color(1f, 0.48f, 0.2f, 1f),
                     DungeonRoomRole.Elite => new Color(0.92f, 0.18f, 0.14f, 1f),
+                    DungeonRoomRole.MiniBoss => new Color(0.95f, 0.28f, 0.18f, 1f),
+                    DungeonRoomRole.Boss => new Color(0.95f, 0.12f, 0.1f, 1f),
                     DungeonRoomRole.Secret => new Color(0.62f, 0.38f, 0.82f, 1f),
                     DungeonRoomRole.Scout => new Color(0.22f, 0.78f, 0.68f, 1f),
                     _ => room.roomType switch
@@ -775,6 +835,29 @@ namespace FrontierDepths.UI
                 return room.purposeIcon;
             }
 
+            if (!string.IsNullOrWhiteSpace(room.purposeId))
+            {
+                string purposeIcon = room.purposeId switch
+                {
+                    "green_cache" => "T",
+                    "purple_shrine" => "+",
+                    "red_elite" => "E",
+                    "orange_ambush" => "!",
+                    "rainbow_wild" => "*",
+                    "blue_fountain" => "~",
+                    "gold_treasury" => "$",
+                    "cyan_armory" => "A",
+                    "white_sanctuary" => "+",
+                    "black_vault" => "?",
+                    "teal_scout" => "M",
+                    _ => string.Empty
+                };
+                if (!string.IsNullOrWhiteSpace(purposeIcon))
+                {
+                    return purposeIcon;
+                }
+            }
+
             return room.roomRole switch
             {
                 DungeonRoomRole.Start => "S",
@@ -783,7 +866,10 @@ namespace FrontierDepths.UI
                 DungeonRoomRole.Treasure => "T",
                 DungeonRoomRole.Shrine => "S",
                 DungeonRoomRole.Armory => "A",
+                DungeonRoomRole.Bounty => "B",
                 DungeonRoomRole.Elite => "E",
+                DungeonRoomRole.MiniBoss => "M",
+                DungeonRoomRole.Boss => "B",
                 DungeonRoomRole.Secret => "?",
                 DungeonRoomRole.Scout => "M",
                 _ => room.roomType switch
@@ -844,6 +930,22 @@ namespace FrontierDepths.UI
             {
                 DestroyImmediate(target);
             }
+        }
+
+        private static int CountNamedChildren(Transform root, string objectName)
+        {
+            if (root == null)
+            {
+                return 0;
+            }
+
+            int count = root.name == objectName ? 1 : 0;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                count += CountNamedChildren(root.GetChild(i), objectName);
+            }
+
+            return count;
         }
 
         private sealed class RoomElement

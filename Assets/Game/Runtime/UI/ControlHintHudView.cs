@@ -41,8 +41,9 @@ namespace FrontierDepths.UI
             }
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Transform parent = HudLayoutConstants.GetZoneOrRoot(transform, HudLayoutConstants.BottomCenterZoneName);
             GameObject textObject = new GameObject("ControlHints", typeof(RectTransform), typeof(Text));
-            textObject.transform.SetParent(transform, false);
+            textObject.transform.SetParent(parent != null ? parent : transform, false);
             hintText = textObject.GetComponent<Text>();
             hintText.font = font;
             hintText.fontSize = 15;
