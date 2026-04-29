@@ -82,6 +82,8 @@ namespace FrontierDepths.Combat
                 return;
             }
 
+            DestroyRuntimeMaterials(importedInstance);
+
             if (Application.isPlaying)
             {
                 Destroy(importedInstance);
@@ -141,38 +143,60 @@ namespace FrontierDepths.Combat
                     continue;
                 }
 
-                Material[] materials = renderer.sharedMaterials;
-                if (materials == null || materials.Length == 0)
+                Material[] sourceMaterials = renderer.sharedMaterials;
+                if (sourceMaterials == null || sourceMaterials.Length == 0)
                 {
                     renderer.sharedMaterial = CreateFallbackMaterial(renderer.name, i, 0);
                     fallbackMaterialsApplied = true;
                     continue;
                 }
 
-                bool changed = false;
+                Material[] runtimeMaterials = new Material[sourceMaterials.Length];
+                for (int slot = 0; slot < sourceMaterials.Length; slot++)
+                {
+                    Material sourceMaterial = sourceMaterials[slot];
+                    runtimeMaterials[slot] = CreateFallbackMaterial($"{renderer.name}_{sourceMaterial?.name}", i, slot);
+                }
+
+                renderer.sharedMaterials = runtimeMaterials;
+                fallbackMaterialsApplied = true;
+            }
+        }
+
+        private static void DestroyRuntimeMaterials(GameObject modelRoot)
+        {
+            if (modelRoot == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = modelRoot.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Material[] materials = renderers[i] != null ? renderers[i].sharedMaterials : null;
+                if (materials == null)
+                {
+                    continue;
+                }
+
                 for (int slot = 0; slot < materials.Length; slot++)
                 {
                     Material material = materials[slot];
-                    if (material != null && !LooksWhite(material.color))
+                    if (material == null || !material.name.StartsWith("RuntimeRevolverFallbackMaterial"))
                     {
                         continue;
                     }
 
-                    materials[slot] = CreateFallbackMaterial($"{renderer.name}_{material?.name}", i, slot);
-                    changed = true;
-                    fallbackMaterialsApplied = true;
-                }
-
-                if (changed)
-                {
-                    renderer.sharedMaterials = materials;
+                    if (Application.isPlaying)
+                    {
+                        Destroy(material);
+                    }
+                    else
+                    {
+                        DestroyImmediate(material);
+                    }
                 }
             }
-        }
-
-        private static bool LooksWhite(Color color)
-        {
-            return color.r > 0.86f && color.g > 0.86f && color.b > 0.86f;
         }
 
         private static Material CreateFallbackMaterial(string rendererName, int rendererIndex, int materialIndex)
@@ -203,6 +227,11 @@ namespace FrontierDepths.Combat
             Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
             material.name = "RuntimeRevolverFallbackMaterial";
             material.color = color;
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
             if (material.HasProperty("_Metallic"))
             {
                 material.SetFloat("_Metallic", grip ? 0.05f : 0.62f);

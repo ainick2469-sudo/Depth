@@ -127,6 +127,57 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(view.PoseAppliedForTests);
                 Assert.IsTrue(view.FallbackMaterialsAppliedForTests);
                 Assert.IsTrue(view.FallbackMaterialColorsForTests.Any(color => color.r < 0.8f && color.g < 0.8f && color.b < 0.8f));
+                Assert.IsFalse(view.FallbackMaterialColorsForTests.Any(color => color.r > 0.9f && color.g > 0.9f && color.b > 0.9f));
+                if (view.FallbackMaterialColorsForTests.Length > 1)
+                {
+                    int distinctReadableColors = view.FallbackMaterialColorsForTests
+                        .Select(color => $"{Mathf.RoundToInt(color.r * 100f)}:{Mathf.RoundToInt(color.g * 100f)}:{Mathf.RoundToInt(color.b * 100f)}")
+                        .Distinct()
+                        .Count();
+                    Assert.GreaterOrEqual(distinctReadableColors, 2);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void WeaponModelView_RuntimeMaterialsDoNotMutatePrefabSharedMaterials()
+        {
+            GameObject prefab = Resources.Load<GameObject>("Weapons/FrontierRevolver_Model");
+            if (prefab == null)
+            {
+                Assert.Pass("Revolver prefab is optional in missing-LFS environments.");
+                return;
+            }
+
+            Renderer[] prefabRenderers = prefab.GetComponentsInChildren<Renderer>(true);
+            Material[][] originalMaterials = prefabRenderers
+                .Select(renderer => renderer.sharedMaterials != null ? renderer.sharedMaterials.ToArray() : System.Array.Empty<Material>())
+                .ToArray();
+            Color[][] originalColors = originalMaterials
+                .Select(materials => materials.Select(material => material != null ? material.color : Color.clear).ToArray())
+                .ToArray();
+
+            GameObject root = new GameObject("WeaponBlockout");
+            try
+            {
+                WeaponModelView view = root.AddComponent<WeaponModelView>();
+                view.Configure(root.transform, WeaponCatalog.FrontierRevolverId);
+
+                for (int rendererIndex = 0; rendererIndex < prefabRenderers.Length; rendererIndex++)
+                {
+                    Material[] currentMaterials = prefabRenderers[rendererIndex].sharedMaterials;
+                    Assert.AreEqual(originalMaterials[rendererIndex].Length, currentMaterials.Length);
+                    for (int slot = 0; slot < currentMaterials.Length; slot++)
+                    {
+                        Assert.AreSame(originalMaterials[rendererIndex][slot], currentMaterials[slot]);
+                        Color currentColor = currentMaterials[slot] != null ? currentMaterials[slot].color : Color.clear;
+                        Assert.AreEqual(originalColors[rendererIndex][slot], currentColor);
+                    }
+                }
             }
             finally
             {
