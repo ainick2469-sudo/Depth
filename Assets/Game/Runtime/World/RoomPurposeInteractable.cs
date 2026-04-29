@@ -81,21 +81,19 @@ namespace FrontierDepths.World
 
             GameObject playerObject = interactor != null ? interactor.gameObject : null;
             PlayerHealth playerHealth = playerObject != null ? playerObject.GetComponentInParent<PlayerHealth>() : null;
-            PlayerWeaponController weapon = playerObject != null ? playerObject.GetComponentInParent<PlayerWeaponController>() : null;
             PlayerResourceController resources = playerObject != null ? playerObject.GetComponentInParent<PlayerResourceController>() : null;
 
             float hpLost = ApplyNonLethalRisk(playerHealth);
             float healed = playerHealth != null ? playerHealth.Heal(healAmount) : 0f;
-            int ammoAdded = weapon != null ? weapon.TryAddAmmoToReserve(ammoAmount, true) : 0;
             if (goldAmount > 0 && GameBootstrap.Instance != null && GameBootstrap.Instance.ProfileService != null)
             {
                 GameBootstrap.Instance.ProfileService.AddGold(goldAmount);
             }
 
-            string sideEffect = ApplyPurposeSideEffect(playerHealth, weapon, resources);
+            string sideEffect = ApplyPurposeSideEffect(playerHealth, resources);
             MarkClaimed();
             claimed = true;
-            lastResultMessage = BuildResultMessage(goldAmount, ammoAdded, healed, hpLost, sideEffect);
+            lastResultMessage = BuildResultMessage(goldAmount, healed, hpLost, sideEffect);
             if (!string.IsNullOrWhiteSpace(resultPrefix))
             {
                 lastResultMessage = $"{resultPrefix} {lastResultMessage}";
@@ -103,7 +101,7 @@ namespace FrontierDepths.World
             Debug.Log($"{displayName}: {lastResultMessage}");
         }
 
-        private string ApplyPurposeSideEffect(PlayerHealth playerHealth, PlayerWeaponController weapon, PlayerResourceController resources)
+        private string ApplyPurposeSideEffect(PlayerHealth playerHealth, PlayerResourceController resources)
         {
             ProfileService profileService = GameBootstrap.Instance != null ? GameBootstrap.Instance.ProfileService : null;
             switch (effect)
@@ -119,14 +117,15 @@ namespace FrontierDepths.World
                     AddProfileProgress(profileService, classXp: 12, reputation: 3);
                     return "+12 class XP, trap marker logged";
                 case RoomPurposeEffect.Wild:
-                    return ApplyWildOutcome(playerHealth, weapon, profileService);
+                    return ApplyWildOutcome(playerHealth, profileService);
                 case RoomPurposeEffect.Fountain:
                     float fountainFocus = resources != null ? resources.RestoreFocus(35f) : 0f;
                     float fountainStamina = resources != null ? resources.RestoreStamina(35f) : 0f;
                     return $"fountain recovery +{fountainFocus:0} focus, +{fountainStamina:0} stamina";
                 case RoomPurposeEffect.Armory:
-                    int armoryAmmo = weapon != null ? weapon.TryAddAmmoToReserve(8, true) : 0;
-                    return armoryAmmo > 0 ? $"+{armoryAmmo} armory ammo" : "weapon cache checked";
+                    AddProfileProgress(profileService, classXp: 10, reputation: 3);
+                    float armoryFocus = resources != null ? resources.RestoreFocus(18f) : 0f;
+                    return armoryFocus > 0f ? "+10 class XP, +3 reputation, weapon kit tuned focus" : "+10 class XP, +3 reputation, weapon kit checked";
                 case RoomPurposeEffect.Sanctuary:
                     AddProfileProgress(profileService, classXp: 8, reputation: 4);
                     return "+8 class XP, sanctuary blessing";
@@ -138,13 +137,17 @@ namespace FrontierDepths.World
                 case RoomPurposeEffect.Treasury:
                     return "treasury payout";
                 case RoomPurposeEffect.Cache:
-                    return "safe supplies recovered";
+                    float cacheFocus = resources != null ? resources.RestoreFocus(10f) : 0f;
+                    float cacheStamina = resources != null ? resources.RestoreStamina(15f) : 0f;
+                    return cacheFocus > 0f || cacheStamina > 0f
+                        ? $"field kit +{cacheFocus:0} focus, +{cacheStamina:0} stamina"
+                        : "field kit recovered";
                 default:
                     return string.Empty;
             }
         }
 
-        private string ApplyWildOutcome(PlayerHealth playerHealth, PlayerWeaponController weapon, ProfileService profileService)
+        private string ApplyWildOutcome(PlayerHealth playerHealth, ProfileService profileService)
         {
             int roll = Mathf.Abs(purposeId.GetHashCode()) % 4;
             switch (roll)
@@ -153,8 +156,8 @@ namespace FrontierDepths.World
                     profileService?.AddGold(22);
                     return "wild gold surge +22g";
                 case 1:
-                    int ammo = weapon != null ? weapon.TryAddAmmoToReserve(14, true) : 0;
-                    return ammo > 0 ? $"wild ammo surge +{ammo}" : "wild ammo fizzled";
+                    AddProfileProgress(profileService, classXp: 14, reputation: 4);
+                    return "wild focus insight +14 class XP, +4 reputation";
                 case 2:
                     float heal = playerHealth != null ? playerHealth.Heal(14f) : 0f;
                     return heal > 0f ? $"wild heal +{heal:0} HP" : "wild heal found no wound";
@@ -365,17 +368,12 @@ namespace FrontierDepths.World
                 : null;
         }
 
-        private static string BuildResultMessage(int gold, int ammo, float healed, float hpLost, string sideEffect)
+        private static string BuildResultMessage(int gold, float healed, float hpLost, string sideEffect)
         {
             string message = string.Empty;
             if (gold > 0)
             {
                 message += $"+{gold} gold";
-            }
-
-            if (ammo > 0)
-            {
-                message += (message.Length > 0 ? ", " : string.Empty) + $"+{ammo} ammo";
             }
 
             if (healed > 0f)

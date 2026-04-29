@@ -20,7 +20,6 @@ namespace FrontierDepths.Combat
         private const float DefaultDamageMultiplierAtMaxRange = 0.50f;
         private const float DefaultRevolverHearingRadius = 55f;
         private const int ImpactPoolSize = 12;
-        private const int DamageNumberPoolSize = 12;
         private const int TracerPoolSize = 8;
         private const float ShotDebugDrawDuration = 0.5f;
         private const string RuntimeFeedbackRootName = "RuntimeFeedbackRoot";
@@ -30,7 +29,6 @@ namespace FrontierDepths.Combat
         [SerializeField] private LayerMask weaponRaycastMask = DefaultWeaponRaycastMask;
         [SerializeField] private float muzzleFlashDuration = 0.045f;
         [SerializeField] private float impactMarkerDuration = 1.25f;
-        [SerializeField] private float damageNumberDuration = 0.75f;
         [SerializeField] private float tracerDuration = 0.05f;
         [SerializeField] private float weaponVolume = 0.28f;
         [SerializeField] private float recoilPitchKick = 1.2f;
@@ -43,7 +41,6 @@ namespace FrontierDepths.Combat
         [SerializeField] private bool enableShotDebugDraw = true;
 
         private readonly ImpactMarker[] impactMarkers = new ImpactMarker[ImpactPoolSize];
-        private readonly DamageNumberMarker[] damageNumbers = new DamageNumberMarker[DamageNumberPoolSize];
         private readonly TracerMarker[] tracers = new TracerMarker[TracerPoolSize];
 
         private FirstPersonController playerController;
@@ -58,7 +55,6 @@ namespace FrontierDepths.Combat
         private WeaponModelView weaponModelView;
         private float muzzleFlashHideTime;
         private int nextImpactMarker;
-        private int nextDamageNumber;
         private int nextTracer;
         private bool runtimeReady;
         private bool firstShotAfterReloadReady;
@@ -1083,34 +1079,6 @@ namespace FrontierDepths.Combat
             }
         }
 
-        private void EnsureDamageNumberPool()
-        {
-            Transform poolTransform = GetOrCreateFeedbackPool("WeaponDamageNumberPool");
-
-            for (int i = 0; i < damageNumbers.Length; i++)
-            {
-                Transform numberTransform = poolTransform.Find($"DamageNumber_{i}");
-                GameObject numberObject;
-                if (numberTransform != null)
-                {
-                    numberObject = numberTransform.gameObject;
-                }
-                else
-                {
-                    numberObject = new GameObject($"DamageNumber_{i}", typeof(TextMesh));
-                    numberObject.transform.SetParent(poolTransform, false);
-                }
-
-                TextMesh text = numberObject.GetComponent<TextMesh>();
-                text.anchor = TextAnchor.MiddleCenter;
-                text.alignment = TextAlignment.Center;
-                text.characterSize = 0.24f;
-                text.fontSize = 52;
-                numberObject.SetActive(false);
-                damageNumbers[i] = new DamageNumberMarker(numberObject, text);
-            }
-        }
-
         private void EnsureTracerPool()
         {
             Transform poolTransform = GetOrCreateFeedbackPool("WeaponTracerPool");
@@ -1859,82 +1827,5 @@ namespace FrontierDepths.Combat
             }
         }
 
-        private sealed class DamageNumberMarker
-        {
-            private readonly GameObject markerObject;
-            private readonly TextMesh text;
-            private Vector3 startPosition;
-            private float showTime;
-            private float hideTime;
-
-            public DamageNumberMarker(GameObject markerObject, TextMesh text)
-            {
-                this.markerObject = markerObject;
-                this.text = text;
-            }
-
-            public void Show(Vector3 position, float hideTime, float amount, Color color, bool killedTarget, string label)
-            {
-                if (markerObject == null || text == null)
-                {
-                    return;
-                }
-
-                startPosition = position;
-                showTime = Time.time;
-                this.hideTime = hideTime;
-                markerObject.transform.position = position;
-                if (!string.IsNullOrWhiteSpace(label))
-                {
-                    text.text = killedTarget ? $"{amount:0}\n{label}\nDOWN" : $"{amount:0}\n{label}";
-                }
-                else
-                {
-                    text.text = killedTarget ? $"{amount:0}\nDOWN" : amount.ToString("0");
-                }
-
-                text.color = color;
-                markerObject.SetActive(true);
-            }
-
-            public void Tick(float currentTime, Camera camera)
-            {
-                if (markerObject == null || !markerObject.activeSelf)
-                {
-                    return;
-                }
-
-                if (currentTime >= hideTime)
-                {
-                    markerObject.SetActive(false);
-                    return;
-                }
-
-                float t = Mathf.InverseLerp(showTime, hideTime, currentTime);
-                markerObject.transform.position = startPosition + Vector3.up * (0.65f * t);
-                if (camera != null)
-                {
-                    Vector3 awayFromCamera = markerObject.transform.position - camera.transform.position;
-                    if (awayFromCamera.sqrMagnitude > 0.001f)
-                    {
-                        markerObject.transform.rotation = Quaternion.LookRotation(awayFromCamera.normalized, Vector3.up);
-                    }
-                }
-
-                Color color = text.color;
-                color.a = 1f - t;
-                text.color = color;
-            }
-
-            public void Hide()
-            {
-                if (markerObject != null)
-                {
-                    markerObject.SetActive(false);
-                }
-
-                hideTime = 0f;
-            }
-        }
     }
 }

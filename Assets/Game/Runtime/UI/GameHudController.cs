@@ -36,6 +36,10 @@ namespace FrontierDepths.UI
         private float mapKeyPressedAt = -1f;
         private bool minimapFocusMode;
 
+        internal bool FullMapVisibleForTests => fullMapController != null && fullMapController.IsVisible;
+        internal bool MinimapVisibleForTests => minimapController != null && minimapController.IsVisible;
+        internal bool MapKeyHeldForTests => minimapFocusMode;
+
         private void Awake()
         {
             EnsureHudElements();
@@ -513,7 +517,7 @@ namespace FrontierDepths.UI
         {
             if (fullMapController != null && fullMapController.IsVisible)
             {
-                if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap) ||
+                if (InputBindingService.GetKeyUp(GameplayInputAction.ToggleFullMap) ||
                     InputBindingService.GetKeyDown(GameplayInputAction.Pause))
                 {
                     fullMapController.SetVisible(false, playerController);
@@ -526,6 +530,7 @@ namespace FrontierDepths.UI
             {
                 minimapFocusMode = false;
                 mapKeyPressedAt = -1f;
+                fullMapController?.SetVisible(false, playerController);
                 return;
             }
 
@@ -557,38 +562,14 @@ namespace FrontierDepths.UI
             if (InputBindingService.GetKeyDown(GameplayInputAction.ToggleFullMap))
             {
                 mapKeyPressedAt = Time.unscaledTime;
-                minimapFocusMode = false;
+                minimapFocusMode = true;
+                minimapController?.SetVisible(true);
+                fullMapController?.SetVisible(true, playerController);
             }
 
             if (InputBindingService.GetKey(GameplayInputAction.ToggleFullMap) && mapKeyPressedAt >= 0f)
             {
-                if (!minimapFocusMode && Time.unscaledTime - mapKeyPressedAt >= 0.25f)
-                {
-                    minimapFocusMode = true;
-                }
-
-                if (minimapFocusMode)
-                {
-                    float zoomDelta = Input.GetAxisRaw("Mouse ScrollWheel");
-                    if (Input.GetKeyDown(KeyCode.Equals) || Input.GetKeyDown(KeyCode.KeypadPlus))
-                    {
-                        zoomDelta += 0.1f;
-                    }
-
-                    if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus))
-                    {
-                        zoomDelta -= 0.1f;
-                    }
-
-                    if (Mathf.Abs(zoomDelta) > 0.001f && minimapController != null)
-                    {
-                        float nextZoom = minimapController.MinimapZoom + zoomDelta;
-                        minimapController.SetZoom(nextZoom);
-                        GameSettingsState settings = GameSettingsService.Current;
-                        settings.minimapZoom = minimapController.MinimapZoom;
-                        GameSettingsService.Save(settings);
-                    }
-                }
+                fullMapController?.SetVisible(true, playerController);
             }
 
             if (!InputBindingService.GetKeyUp(GameplayInputAction.ToggleFullMap))
@@ -596,13 +577,10 @@ namespace FrontierDepths.UI
                 return;
             }
 
-            bool wasHold = minimapFocusMode || (mapKeyPressedAt >= 0f && Time.unscaledTime - mapKeyPressedAt >= 0.25f);
             mapKeyPressedAt = -1f;
             minimapFocusMode = false;
-            if (!wasHold)
-            {
-                fullMapController?.Toggle(playerController);
-            }
+            fullMapController?.SetVisible(false, playerController);
+            minimapController?.SetVisible(true);
         }
 
         private bool CanToggleGameplayOverlay()

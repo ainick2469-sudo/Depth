@@ -19,6 +19,7 @@ Assets\Game\Tests\EditMode\GateVS1301FocusCleanupTests.cs
 Assets\Game\Tests\EditMode\GateVS1302AHudPresentationTests.cs
 Assets\Game\Tests\EditMode\GateVS1304BReadabilityTests.cs
 Assets\Game\Tests\EditMode\GateVS1305AStabilityTests.cs
+Assets\Game\Tests\EditMode\GateVS1305CReadabilityCleanupTests.cs
 Assets\Game\Tests\EditMode\GateVS130ResourcesCompassMetadataTests.cs
 Assets\Game\Tests\EditMode\RunServiceTests.cs
 Assets\Game\Tests\EditMode\TownPanelInputTests.cs

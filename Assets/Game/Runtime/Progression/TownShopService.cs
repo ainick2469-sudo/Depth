@@ -110,31 +110,7 @@ namespace FrontierDepths.Progression
 
         private bool RestockAmmo(out string message)
         {
-            message = string.Empty;
-            if (GameBootstrap.Instance == null || GameBootstrap.Instance.RunService == null)
-            {
-                message = "No ammo state available.";
-                return false;
-            }
-
-            const int purchaseAmount = 12;
-            RunState run = GameBootstrap.Instance.RunService.EnsureRun();
-            int added = run.TryAddReserveAmmoToActiveWeapon(purchaseAmount);
-            if (added <= 0)
-            {
-                message = "Ammo reserve full.";
-                return false;
-            }
-
-            GameBootstrap.Instance.RunService.Save();
-            GameplayEventBus.Publish(new GameplayEvent
-            {
-                eventType = GameplayEventType.AmmoRestocked,
-                weaponId = run.equippedWeaponId,
-                amount = added,
-                timestamp = UnityEngine.Time.unscaledTime
-            });
-            message = $"+{added} reserve ammo.";
+            message = "Basic ammo is infinite for now.";
             return true;
         }
 

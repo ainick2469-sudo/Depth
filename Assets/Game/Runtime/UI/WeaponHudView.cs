@@ -35,15 +35,16 @@ namespace FrontierDepths.UI
         private int lastReloadProgressBucket = -1;
         private Color hitMarkerColor = new Color(1f, 0.95f, 0.62f, 0.95f);
         private Vector2 hitMarkerSize = new Vector2(22f, 22f);
-        private static readonly Vector2[] RevolverChamberPositions =
+        private static readonly Vector2[] RevolverChamberNormalizedPositions =
         {
-            new Vector2(0f, 24f),
-            new Vector2(20.8f, 12f),
-            new Vector2(20.8f, -12f),
-            new Vector2(0f, -24f),
-            new Vector2(-20.8f, -12f),
-            new Vector2(-20.8f, 12f)
+            new Vector2(0f, 0.33f),
+            new Vector2(0.29f, 0.16f),
+            new Vector2(0.29f, -0.16f),
+            new Vector2(0f, -0.33f),
+            new Vector2(-0.29f, -0.16f),
+            new Vector2(-0.29f, 0.16f)
         };
+        private const float ChamberPipSizeFraction = 0.16f;
 
         internal int ChamberCountForTests => chamberFills.Count;
         internal int FilledChamberCountForTests => CountFilledChambers();
@@ -52,6 +53,8 @@ namespace FrontierDepths.UI
         internal string AmmoTextForTests => ammoText != null ? ammoText.text : string.Empty;
         internal string WeaponNameTextForTests => weaponNameText != null ? weaponNameText.text : string.Empty;
         internal string WeaponSubtitleTextForTests => weaponSubtitleText != null ? weaponSubtitleText.text : string.Empty;
+        internal Vector2[] ChamberLocalPositionsForTests => GetChamberLocalPositions();
+        internal bool AreChambersInsideRootForTests => AreChambersInsideRoot();
         internal bool HasPanelRootForTests => panelRoot != null;
         internal bool HasBackgroundFrameForTests => backgroundFrameImage != null;
         internal bool HasAmmoPipContainerForTests => false;
@@ -302,8 +305,14 @@ namespace FrontierDepths.UI
                 RectTransform rect = chamber.rectTransform;
                 rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.sizeDelta = new Vector2(14f, 14f);
-                rect.anchoredPosition = RevolverChamberPositions[i];
+                float rootSize = chamberRoot != null ? Mathf.Min(chamberRoot.rect.width, chamberRoot.rect.height) : 58f;
+                if (rootSize <= 0.001f)
+                {
+                    rootSize = Mathf.Min(chamberRoot.sizeDelta.x, chamberRoot.sizeDelta.y);
+                }
+
+                rect.sizeDelta = Vector2.one * Mathf.Max(8f, rootSize * ChamberPipSizeFraction);
+                rect.anchoredPosition = GetChamberLocalPosition(i, rootSize);
                 chamberFills.Add(chamber);
             }
         }
@@ -526,8 +535,8 @@ namespace FrontierDepths.UI
 
             chamberRoot.anchorMin = chamberRoot.anchorMax = new Vector2(1f, 0f);
             chamberRoot.pivot = new Vector2(0.5f, 0.5f);
-            chamberRoot.sizeDelta = new Vector2(76f, 76f);
-            chamberRoot.anchoredPosition = new Vector2(-74f, 92f);
+            chamberRoot.sizeDelta = new Vector2(58f, 58f);
+            chamberRoot.anchoredPosition = new Vector2(-84f, 92f);
 
             if (reloadText == null)
             {
@@ -639,6 +648,57 @@ namespace FrontierDepths.UI
             }
 
             return count;
+        }
+
+        private static Vector2 GetChamberLocalPosition(int index, float rootSize)
+        {
+            int safeIndex = Mathf.Clamp(index, 0, RevolverChamberNormalizedPositions.Length - 1);
+            return RevolverChamberNormalizedPositions[safeIndex] * Mathf.Max(1f, rootSize);
+        }
+
+        private Vector2[] GetChamberLocalPositions()
+        {
+            Vector2[] positions = new Vector2[chamberFills.Count];
+            for (int i = 0; i < chamberFills.Count; i++)
+            {
+                positions[i] = chamberFills[i] != null ? chamberFills[i].rectTransform.anchoredPosition : Vector2.zero;
+            }
+
+            return positions;
+        }
+
+        private bool AreChambersInsideRoot()
+        {
+            if (chamberRoot == null)
+            {
+                return chamberFills.Count == 0;
+            }
+
+            Vector2 halfSize = chamberRoot.rect.size * 0.5f;
+            if (halfSize.x <= 0.001f || halfSize.y <= 0.001f)
+            {
+                halfSize = chamberRoot.sizeDelta * 0.5f;
+            }
+
+            for (int i = 0; i < chamberFills.Count; i++)
+            {
+                Image chamber = chamberFills[i];
+                if (chamber == null)
+                {
+                    continue;
+                }
+
+                RectTransform rect = chamber.rectTransform;
+                Vector2 halfPip = rect.sizeDelta * 0.5f;
+                Vector2 position = rect.anchoredPosition;
+                if (Mathf.Abs(position.x) + halfPip.x > halfSize.x ||
+                    Mathf.Abs(position.y) + halfPip.y > halfSize.y)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private T FindNamedComponent<T>(string objectName) where T : Component

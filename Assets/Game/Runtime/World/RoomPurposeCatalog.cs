@@ -49,16 +49,16 @@ namespace FrontierDepths.World
     {
         private static readonly RoomPurposeDefinition[] Definitions =
         {
-            Definition("green_cache", "Cache Room", "Open Cache", "Reliable supplies recovered.", new Color(0.25f, 0.9f, 0.38f), 1, 0, 8, 14, 10f, 0f, RoomPurposeEffect.Cache, "C"),
-            Definition("purple_shrine", "Strange Shrine", "Make Sacrifice", "You trade blood for a strange blessing.", new Color(0.7f, 0.3f, 0.95f), 1, 0, 18, 4, 0f, 8f, RoomPurposeEffect.Shrine, "S"),
+            Definition("green_cache", "Cache Room", "Open Cache", "Useful field supplies recovered.", new Color(0.25f, 0.9f, 0.38f), 1, 0, 12, 0, 10f, 0f, RoomPurposeEffect.Cache, "C"),
+            Definition("purple_shrine", "Strange Shrine", "Make Sacrifice", "You trade blood for a strange blessing.", new Color(0.7f, 0.3f, 0.95f), 1, 0, 18, 0, 0f, 8f, RoomPurposeEffect.Shrine, "S"),
             Definition("red_elite", "Elite Den", "Claim War Trophy", "A battle trophy converts danger into reputation.", new Color(0.95f, 0.22f, 0.16f), 3, 0, 28, 0, 0f, 0f, RoomPurposeEffect.Elite, "E"),
-            Definition("orange_ambush", "Ambush Room", "Spring Trap Cache", "You spring the trap and learn from the ambush.", new Color(1f, 0.48f, 0.12f), 2, 0, 12, 8, 0f, 4f, RoomPurposeEffect.Ambush, "!"),
-            Definition("rainbow_wild", "Wild Room", "Open Wild Cache", "The room rolls a wildcard outcome.", new Color(0.95f, 0.75f, 1f), 4, 0, 8, 8, 0f, 0f, RoomPurposeEffect.Wild, "?"),
+            Definition("orange_ambush", "Ambush Room", "Spring Trap Cache", "You spring the trap and learn from the ambush.", new Color(1f, 0.48f, 0.12f), 2, 0, 16, 0, 0f, 4f, RoomPurposeEffect.Ambush, "!"),
+            Definition("rainbow_wild", "Wild Room", "Open Wild Cache", "The room rolls a wildcard outcome.", new Color(0.95f, 0.75f, 1f), 4, 0, 12, 0, 0f, 0f, RoomPurposeEffect.Wild, "?"),
             Definition("blue_fountain", "Fountain Room", "Drink From Fountain", "Clean water restores and steadies you.", new Color(0.25f, 0.58f, 1f), 2, 0, 0, 0, 26f, 0f, RoomPurposeEffect.Fountain, "+"),
             Definition("gold_treasury", "Treasury", "Open Treasury Cache", "Gold. Finally, a room with manners.", new Color(1f, 0.78f, 0.22f), 3, 0, 65, 0, 0f, 0f, RoomPurposeEffect.Treasury, "$"),
-            Definition("cyan_armory", "Armory", "Open Armory Crate", "Weapon supplies improve your next stretch.", new Color(0.35f, 0.9f, 0.95f), 2, 0, 4, 30, 0f, 0f, RoomPurposeEffect.Armory, "A"),
-            Definition("white_sanctuary", "Sanctuary", "Rest At Sanctuary", "A safe blessing, no teeth attached.", new Color(0.95f, 0.92f, 0.82f), 4, 0, 0, 6, 18f, 0f, RoomPurposeEffect.Sanctuary, "W"),
-            Definition("black_vault", "Cursed Vault", "Open Cursed Vault", "High reward, real cost, no polite lies.", new Color(0.08f, 0.07f, 0.09f), 5, 0, 80, 18, 0f, 14f, RoomPurposeEffect.CursedVault, "V"),
+            Definition("cyan_armory", "Armory", "Open Armory Crate", "Weapon kit improves your next stretch.", new Color(0.35f, 0.9f, 0.95f), 2, 0, 18, 0, 0f, 0f, RoomPurposeEffect.Armory, "A"),
+            Definition("white_sanctuary", "Sanctuary", "Rest At Sanctuary", "A safe blessing, no teeth attached.", new Color(0.95f, 0.92f, 0.82f), 4, 0, 8, 0, 18f, 0f, RoomPurposeEffect.Sanctuary, "W"),
+            Definition("black_vault", "Cursed Vault", "Open Cursed Vault", "High reward, real cost, no polite lies.", new Color(0.08f, 0.07f, 0.09f), 5, 0, 88, 0, 0f, 14f, RoomPurposeEffect.CursedVault, "V"),
             Definition("teal_scout", "Scout Room", "Read Survey Map", "Nearby routes and the stair are marked.", new Color(0.2f, 0.75f, 0.68f), 2, 0, 0, 0, 0f, 0f, RoomPurposeEffect.Scout, "M")
         };
 

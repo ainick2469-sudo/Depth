@@ -289,6 +289,11 @@ namespace FrontierDepths.Combat
                     continue;
                 }
 
+                if (IsDormantBasicAmmoUpgrade(definition))
+                {
+                    continue;
+                }
+
                 candidates.Add(definition);
             }
 
@@ -304,7 +309,7 @@ namespace FrontierDepths.Combat
 
             for (int i = 0; i < Definitions.Length && choices.Count < count; i++)
             {
-                if (!ContainsUpgrade(choices, Definitions[i].upgradeId))
+                if (!IsDormantBasicAmmoUpgrade(Definitions[i]) && !ContainsUpgrade(choices, Definitions[i].upgradeId))
                 {
                     choices.Add(Definitions[i]);
                 }
@@ -401,6 +406,14 @@ namespace FrontierDepths.Combat
                 RunUpgradeEffectKind.MoveSpeedAfterKillPercent => $"+{definition.value * stackCount * 100f:0.#}% move speed after kill",
                 _ => definition.description ?? string.Empty
             };
+        }
+
+        private static bool IsDormantBasicAmmoUpgrade(RunUpgradeDefinition definition)
+        {
+            return definition != null &&
+                   (definition.effectKind == RunUpgradeEffectKind.AmmoPickupPercent ||
+                    definition.effectKind == RunUpgradeEffectKind.ReserveAmmoCapacityFlat ||
+                    definition.category == RunUpgradeCategory.Ammo);
         }
 
         private static string BuildPercentPreview(string label, float value, int currentStack, int nextStack)

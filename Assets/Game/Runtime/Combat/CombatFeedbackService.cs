@@ -13,6 +13,8 @@ namespace FrontierDepths.Combat
         private int nextDamageNumber;
         private bool initialized;
         private Canvas damageCanvas;
+        private string lastSpawnResult = string.Empty;
+        private Vector3 lastScreenPosition;
 
         public static CombatFeedbackService Instance { get; private set; }
 
@@ -52,6 +54,9 @@ namespace FrontierDepths.Combat
 
         internal int PoolSizeForTests => damageNumbers.Length;
         internal int ActiveMarkerCountForTests => CountActiveMarkers();
+        internal string LastSpawnResultForTests => lastSpawnResult;
+        internal Vector3 LastScreenPositionForTests => lastScreenPosition;
+        internal bool HasScreenSpaceCanvasForTests => damageCanvas != null;
 
         internal static Quaternion GetDamageNumberBillboardRotationForTests(Vector3 markerPosition, Camera camera)
         {
@@ -104,10 +109,11 @@ namespace FrontierDepths.Combat
 
         private void LateUpdate()
         {
-            Camera camera = Camera.main;
+            HandleDebugDamageNumberInput();
+            Camera camera = ResolveFeedbackCamera();
             for (int i = 0; i < damageNumbers.Length; i++)
             {
-                damageNumbers[i]?.Tick(Time.time, camera);
+                damageNumbers[i]?.Tick(Time.time, camera, ref lastScreenPosition, ref lastSpawnResult);
             }
         }
 
@@ -162,8 +168,68 @@ namespace FrontierDepths.Combat
             EnsureInitialized();
             DamageNumberMarker marker = damageNumbers[nextDamageNumber];
             nextDamageNumber = (nextDamageNumber + 1) % damageNumbers.Length;
-            return marker != null &&
-                   marker.Show(point + Vector3.up * 1.25f, Time.time + DamageNumberDuration, amount, color, killedTarget, label);
+            if (marker == null)
+            {
+                lastSpawnResult = "marker missing";
+                return false;
+            }
+
+            bool shown = marker.Show(point + Vector3.up * 1.25f, Time.time + DamageNumberDuration, amount, color, killedTarget, label);
+            lastSpawnResult = shown ? "spawned" : "marker invalid";
+            marker.Tick(Time.time, ResolveFeedbackCamera(), ref lastScreenPosition, ref lastSpawnResult);
+            return shown;
+        }
+
+        public static bool SpawnDebugDamageNumberAtCrosshair()
+        {
+            Camera camera = GetOrCreate().ResolveFeedbackCamera();
+            if (camera == null)
+            {
+                GetOrCreate().lastSpawnResult = "debug camera missing";
+                return false;
+            }
+
+            ShowDamageNumber(camera.transform.position + camera.transform.forward * 8f, 99f, new Color(1f, 0.92f, 0.2f, 1f), false, "DEBUG");
+            return true;
+        }
+
+        public static bool SpawnDebugDamageNumberOverNearestEnemy()
+        {
+            CombatFeedbackService service = GetOrCreate();
+            Camera camera = service.ResolveFeedbackCamera();
+            if (camera == null)
+            {
+                service.lastSpawnResult = "debug camera missing";
+                return false;
+            }
+
+            EnemyHealth[] enemies = FindObjectsByType<EnemyHealth>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            EnemyHealth nearest = null;
+            float nearestDistance = float.MaxValue;
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                EnemyHealth enemy = enemies[i];
+                if (enemy == null || enemy.IsDead)
+                {
+                    continue;
+                }
+
+                float distance = (enemy.transform.position - camera.transform.position).sqrMagnitude;
+                if (distance < nearestDistance)
+                {
+                    nearest = enemy;
+                    nearestDistance = distance;
+                }
+            }
+
+            if (nearest == null)
+            {
+                service.lastSpawnResult = "debug enemy missing";
+                return false;
+            }
+
+            ShowDamageNumber(nearest.transform.position, 99f, new Color(1f, 0.72f, 0.25f, 1f), false, "DEBUG");
+            return true;
         }
 
         private void EnsureDamageCanvas(ref Transform poolTransform)
@@ -204,6 +270,47 @@ namespace FrontierDepths.Combat
             }
 
             return count;
+        }
+
+        private Camera ResolveFeedbackCamera()
+        {
+            Camera camera = Camera.main;
+            if (camera != null && camera.isActiveAndEnabled)
+            {
+                return camera;
+            }
+
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                if (cameras[i] != null && cameras[i].isActiveAndEnabled)
+                {
+                    return cameras[i];
+                }
+            }
+
+            return null;
+        }
+
+        private void HandleDebugDamageNumberInput()
+        {
+            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))
+            {
+                return;
+            }
+
+            if (!Input.GetKeyDown(KeyCode.F9))
+            {
+                return;
+            }
+
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+            {
+                SpawnDebugDamageNumberOverNearestEnemy();
+                return;
+            }
+
+            SpawnDebugDamageNumberAtCrosshair();
         }
 
         private sealed class DamageNumberMarker
@@ -249,7 +356,7 @@ namespace FrontierDepths.Combat
                 return true;
             }
 
-            public void Tick(float currentTime, Camera camera)
+            public void Tick(float currentTime, Camera camera, ref Vector3 lastScreenPosition, ref string lastSpawnResult)
             {
                 if (markerObject == null || !markerObject.activeSelf)
                 {
@@ -265,7 +372,12 @@ namespace FrontierDepths.Combat
                 float t = Mathf.Clamp01((currentTime - showTime) / Mathf.Max(0.01f, hideTime - showTime));
                 if (camera == null)
                 {
-                    markerObject.SetActive(false);
+                    if (canvasGroup != null)
+                    {
+                        canvasGroup.alpha = 0f;
+                    }
+
+                    lastSpawnResult = "camera missing";
                     return;
                 }
 
@@ -277,10 +389,13 @@ namespace FrontierDepths.Combat
                         canvasGroup.alpha = 0f;
                     }
 
+                    lastSpawnResult = "behind camera";
                     return;
                 }
 
                 rectTransform.position = screenPosition + Vector3.up * Mathf.Lerp(16f, 58f, t);
+                lastScreenPosition = rectTransform.position;
+                lastSpawnResult = "visible";
                 if (canvasGroup != null)
                 {
                     canvasGroup.alpha = Mathf.Lerp(1f, 0f, t);

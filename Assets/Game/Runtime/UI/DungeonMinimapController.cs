@@ -70,6 +70,7 @@ namespace FrontierDepths.UI
         internal bool FrameOverlaysMaskForTests => frameLayerRect != null && contentMaskRect != null && frameLayerRect.parent == contentMaskRect.parent && frameLayerRect.GetSiblingIndex() > contentMaskRect.GetSiblingIndex();
         internal int FrameCountForTests => CountNamedChildren(panelRect, "MinimapFrame");
         internal bool PlayerMarkerUnderContentRootForTests => playerArrow != null && contentRect != null && playerArrow.transform.IsChildOf(contentRect);
+        internal bool PlayerMarkerUnderMaskForTests => playerArrow != null && contentMaskRect != null && playerArrow.transform.IsChildOf(contentMaskRect);
 
         private void Awake()
         {

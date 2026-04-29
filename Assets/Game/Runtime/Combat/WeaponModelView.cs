@@ -22,6 +22,7 @@ namespace FrontierDepths.Combat
         internal bool FallbackMaterialsAppliedForTests => fallbackMaterialsApplied;
         internal bool PoseAppliedForTests => poseApplied;
         internal Vector3 ImportedLocalEulerForTests => importedInstance != null ? importedInstance.transform.localEulerAngles : Vector3.zero;
+        internal Color[] FallbackMaterialColorsForTests => GetRendererColors();
 
         public void Configure(Transform blockoutRoot, string weaponId)
         {
@@ -140,15 +141,32 @@ namespace FrontierDepths.Combat
                     continue;
                 }
 
-                Material material = renderer.sharedMaterial;
-                bool needsFallback = material == null || LooksWhite(material.color);
-                if (!needsFallback)
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0)
                 {
+                    renderer.sharedMaterial = CreateFallbackMaterial(renderer.name, i, 0);
+                    fallbackMaterialsApplied = true;
                     continue;
                 }
 
-                renderer.sharedMaterial = CreateFallbackMaterial(renderer.name);
-                fallbackMaterialsApplied = true;
+                bool changed = false;
+                for (int slot = 0; slot < materials.Length; slot++)
+                {
+                    Material material = materials[slot];
+                    if (material != null && !LooksWhite(material.color))
+                    {
+                        continue;
+                    }
+
+                    materials[slot] = CreateFallbackMaterial($"{renderer.name}_{material?.name}", i, slot);
+                    changed = true;
+                    fallbackMaterialsApplied = true;
+                }
+
+                if (changed)
+                {
+                    renderer.sharedMaterials = materials;
+                }
             }
         }
 
@@ -157,14 +175,29 @@ namespace FrontierDepths.Combat
             return color.r > 0.86f && color.g > 0.86f && color.b > 0.86f;
         }
 
-        private static Material CreateFallbackMaterial(string rendererName)
+        private static Material CreateFallbackMaterial(string rendererName, int rendererIndex, int materialIndex)
         {
             string lowerName = (rendererName ?? string.Empty).ToLowerInvariant();
-            Color color = lowerName.Contains("grip") || lowerName.Contains("handle")
-                ? new Color(0.16f, 0.09f, 0.045f, 1f)
-                : lowerName.Contains("barrel") || lowerName.Contains("cylinder")
-                    ? new Color(0.42f, 0.43f, 0.42f, 1f)
-                    : new Color(0.11f, 0.12f, 0.125f, 1f);
+            bool grip = lowerName.Contains("grip") || lowerName.Contains("handle") || lowerName.Contains("wood");
+            bool brightMetal = lowerName.Contains("barrel") ||
+                               lowerName.Contains("cylinder") ||
+                               lowerName.Contains("chamber") ||
+                               lowerName.Contains("sight");
+            bool darkMetal = lowerName.Contains("trigger") || lowerName.Contains("hammer") || lowerName.Contains("frame");
+
+            if (!grip && !brightMetal && !darkMetal)
+            {
+                int bucket = Mathf.Abs(rendererIndex + materialIndex) % 5;
+                grip = bucket == 3;
+                brightMetal = bucket == 1 || bucket == 2;
+                darkMetal = !grip && !brightMetal;
+            }
+
+            Color color = grip
+                ? new Color(0.12f, 0.065f, 0.035f, 1f)
+                : brightMetal
+                    ? new Color(0.32f, 0.33f, 0.32f, 1f)
+                    : new Color(0.075f, 0.082f, 0.09f, 1f);
 
             Shader shader = Shader.Find("Standard") ?? Shader.Find("Diffuse") ?? Shader.Find("Universal Render Pipeline/Lit");
             Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
@@ -172,15 +205,33 @@ namespace FrontierDepths.Combat
             material.color = color;
             if (material.HasProperty("_Metallic"))
             {
-                material.SetFloat("_Metallic", lowerName.Contains("grip") || lowerName.Contains("handle") ? 0.05f : 0.55f);
+                material.SetFloat("_Metallic", grip ? 0.05f : 0.62f);
             }
 
             if (material.HasProperty("_Glossiness"))
             {
-                material.SetFloat("_Glossiness", 0.35f);
+                material.SetFloat("_Glossiness", grip ? 0.24f : 0.38f);
             }
 
             return material;
+        }
+
+        private Color[] GetRendererColors()
+        {
+            if (importedInstance == null)
+            {
+                return System.Array.Empty<Color>();
+            }
+
+            Renderer[] renderers = importedInstance.GetComponentsInChildren<Renderer>(true);
+            Color[] colors = new Color[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Material material = renderers[i] != null ? renderers[i].sharedMaterial : null;
+                colors[i] = material != null ? material.color : Color.clear;
+            }
+
+            return colors;
         }
 
         private void SetGrayboxRenderersVisible(bool visible)
