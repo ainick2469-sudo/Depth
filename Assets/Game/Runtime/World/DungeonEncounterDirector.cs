@@ -233,6 +233,7 @@ namespace FrontierDepths.World
                         enemyLevel = enemyLevel
                     });
                     plan.AddArchetype(spawnDefinition.archetype);
+                    plan.AddTaxonomy(spawnDefinition);
                 }
             }
 
@@ -785,7 +786,7 @@ namespace FrontierDepths.World
             for (int i = 0; i < template.archetypes.Length; i++)
             {
                 EnemyDefinition definition = FindDefinition(definitions, template.archetypes[i]);
-                if (definition == null || !definition.IsEligibleForFloor(floorIndex))
+                if (definition == null || !definition.IsEligibleForNormalSpawn(floorIndex))
                 {
                     return false;
                 }
@@ -798,37 +799,50 @@ namespace FrontierDepths.World
         {
             return new List<EncounterTemplate>
             {
-                new EncounterTemplate("SoloSlime", 1, 0, 1, EnemyArchetype.Slime),
-                new EncounterTemplate("SoloBat", 1, 0, 1, EnemyArchetype.Bat),
-                new EncounterTemplate("SoloGoblinGrunt", 1, 0, 1, EnemyArchetype.GoblinGrunt),
-                new EncounterTemplate("SoloCaveRat", 1, 0, 1, EnemyArchetype.CaveRat),
-                new EncounterTemplate("SoloTrainingSkeleton", 1, 0, 1, EnemyArchetype.TrainingSkeleton),
-                new EncounterTemplate("Easy_2Slimes", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Slime),
-                new EncounterTemplate("Easy_SlimeBat", 1, 0, 7, EnemyArchetype.Slime, EnemyArchetype.Bat),
-                new EncounterTemplate("Easy_RatMite", 1, 0, 5, EnemyArchetype.CaveRat, EnemyArchetype.DustMite),
-                new EncounterTemplate("Easy_SkitterSlime", 2, 0, 5, EnemyArchetype.Skitter, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_GoblinSlime", 1, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_2BatsSlime", 1, 0, 4, EnemyArchetype.Bat, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_2SlimesBat", 1, 0, 5, EnemyArchetype.Slime, EnemyArchetype.Slime, EnemyArchetype.Bat),
-                new EncounterTemplate("Medium_SpitterEscort", 3, 0, 5, EnemyArchetype.SpitterSlime, EnemyArchetype.Slime),
-                new EncounterTemplate("Medium_BoneArcherGuard", 3, 0, 4, EnemyArchetype.BoneArcher, EnemyArchetype.TrainingSkeleton),
-                new EncounterTemplate("Medium_ShieldGoblinPair", 3, 0, 4, EnemyArchetype.ShieldGoblin, EnemyArchetype.GoblinGrunt),
-                new EncounterTemplate("Medium_BombBeetleSkitter", 4, 0, 4, EnemyArchetype.BombBeetle, EnemyArchetype.Skitter),
-                new EncounterTemplate("Hard_2GoblinGrunts", 2, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt),
-                new EncounterTemplate("Hard_Goblin2Slimes", 2, 0, 5, EnemyArchetype.GoblinGrunt, EnemyArchetype.Slime, EnemyArchetype.Slime),
-                new EncounterTemplate("Depth_BruteBat", 3, 0, 4, EnemyArchetype.GoblinBrute, EnemyArchetype.Bat),
-                new EncounterTemplate("Depth_Brute2Slimes", 3, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.Slime, EnemyArchetype.Slime),
-                new EncounterTemplate("Deep_GoblinBatSlime", 4, 0, 6, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Deep_BruteEscort", 5, 0, 5, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat),
-                new EncounterTemplate("Deep_LargeSkirmish", 6, 0, 4, EnemyArchetype.GoblinGrunt, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Deep_LandmarkPressure", 6, 0, 3, EnemyArchetype.GoblinBrute, EnemyArchetype.GoblinGrunt, EnemyArchetype.Bat, EnemyArchetype.Slime),
-                new EncounterTemplate("Deep_OrcRiftHound", 6, 0, 5, EnemyArchetype.OrcGrunt, EnemyArchetype.RiftHound),
-                new EncounterTemplate("Deep_StoneCaster", 7, 0, 4, EnemyArchetype.Stoneback, EnemyArchetype.HexCaster),
-                new EncounterTemplate("Deep_TrapWardenPack", 7, 0, 4, EnemyArchetype.BombBeetle, EnemyArchetype.RiftHound, EnemyArchetype.SpitterSlime),
-                new EncounterTemplate("Late_OgreEscort", 11, 0, 4, EnemyArchetype.IronOgre, EnemyArchetype.HexWitch),
+                new EncounterTemplate("Solo_TorchlessPrisoner", 1, 3, 2, EnemyArchetype.TorchlessPrisoner),
+                new EncounterTemplate("Solo_MoldCoveredSkeleton", 1, 3, 2, EnemyArchetype.MoldCoveredSkeleton),
+                new EncounterTemplate("Solo_StarvedDungeonWolf", 1, 3, 2, EnemyArchetype.StarvedDungeonWolf),
+                new EncounterTemplate("Solo_CandleGoblin", 1, 3, 1, EnemyArchetype.CandleGoblin),
+                new EncounterTemplate("Solo_RustBellBat", 1, 3, 1, EnemyArchetype.RustBellBat),
+                new EncounterTemplate("BeginnerRoom", 1, 3, 10, EnemyArchetype.TorchlessPrisoner, EnemyArchetype.MoldCoveredSkeleton),
+                new EncounterTemplate("FirstFastPressure", 1, 3, 8, EnemyArchetype.RustyDaggerRatfolk, EnemyArchetype.CandleGoblin),
+                new EncounterTemplate("FirstBeastRoom", 1, 3, 8, EnemyArchetype.StarvedDungeonWolf, EnemyArchetype.MoldCoveredSkeleton),
+                new EncounterTemplate("FirstSmallBeastRoom", 1, 3, 5, EnemyArchetype.CoalEyedAlleyCat, EnemyArchetype.RustBellBat),
+                new EncounterTemplate("FirstDungeonWorkCrew", 1, 3, 5, EnemyArchetype.DungeonJanitorGhoul, EnemyArchetype.TorchlessPrisoner),
+                new EncounterTemplate("Solo_ChainBoundThief", 4, 7, 1, EnemyArchetype.ChainBoundThief),
+                new EncounterTemplate("Solo_GoblinShieldRat", 4, 7, 1, EnemyArchetype.GoblinShieldRat),
+                new EncounterTemplate("Solo_BoneArcherInitiate", 4, 7, 1, EnemyArchetype.BoneArcherInitiate),
+                new EncounterTemplate("FirstRangedPressure", 4, 7, 9, EnemyArchetype.GoblinShieldRat, EnemyArchetype.BoneArcherInitiate),
+                new EncounterTemplate("FirstSupportRoom", 4, 7, 8, EnemyArchetype.LanternCultist, EnemyArchetype.CursedKennelWolf, EnemyArchetype.CandleGoblin),
+                new EncounterTemplate("FirstAmbushRoom", 4, 7, 7, EnemyArchetype.CryptLynx, EnemyArchetype.ChainBoundThief),
+                new EncounterTemplate("FirstBruteRoom", 4, 7, 7, EnemyArchetype.DungeonJanitorGhoul, EnemyArchetype.PickaxeSkeletonMiner),
+                new EncounterTemplate("KennelPressure", 4, 7, 6, EnemyArchetype.CursedKennelWolf, EnemyArchetype.CryptLynx),
+                new EncounterTemplate("AshGuardSupport", 4, 7, 5, EnemyArchetype.AshEatenPrisonGuard, EnemyArchetype.LanternCultist),
+                new EncounterTemplate("Solo_GoblinTripwireTrapper", 8, 12, 1, EnemyArchetype.GoblinTripwireTrapper),
+                new EncounterTemplate("Solo_MossbackBearCub", 8, 12, 1, EnemyArchetype.MossbackBearCub),
+                new EncounterTemplate("FirstTrapRoom", 8, 12, 9, EnemyArchetype.GoblinTripwireTrapper, EnemyArchetype.CrossbowGoblin),
+                new EncounterTemplate("FirstBeastPack", 8, 12, 8, EnemyArchetype.CursedKennelWolf, EnemyArchetype.BoneManeWolf, EnemyArchetype.RustBellBat),
+                new EncounterTemplate("TacticalRangedPack", 8, 12, 7, EnemyArchetype.BoneArcherInitiate, EnemyArchetype.CryptLynx, EnemyArchetype.BoneManeWolf),
+                new EncounterTemplate("BanditKnifePressure", 8, 12, 7, EnemyArchetype.BarrelHeadBandit, EnemyArchetype.SewerKnifeTwin),
+                new EncounterTemplate("BellRingerEscort", 8, 12, 6, EnemyArchetype.RottenBellRinger, EnemyArchetype.CrossbowGoblin),
+                new EncounterTemplate("RamBearPressure", 8, 12, 5, EnemyArchetype.DungeonRam, EnemyArchetype.MossbackBearCub),
+                new EncounterTemplate("Late_OgreEscort", 11, 0, 3, EnemyArchetype.IronOgre, EnemyArchetype.HexWitch),
                 new EncounterTemplate("Late_GraveKnights", 11, 0, 3, EnemyArchetype.GraveKnight, EnemyArchetype.GraveKnight),
-                new EncounterTemplate("Late_RiftStalkerHunt", 12, 0, 4, EnemyArchetype.RiftStalker, EnemyArchetype.RiftHound, EnemyArchetype.HexCaster)
+                new EncounterTemplate("Late_RiftStalkerHunt", 13, 0, 4, EnemyArchetype.RiftStalker, EnemyArchetype.RiftHound, EnemyArchetype.HexCaster)
             };
+        }
+
+        internal static List<EnemyPackDefinition> CreateEnemyPacksForTests()
+        {
+            List<EncounterTemplate> templates = CreateEncounterTemplates();
+            List<EnemyPackDefinition> packs = new List<EnemyPackDefinition>(templates.Count);
+            for (int i = 0; i < templates.Count; i++)
+            {
+                EncounterTemplate template = templates[i];
+                packs.Add(new EnemyPackDefinition(template.id, template.id, template.minFloor, template.maxFloor, template.weight, template.archetypes));
+            }
+
+            return packs;
         }
 
         private static EnemyDefinition FindDefinition(List<EnemyDefinition> definitions, EnemyArchetype archetype)
@@ -996,19 +1010,12 @@ namespace FrontierDepths.World
 
         private static float GetSpawnWeight(EnemyDefinition definition, int floorIndex, List<EnemyDefinition> currentGroup = null)
         {
-            if (definition == null || !definition.IsEligibleForFloor(floorIndex))
+            if (definition == null || !definition.IsEligibleForNormalSpawn(floorIndex))
             {
                 return 0f;
             }
 
-            float weight = definition.archetype switch
-            {
-                EnemyArchetype.Slime => floorIndex <= 1 ? 55f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 18f : 10f)),
-                EnemyArchetype.Bat => floorIndex <= 1 ? 25f : (floorIndex == 2 ? 30f : (floorIndex <= 5 ? 30f : 24f)),
-                EnemyArchetype.GoblinBrute => floorIndex < 3 ? 0f : (floorIndex == 3 ? 10f : (floorIndex <= 5 ? 22f : 30f)),
-                EnemyArchetype.GoblinGrunt => floorIndex <= 1 ? 20f : (floorIndex == 2 ? 35f : (floorIndex <= 5 ? 45f : 52f)),
-                _ => definition.spawnWeight * GetTierBandMultiplier(definition.tier, floorIndex)
-            };
+            float weight = definition.spawnWeight * GetTierBandMultiplier(definition.tier, floorIndex);
 
             if (currentGroup != null && currentGroup.Count > 0)
             {
@@ -1080,6 +1087,7 @@ namespace FrontierDepths.World
 
                 plan.spawns.Add(spawn);
                 plan.AddArchetype(spawn.definition.archetype);
+                plan.AddTaxonomy(spawn.definition);
                 plan.AddMobilityRole(spawn.mobilityRole);
                 plan.bountyTargetCount++;
                 plan.bountyTargetIds.Add(bounty.bountyId);
@@ -1263,6 +1271,14 @@ namespace FrontierDepths.World
             clone.displayName = bounty.targetName;
             clone.archetype = baseDefinition.archetype;
             clone.attackFamily = baseDefinition.attackFamily;
+            clone.bodyPlan = baseDefinition.bodyPlan;
+            clone.faction = baseDefinition.faction;
+            clone.combatRole = baseDefinition.combatRole;
+            clone.floorBand = EnemyCatalog.GetFloorBand(bounty.minFloor);
+            clone.spawnAvailability = EnemySpawnAvailability.Active;
+            clone.bountyEligible = baseDefinition.bountyEligible;
+            clone.designNote = baseDefinition.designNote;
+            clone.attackImplementationNote = baseDefinition.attackImplementationNote;
             clone.visualProfileId = baseDefinition.visualProfileId;
             clone.tier = Mathf.Max(baseDefinition.tier, 2);
             clone.maxHealth = baseDefinition.maxHealth * Mathf.Max(1f, bounty.healthMultiplier);
@@ -1301,8 +1317,8 @@ namespace FrontierDepths.World
             clone.goldMax = Mathf.Max(clone.goldMin + 1, bounty.goldReward / 5);
             clone.healthDropChance = baseDefinition.healthDropChance;
             clone.healthAmount = baseDefinition.healthAmount;
-            clone.ammoDropChance = Mathf.Max(baseDefinition.ammoDropChance, 0.25f);
-            clone.ammoAmount = Mathf.Max(baseDefinition.ammoAmount, 12);
+            clone.ammoDropChance = 0f;
+            clone.ammoAmount = 0;
             return clone;
         }
 
@@ -1439,9 +1455,15 @@ namespace FrontierDepths.World
         {
             return definition.attackFamily switch
             {
+                EnemyAttackFamily.LeapingBite => roll < (floorIndex >= 3 ? 0.62d : 0.38d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.PackTactics => roll < 0.55d ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
                 EnemyAttackFamily.FastSkirmisher => roll < (floorIndex >= 3 ? 0.58d : 0.32d) ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.Charge => roll < (floorIndex >= 6 ? 0.38d : 0.18d) ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
                 EnemyAttackFamily.Charger => roll < (floorIndex >= 6 ? 0.38d : 0.18d) ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.TrapPlace => EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.RangedProjectile => EnemyMobilityRole.RoomGuard,
                 EnemyAttackFamily.Ambusher => floorIndex >= 6 && roll < 0.55d ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
+                EnemyAttackFamily.BuffAlly => roll < 0.18d ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
                 EnemyAttackFamily.CasterSupport => roll < 0.12d ? EnemyMobilityRole.Hunter : EnemyMobilityRole.RoomGuard,
                 _ => definition.defaultMobilityRole == EnemyMobilityRole.Roamer && roll < 0.35d ? EnemyMobilityRole.Roamer : EnemyMobilityRole.RoomGuard
             };
@@ -1788,41 +1810,70 @@ namespace FrontierDepths.World
 
             switch (definition.attackFamily)
             {
+                case EnemyAttackFamily.RangedProjectile:
                 case EnemyAttackFamily.RangedSpit:
                     CreateVisualPart(enemyRoot, "RangedSnout", PrimitiveType.Sphere, new Vector3(0f, 0.45f, 0.55f), new Vector3(0.42f, 0.28f, 0.42f), Color.Lerp(definition.bodyColor, Color.cyan, 0.35f));
                     CreateVisualPart(enemyRoot, "ShoulderMark", PrimitiveType.Cube, new Vector3(0f, 0.85f, -0.25f), new Vector3(0.62f, 0.14f, 0.18f), Color.Lerp(definition.bodyColor, Color.white, 0.2f));
                     break;
+                case EnemyAttackFamily.Charge:
                 case EnemyAttackFamily.Charger:
                     CreateVisualPart(enemyRoot, "ChargeHornLeft", PrimitiveType.Cube, new Vector3(-0.28f, 0.75f, 0.62f), new Vector3(0.16f, 0.18f, 0.42f), Color.yellow);
                     CreateVisualPart(enemyRoot, "ChargeHornRight", PrimitiveType.Cube, new Vector3(0.28f, 0.75f, 0.62f), new Vector3(0.16f, 0.18f, 0.42f), Color.yellow);
                     break;
+                case EnemyAttackFamily.HeavyWindup:
+                case EnemyAttackFamily.ShieldGuard:
                 case EnemyAttackFamily.TankBruiser:
                     CreateVisualPart(enemyRoot, "ArmorPlate", PrimitiveType.Cube, new Vector3(0f, 0.35f, 0.62f), new Vector3(0.95f, 0.7f, 0.16f), Color.Lerp(definition.bodyColor, Color.gray, 0.55f));
                     CreateVisualPart(enemyRoot, "HeavyHead", PrimitiveType.Cube, new Vector3(0f, 1.12f, 0.1f), new Vector3(0.62f, 0.42f, 0.52f), Color.Lerp(definition.bodyColor, Color.black, 0.18f));
                     break;
+                case EnemyAttackFamily.BuffAlly:
+                case EnemyAttackFamily.DebuffPlayer:
+                case EnemyAttackFamily.Summon:
+                case EnemyAttackFamily.FearHowl:
                 case EnemyAttackFamily.CasterSupport:
                     CreateVisualPart(enemyRoot, "CasterHalo", PrimitiveType.Cylinder, new Vector3(0f, 1.25f, 0f), new Vector3(0.65f, 0.08f, 0.65f), Color.Lerp(definition.bodyColor, Color.magenta, 0.55f));
                     CreateVisualPart(enemyRoot, "RuneCore", PrimitiveType.Sphere, new Vector3(0f, 0.35f, 0.45f), new Vector3(0.28f, 0.28f, 0.28f), Color.magenta);
                     break;
+                case EnemyAttackFamily.PackTactics:
+                case EnemyAttackFamily.TrapPlace:
                 case EnemyAttackFamily.Ambusher:
                     CreateVisualPart(enemyRoot, "StalkerCowl", PrimitiveType.Cube, new Vector3(0f, 0.95f, 0f), new Vector3(0.9f, 0.28f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.45f));
                     CreateVisualPart(enemyRoot, "EyeMark", PrimitiveType.Sphere, new Vector3(0f, 1.0f, 0.62f), new Vector3(0.22f, 0.12f, 0.08f), Color.cyan);
                     break;
+                case EnemyAttackFamily.LeapingBite:
+                case EnemyAttackFamily.Pounce:
                 case EnemyAttackFamily.FastSkirmisher:
                     CreateVisualPart(enemyRoot, "SpeedTail", PrimitiveType.Cube, new Vector3(0f, 0.25f, -0.7f), new Vector3(0.22f, 0.22f, 0.72f), Color.Lerp(definition.bodyColor, Color.white, 0.25f));
                     break;
             }
 
-            if (definition.visualProfileId.Contains("wing"))
+            if (definition.bodyPlan == EnemyBodyPlan.Humanoid ||
+                definition.bodyPlan == EnemyBodyPlan.EliteHumanoid ||
+                definition.bodyPlan == EnemyBodyPlan.BossHumanoid)
+            {
+                CreateVisualPart(enemyRoot, "HumanoidHead", PrimitiveType.Sphere, new Vector3(0f, 0.95f, 0.08f), new Vector3(0.42f, 0.38f, 0.36f), Color.Lerp(definition.bodyColor, Color.white, 0.16f));
+                CreateVisualPart(enemyRoot, "LeftArm", PrimitiveType.Cube, new Vector3(-0.52f, 0.32f, 0.04f), new Vector3(0.16f, 0.62f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.12f));
+                CreateVisualPart(enemyRoot, "RightArm", PrimitiveType.Cube, new Vector3(0.52f, 0.32f, 0.04f), new Vector3(0.16f, 0.62f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.12f));
+            }
+
+            if (definition.bodyPlan == EnemyBodyPlan.Flying || definition.visualProfileId.Contains("wing"))
             {
                 CreateVisualPart(enemyRoot, "LeftWing", PrimitiveType.Cube, new Vector3(-0.58f, 0.42f, 0f), new Vector3(0.74f, 0.08f, 0.3f), Color.Lerp(definition.bodyColor, Color.white, 0.18f));
                 CreateVisualPart(enemyRoot, "RightWing", PrimitiveType.Cube, new Vector3(0.58f, 0.42f, 0f), new Vector3(0.74f, 0.08f, 0.3f), Color.Lerp(definition.bodyColor, Color.white, 0.18f));
             }
 
-            if (definition.visualProfileId.Contains("low") || definition.visualProfileId.Contains("spider"))
+            if (definition.bodyPlan == EnemyBodyPlan.Quadruped ||
+                definition.bodyPlan == EnemyBodyPlan.LargeQuadruped ||
+                definition.bodyPlan == EnemyBodyPlan.BossBeast ||
+                definition.visualProfileId.Contains("low") ||
+                definition.visualProfileId.Contains("spider") ||
+                definition.visualProfileId.Contains("quadruped"))
             {
-                CreateVisualPart(enemyRoot, "LeftLegs", PrimitiveType.Cube, new Vector3(-0.52f, -0.25f, 0f), new Vector3(0.16f, 0.12f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
-                CreateVisualPart(enemyRoot, "RightLegs", PrimitiveType.Cube, new Vector3(0.52f, -0.25f, 0f), new Vector3(0.16f, 0.12f, 0.9f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+                CreateVisualPart(enemyRoot, "QuadHead", PrimitiveType.Sphere, new Vector3(0f, 0.28f, 0.72f), new Vector3(0.42f, 0.32f, 0.38f), Color.Lerp(definition.bodyColor, Color.white, 0.12f));
+                CreateVisualPart(enemyRoot, "FrontLeftLeg", PrimitiveType.Cube, new Vector3(-0.42f, -0.32f, 0.38f), new Vector3(0.16f, 0.42f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+                CreateVisualPart(enemyRoot, "FrontRightLeg", PrimitiveType.Cube, new Vector3(0.42f, -0.32f, 0.38f), new Vector3(0.16f, 0.42f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+                CreateVisualPart(enemyRoot, "BackLeftLeg", PrimitiveType.Cube, new Vector3(-0.42f, -0.32f, -0.42f), new Vector3(0.16f, 0.42f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
+                CreateVisualPart(enemyRoot, "BackRightLeg", PrimitiveType.Cube, new Vector3(0.42f, -0.32f, -0.42f), new Vector3(0.16f, 0.42f, 0.16f), Color.Lerp(definition.bodyColor, Color.black, 0.25f));
             }
         }
 
@@ -1977,6 +2028,10 @@ namespace FrontierDepths.World
         public readonly Dictionary<string, int> templateCounts = new Dictionary<string, int>();
         public readonly Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
         public readonly Dictionary<string, int> variantCounts = new Dictionary<string, int>();
+        public readonly Dictionary<EnemyFaction, int> factionCounts = new Dictionary<EnemyFaction, int>();
+        public readonly Dictionary<EnemyAttackFamily, int> attackFamilyCounts = new Dictionary<EnemyAttackFamily, int>();
+        public readonly Dictionary<EnemyFloorBand, int> floorBandCounts = new Dictionary<EnemyFloorBand, int>();
+        public int retiredArchetypeViolationCount;
         public int bountyTargetCount;
 
         public void AddArchetype(EnemyArchetype archetype)
@@ -2013,6 +2068,25 @@ namespace FrontierDepths.World
             variantCounts[variantId] = count + 1;
         }
 
+        public void AddTaxonomy(EnemyDefinition definition)
+        {
+            if (definition == null)
+            {
+                return;
+            }
+
+            factionCounts.TryGetValue(definition.faction, out int factionCount);
+            factionCounts[definition.faction] = factionCount + 1;
+            attackFamilyCounts.TryGetValue(definition.attackFamily, out int attackCount);
+            attackFamilyCounts[definition.attackFamily] = attackCount + 1;
+            floorBandCounts.TryGetValue(definition.floorBand, out int bandCount);
+            floorBandCounts[definition.floorBand] = bandCount + 1;
+            if (EnemyCatalog.IsRetiredFromNormalSpawns(definition.archetype))
+            {
+                retiredArchetypeViolationCount++;
+            }
+        }
+
         public DungeonEncounterSummary ToSummary()
         {
             return new DungeonEncounterSummary
@@ -2035,6 +2109,10 @@ namespace FrontierDepths.World
                 templateCounts = new Dictionary<string, int>(templateCounts),
                 mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>(mobilityRoleCounts),
                 variantCounts = new Dictionary<string, int>(variantCounts),
+                factionCounts = new Dictionary<EnemyFaction, int>(factionCounts),
+                attackFamilyCounts = new Dictionary<EnemyAttackFamily, int>(attackFamilyCounts),
+                floorBandCounts = new Dictionary<EnemyFloorBand, int>(floorBandCounts),
+                retiredArchetypeViolationCount = retiredArchetypeViolationCount,
                 bountyTargetCount = bountyTargetCount,
                 bountyTargetIds = new List<string>(bountyTargetIds),
                 enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>()
@@ -2071,6 +2149,35 @@ namespace FrontierDepths.World
         public readonly List<EnemyArchetype> archetypes = new List<EnemyArchetype>();
     }
 
+    public sealed class EnemyPackDefinition
+    {
+        public readonly string packId;
+        public readonly string displayName;
+        public readonly int minFloor;
+        public readonly int maxFloor;
+        public readonly int weight;
+        public readonly EnemyArchetype[] archetypes;
+
+        public EnemyPackDefinition(string packId, string displayName, int minFloor, int maxFloor, int weight, EnemyArchetype[] archetypes)
+        {
+            this.packId = packId ?? string.Empty;
+            this.displayName = displayName ?? string.Empty;
+            this.minFloor = minFloor;
+            this.maxFloor = maxFloor;
+            this.weight = weight;
+            this.archetypes = archetypes ?? System.Array.Empty<EnemyArchetype>();
+        }
+
+        public int Count => archetypes.Length;
+
+        public bool IsEligibleForFloor(int floorIndex)
+        {
+            int clampedFloor = Mathf.Max(1, floorIndex);
+            return clampedFloor >= Mathf.Max(1, minFloor) &&
+                   (maxFloor <= 0 || clampedFloor <= maxFloor);
+        }
+    }
+
     public sealed class DungeonEncounterSummary
     {
         public static readonly DungeonEncounterSummary Empty = new DungeonEncounterSummary
@@ -2096,6 +2203,10 @@ namespace FrontierDepths.World
         public Dictionary<string, int> templateCounts = new Dictionary<string, int>();
         public Dictionary<EnemyMobilityRole, int> mobilityRoleCounts = new Dictionary<EnemyMobilityRole, int>();
         public Dictionary<string, int> variantCounts = new Dictionary<string, int>();
+        public Dictionary<EnemyFaction, int> factionCounts = new Dictionary<EnemyFaction, int>();
+        public Dictionary<EnemyAttackFamily, int> attackFamilyCounts = new Dictionary<EnemyAttackFamily, int>();
+        public Dictionary<EnemyFloorBand, int> floorBandCounts = new Dictionary<EnemyFloorBand, int>();
+        public int retiredArchetypeViolationCount;
         public int bountyTargetCount;
         public List<string> bountyTargetIds = new List<string>();
         public Dictionary<SimpleMeleeEnemyState, int> enemyStateCounts = new Dictionary<SimpleMeleeEnemyState, int>();
@@ -2107,7 +2218,7 @@ namespace FrontierDepths.World
                 $"Band {difficultyBand} | Spawned {spawnedEnemyCount}/{requestedBudget} | Living {livingEnemyCount} | ActiveCap {activeCombatCap} | " +
                 $"Archetypes {FormatArchetypes()} | Rooms {roomAssignments.Count}/{eligibleRoomCount} | " +
                 $"Empty {emptyEligibleRoomCount} | Groups {groupFightCount} | Solos {soloRoomCount} | Roamers {roamerCount} | " +
-                $"Bounties {FormatBounties()} | Templates {FormatTemplates()} | Roles {FormatRoles()} | Variants {FormatVariants()} | States {FormatStates()}" +
+                $"Bounties {FormatBounties()} | Templates {FormatTemplates()} | Roles {FormatRoles()} | Factions {FormatFactions()} | Attacks {FormatAttackFamilies()} | Bands {FormatFloorBands()} | RetiredViolations {retiredArchetypeViolationCount} | Variants {FormatVariants()} | States {FormatStates()}" +
                 (string.IsNullOrWhiteSpace(warning) ? string.Empty : $" | Warning: {warning}");
         }
 
@@ -2184,6 +2295,54 @@ namespace FrontierDepths.World
 
             List<string> parts = new List<string>();
             foreach (KeyValuePair<string, int> pair in variantCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatFactions()
+        {
+            if (factionCounts == null || factionCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<EnemyFaction, int> pair in factionCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatAttackFamilies()
+        {
+            if (attackFamilyCounts == null || attackFamilyCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<EnemyAttackFamily, int> pair in attackFamilyCounts)
+            {
+                parts.Add($"{pair.Key}:{pair.Value}");
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private string FormatFloorBands()
+        {
+            if (floorBandCounts == null || floorBandCounts.Count == 0)
+            {
+                return "none";
+            }
+
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<EnemyFloorBand, int> pair in floorBandCounts)
             {
                 parts.Add($"{pair.Key}:{pair.Value}");
             }

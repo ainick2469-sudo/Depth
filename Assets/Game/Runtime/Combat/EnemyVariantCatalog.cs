@@ -188,6 +188,14 @@ namespace FrontierDepths.Combat
             target.displayName = source.displayName;
             target.archetype = source.archetype;
             target.attackFamily = source.attackFamily;
+            target.bodyPlan = source.bodyPlan;
+            target.faction = source.faction;
+            target.combatRole = source.combatRole;
+            target.floorBand = source.floorBand;
+            target.spawnAvailability = source.spawnAvailability;
+            target.bountyEligible = source.bountyEligible;
+            target.designNote = source.designNote;
+            target.attackImplementationNote = source.attackImplementationNote;
             target.visualProfileId = source.visualProfileId;
             target.tier = source.tier;
             target.maxHealth = source.maxHealth;

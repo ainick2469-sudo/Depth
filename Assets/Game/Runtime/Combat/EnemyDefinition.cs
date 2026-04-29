@@ -23,7 +23,31 @@ namespace FrontierDepths.Combat
         IronOgre,
         HexWitch,
         GraveKnight,
-        RiftStalker
+        RiftStalker,
+        TorchlessPrisoner,
+        CandleGoblin,
+        MoldCoveredSkeleton,
+        RustyDaggerRatfolk,
+        DungeonJanitorGhoul,
+        StarvedDungeonWolf,
+        CoalEyedAlleyCat,
+        RustBellBat,
+        ChainBoundThief,
+        GoblinShieldRat,
+        BoneArcherInitiate,
+        LanternCultist,
+        PickaxeSkeletonMiner,
+        CursedKennelWolf,
+        CryptLynx,
+        AshEatenPrisonGuard,
+        GoblinTripwireTrapper,
+        BarrelHeadBandit,
+        SewerKnifeTwin,
+        RottenBellRinger,
+        CrossbowGoblin,
+        BoneManeWolf,
+        DungeonRam,
+        MossbackBearCub
     }
 
     public enum EnemyAttackFamily
@@ -35,7 +59,84 @@ namespace FrontierDepths.Combat
         TankBruiser,
         CasterSupport,
         Ambusher,
-        AreaDenial
+        AreaDenial,
+        BasicMelee,
+        LeapingBite,
+        HeavyWindup,
+        Pounce,
+        Charge,
+        ShieldGuard,
+        RangedProjectile,
+        TrapPlace,
+        Summon,
+        BuffAlly,
+        DebuffPlayer,
+        Bleed,
+        Lifesteal,
+        TeleportStrike,
+        FearHowl,
+        PackTactics
+    }
+
+    public enum EnemyBodyPlan
+    {
+        Humanoid,
+        Quadruped,
+        LargeQuadruped,
+        Flying,
+        EliteHumanoid,
+        BossHumanoid,
+        BossBeast
+    }
+
+    public enum EnemyFaction
+    {
+        Prisoner,
+        Goblin,
+        Ratfolk,
+        Undead,
+        Beast,
+        Cultist,
+        Vampire,
+        Werebeast,
+        Orc,
+        CursedNobility,
+        DungeonConstruct,
+        DeepHorror
+    }
+
+    public enum EnemyCombatRole
+    {
+        Swarmer,
+        Grunt,
+        Shield,
+        Archer,
+        Charger,
+        Ambusher,
+        Trapper,
+        Support,
+        Summoner,
+        Brute,
+        Hunter,
+        EliteDuelist,
+        Boss
+    }
+
+    public enum EnemyFloorBand
+    {
+        RecruitDungeon,
+        OrganizedDungeon,
+        TacticalDungeon,
+        CursedOrders,
+        GothicHunters,
+        DeepHorrors
+    }
+
+    public enum EnemySpawnAvailability
+    {
+        Active,
+        DebugOnly,
+        Inactive
     }
 
     public enum EnemyMobilityRole
@@ -62,6 +163,14 @@ namespace FrontierDepths.Combat
         public string displayName = "Mire Hound";
         public EnemyArchetype archetype = EnemyArchetype.GoblinGrunt;
         public EnemyAttackFamily attackFamily = EnemyAttackFamily.MeleeRush;
+        public EnemyBodyPlan bodyPlan = EnemyBodyPlan.Humanoid;
+        public EnemyFaction faction = EnemyFaction.Goblin;
+        public EnemyCombatRole combatRole = EnemyCombatRole.Grunt;
+        public EnemyFloorBand floorBand = EnemyFloorBand.RecruitDungeon;
+        public EnemySpawnAvailability spawnAvailability = EnemySpawnAvailability.Active;
+        public bool bountyEligible = true;
+        public string designNote = "Forces player to manage spacing.";
+        public string attackImplementationNote = "Uses existing melee behavior.";
         public string visualProfileId = "capsule";
         public int tier = 1;
         public float maxHealth = 55f;
@@ -101,12 +210,24 @@ namespace FrontierDepths.Combat
         public float ammoDropChance = 0.08f;
         public int ammoAmount = 2;
 
+        public bool IsActiveForNormalSpawn => spawnAvailability == EnemySpawnAvailability.Active && spawnWeight > 0f;
+
         public bool IsEligibleForFloor(int floorIndex)
         {
             int clampedFloor = Mathf.Max(1, floorIndex);
             return clampedFloor >= Mathf.Max(1, minFloor) &&
                    (maxFloor <= 0 || clampedFloor <= maxFloor);
         }
+
+        public bool IsEligibleForNormalSpawn(int floorIndex)
+        {
+            return IsActiveForNormalSpawn && IsEligibleForFloor(floorIndex);
+        }
+
+        public string FloorRangeDebugText => maxFloor <= 0 ? $"{Mathf.Max(1, minFloor)}+" : $"{Mathf.Max(1, minFloor)}-{maxFloor}";
+
+        public string TaxonomyDebugText =>
+            $"{bodyPlan} | {faction} | {combatRole} | {attackFamily} | Floors {FloorRangeDebugText} | Weight {spawnWeight:0.#}";
     }
 
     public sealed class EnemyVariantDefinition

@@ -97,8 +97,9 @@ namespace FrontierDepths.Tests.EditMode
             Assert.GreaterOrEqual(plan.spawnedCount, 8);
             Assert.LessOrEqual(plan.spawnedCount, 12);
             Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.GoblinBrute));
-            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 2));
-            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
+            Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.Slime));
+            Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.SpitterSlime));
+            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount >= 2));
             Assert.GreaterOrEqual(plan.groupFightCount, 2);
             Assert.LessOrEqual(plan.soloRoomCount, 1);
             Assert.GreaterOrEqual(plan.emptyEligibleRoomCount, 1);
@@ -126,7 +127,7 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void EncounterDirector_FloorTwoOrHigherIncludesThreePackWhenSafe()
+        public void EncounterDirector_FloorTwoOrHigherIncludesDesignedPackWhenSafe()
         {
             DungeonBuildResult build = CreateEncounterBuild(2);
 
@@ -134,7 +135,9 @@ namespace FrontierDepths.Tests.EditMode
 
             Assert.GreaterOrEqual(plan.spawnedCount, 10);
             Assert.LessOrEqual(plan.spawnedCount, 15);
-            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount == 3));
+            Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.Slime));
+            Assert.IsFalse(plan.archetypeCounts.ContainsKey(EnemyArchetype.SpitterSlime));
+            Assert.IsTrue(plan.assignments.Exists(assignment => assignment.plannedCount >= 2));
             Assert.GreaterOrEqual(plan.groupFightCount, 2);
         }
 

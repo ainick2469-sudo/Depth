@@ -65,16 +65,16 @@ namespace FrontierDepths.Core
             new BountyDefinition
             {
                 bountyId = "bounty.lantern_eater_slime",
-                title = "Wanted: Lantern-Eater Slime",
-                targetName = "Lantern-Eater Slime",
-                targetArchetype = "Slime",
-                minFloor = 2,
+                title = "Wanted: Lantern Thief Prisoner",
+                targetName = "Lantern Thief Prisoner",
+                targetArchetype = "TorchlessPrisoner",
+                minFloor = 1,
                 maxFloor = 3,
                 goldReward = 85,
                 xpReward = 35,
                 reputationRequired = 0,
-                reason = "It has been swallowing survey lamps and leaving miners blind in the dark.",
-                markerColor = "#88FF66"
+                reason = "He keeps stealing survey lamps and leaving miners blind in the dark.",
+                markerColor = "#D8B46A"
             },
             new BountyDefinition
             {

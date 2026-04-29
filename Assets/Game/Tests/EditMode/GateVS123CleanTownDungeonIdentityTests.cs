@@ -26,7 +26,7 @@ namespace FrontierDepths.Tests.EditMode
 
             Assert.IsTrue(BountyObjectiveTracker.MarkKilled(profile, "bounty.lantern_eater_slime"));
             Assert.IsTrue(BountyObjectiveTracker.TryTurnIn(profile, "bounty.lantern_eater_slime", out BountyDefinition definition, out _));
-            Assert.AreEqual("Lantern-Eater Slime", definition.targetName);
+            Assert.AreEqual("Lantern Thief Prisoner", definition.targetName);
             Assert.IsFalse(BountyObjectiveTracker.TryTurnIn(profile, "bounty.lantern_eater_slime", out _, out _));
         }
 
