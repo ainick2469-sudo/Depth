@@ -79,9 +79,12 @@ namespace FrontierDepths.Tests.EditMode
 
                 Assert.AreEqual("6 / 6", view.AmmoTextForTests);
                 Assert.AreEqual(6, view.ChamberCountForTests);
+                Assert.IsTrue(view.AreChambersParentedToRootForTests);
                 Assert.IsTrue(view.AreChambersInsideRootForTests);
                 Assert.IsFalse(view.HasOldAmmoPipStripForTests);
-                Assert.IsTrue(view.ChamberLocalPositionsForTests.All(position => position.magnitude < 30f));
+                Assert.IsTrue(view.ChamberLocalPositionsForTests.All(position => position.magnitude < 18f));
+                Assert.IsTrue(view.IsWeaponPanelInsideSafeAreaForTests);
+                Assert.IsTrue(view.IsWeaponTextInsidePanelForTests);
             }
             finally
             {
@@ -128,6 +131,9 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(view.FallbackMaterialsAppliedForTests);
                 Assert.IsTrue(view.FallbackMaterialColorsForTests.Any(color => color.r < 0.8f && color.g < 0.8f && color.b < 0.8f));
                 Assert.IsFalse(view.FallbackMaterialColorsForTests.Any(color => color.r > 0.9f && color.g > 0.9f && color.b > 0.9f));
+                Assert.IsFalse(view.FallbackMaterialColorsForTests.Any(IsNearBlack));
+                Assert.Greater(AverageBrightness(view.FallbackMaterialColorsForTests), 0.28f);
+                Assert.IsNotEmpty(view.MaterialDebugLinesForTests);
                 if (view.FallbackMaterialColorsForTests.Length > 1)
                 {
                     int distinctReadableColors = view.FallbackMaterialColorsForTests
@@ -141,6 +147,21 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        private static bool IsNearBlack(Color color)
+        {
+            return color.r < 0.08f && color.g < 0.08f && color.b < 0.08f;
+        }
+
+        private static float AverageBrightness(Color[] colors)
+        {
+            if (colors == null || colors.Length == 0)
+            {
+                return 0f;
+            }
+
+            return colors.Average(color => (color.r + color.g + color.b) / 3f);
         }
 
         [Test]

@@ -1,9 +1,17 @@
 using FrontierDepths.Core;
+using FrontierDepths.Progression;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace FrontierDepths.UI
 {
+    public enum HudLocationContext
+    {
+        MainMenu,
+        Town,
+        Dungeon
+    }
+
     public sealed class CompassHudView : MonoBehaviour
     {
         private static readonly string[] HeadingLabels = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
@@ -18,6 +26,8 @@ namespace FrontierDepths.UI
         private bool hasSmoothedYaw;
 
         internal string CenterHeadingForTests { get; private set; } = "N";
+        internal string LocationLabelForTests => floorText != null ? floorText.text : string.Empty;
+        internal bool LocationLabelVisibleForTests => floorText != null && floorText.enabled;
 
         private void Awake()
         {
@@ -43,7 +53,9 @@ namespace FrontierDepths.UI
             RunState run = GameBootstrap.Instance?.RunService?.Current;
             if (floorText != null)
             {
-                floorText.text = run != null ? $"Floor {Mathf.Max(1, run.floorIndex)} - Frontier Depths" : "Frontier Depths";
+                HudLocationContext context = ResolveLocationContext();
+                floorText.enabled = ShouldShowLocationLabel(context);
+                floorText.text = GetLocationLabel(context, run != null ? run.floorIndex : 1);
             }
         }
 
@@ -56,6 +68,16 @@ namespace FrontierDepths.UI
         internal static float GetHeadingOffsetForYaw(float headingYaw, float playerYaw, float pixelsPerDegree)
         {
             return Mathf.DeltaAngle(playerYaw, headingYaw) * pixelsPerDegree;
+        }
+
+        internal static string GetLocationLabelForTests(HudLocationContext context, int floorIndex)
+        {
+            return GetLocationLabel(context, floorIndex);
+        }
+
+        internal static bool ShouldShowLocationLabelForTests(HudLocationContext context)
+        {
+            return ShouldShowLocationLabel(context);
         }
 
         private void UpdateCompass(float yaw)
@@ -93,6 +115,37 @@ namespace FrontierDepths.UI
             nextResolveTime = Time.unscaledTime + 0.5f;
             FirstPersonController controller = FindAnyObjectByType<FirstPersonController>();
             player = controller != null ? controller.transform : null;
+        }
+
+        private static HudLocationContext ResolveLocationContext()
+        {
+            string sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (sceneName == "MainMenu")
+            {
+                return HudLocationContext.MainMenu;
+            }
+
+            if (sceneName == "TownHub" || FindAnyObjectByType<TownHubController>() != null)
+            {
+                return HudLocationContext.Town;
+            }
+
+            return HudLocationContext.Dungeon;
+        }
+
+        private static bool ShouldShowLocationLabel(HudLocationContext context)
+        {
+            return context != HudLocationContext.MainMenu;
+        }
+
+        private static string GetLocationLabel(HudLocationContext context, int floorIndex)
+        {
+            return context switch
+            {
+                HudLocationContext.MainMenu => string.Empty,
+                HudLocationContext.Town => "Town - Frontier Outpost",
+                _ => $"Floor {Mathf.Max(1, floorIndex)} - Frontier Depths"
+            };
         }
 
         private void EnsureUi()

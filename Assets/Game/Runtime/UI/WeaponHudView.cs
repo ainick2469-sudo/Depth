@@ -37,14 +37,14 @@ namespace FrontierDepths.UI
         private Vector2 hitMarkerSize = new Vector2(22f, 22f);
         private static readonly Vector2[] RevolverChamberNormalizedPositions =
         {
-            new Vector2(0f, 0.33f),
-            new Vector2(0.29f, 0.16f),
-            new Vector2(0.29f, -0.16f),
-            new Vector2(0f, -0.33f),
-            new Vector2(-0.29f, -0.16f),
-            new Vector2(-0.29f, 0.16f)
+            new Vector2(0f, 0.24f),
+            new Vector2(0.21f, 0.12f),
+            new Vector2(0.21f, -0.12f),
+            new Vector2(0f, -0.24f),
+            new Vector2(-0.21f, -0.12f),
+            new Vector2(-0.21f, 0.12f)
         };
-        private const float ChamberPipSizeFraction = 0.16f;
+        private const float ChamberPipSizeFraction = 0.14f;
 
         internal int ChamberCountForTests => chamberFills.Count;
         internal int FilledChamberCountForTests => CountFilledChambers();
@@ -59,6 +59,10 @@ namespace FrontierDepths.UI
         internal bool HasBackgroundFrameForTests => backgroundFrameImage != null;
         internal bool HasAmmoPipContainerForTests => false;
         internal bool HasChamberIndicatorForTests => chamberRoot != null;
+        internal bool AreChambersParentedToRootForTests => AreChambersParentedToRoot();
+        internal bool IsWeaponPanelInsideSafeAreaForTests => IsPanelInsideSafeArea();
+        internal bool IsWeaponTextInsidePanelForTests => IsRectInsidePanel(weaponNameText != null ? weaponNameText.rectTransform : null) &&
+                                                         IsRectInsidePanel(ammoText != null ? ammoText.rectTransform : null);
         internal bool HasOldAmmoPipStripForTests => FindNamedTransform(transform, "AmmoPipContainer") != null;
         internal bool IsIconFallbackVisibleForTests => weaponIconLabel != null && weaponIconLabel.enabled;
         internal bool UsesAmmoBulletFallbackForTests => chamberFills.Count > 0 && chamberFills[0] != null && chamberFills[0].sprite == null;
@@ -693,6 +697,61 @@ namespace FrontierDepths.UI
                 Vector2 position = rect.anchoredPosition;
                 if (Mathf.Abs(position.x) + halfPip.x > halfSize.x ||
                     Mathf.Abs(position.y) + halfPip.y > halfSize.y)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool AreChambersParentedToRoot()
+        {
+            if (chamberRoot == null)
+            {
+                return chamberFills.Count == 0;
+            }
+
+            for (int i = 0; i < chamberFills.Count; i++)
+            {
+                if (chamberFills[i] == null || chamberFills[i].transform.parent != chamberRoot)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsPanelInsideSafeArea()
+        {
+            if (panelRoot == null)
+            {
+                return false;
+            }
+
+            Vector2 size = panelRoot.sizeDelta;
+            Vector2 position = panelRoot.anchoredPosition;
+            return position.x <= -HudLayoutConstants.HudMargin + 0.001f &&
+                   position.y >= HudLayoutConstants.HudMargin - 0.001f &&
+                   size.x <= HudLayoutConstants.WeaponPanelWidth + 0.001f &&
+                   size.y <= HudLayoutConstants.WeaponPanelHeight + 0.001f;
+        }
+
+        private bool IsRectInsidePanel(RectTransform rect)
+        {
+            if (panelRoot == null || rect == null)
+            {
+                return false;
+            }
+
+            Rect panelRect = panelRoot.rect;
+            Vector3[] corners = new Vector3[4];
+            rect.GetLocalCorners(corners);
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 panelSpace = panelRoot.InverseTransformPoint(rect.TransformPoint(corners[i]));
+                if (!panelRect.Contains(panelSpace))
                 {
                     return false;
                 }

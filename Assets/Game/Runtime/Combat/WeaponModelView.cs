@@ -23,6 +23,7 @@ namespace FrontierDepths.Combat
         internal bool PoseAppliedForTests => poseApplied;
         internal Vector3 ImportedLocalEulerForTests => importedInstance != null ? importedInstance.transform.localEulerAngles : Vector3.zero;
         internal Color[] FallbackMaterialColorsForTests => GetRendererColors();
+        internal string[] MaterialDebugLinesForTests => GetMaterialDebugLines();
 
         public void Configure(Transform blockoutRoot, string weaponId)
         {
@@ -218,10 +219,12 @@ namespace FrontierDepths.Combat
             }
 
             Color color = grip
-                ? new Color(0.12f, 0.065f, 0.035f, 1f)
+                ? new Color(0.36f, 0.22f, 0.11f, 1f)
                 : brightMetal
-                    ? new Color(0.32f, 0.33f, 0.32f, 1f)
-                    : new Color(0.075f, 0.082f, 0.09f, 1f);
+                    ? new Color(0.68f, 0.7f, 0.66f, 1f)
+                    : darkMetal
+                        ? new Color(0.29f, 0.31f, 0.32f, 1f)
+                        : new Color(0.44f, 0.46f, 0.44f, 1f);
 
             Shader shader = Shader.Find("Standard") ?? Shader.Find("Diffuse") ?? Shader.Find("Universal Render Pipeline/Lit");
             Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
@@ -234,12 +237,12 @@ namespace FrontierDepths.Combat
 
             if (material.HasProperty("_Metallic"))
             {
-                material.SetFloat("_Metallic", grip ? 0.05f : 0.62f);
+                material.SetFloat("_Metallic", grip ? 0.04f : 0.48f);
             }
 
             if (material.HasProperty("_Glossiness"))
             {
-                material.SetFloat("_Glossiness", grip ? 0.24f : 0.38f);
+                material.SetFloat("_Glossiness", grip ? 0.26f : 0.32f);
             }
 
             return material;
@@ -261,6 +264,26 @@ namespace FrontierDepths.Combat
             }
 
             return colors;
+        }
+
+        private string[] GetMaterialDebugLines()
+        {
+            if (importedInstance == null)
+            {
+                return System.Array.Empty<string>();
+            }
+
+            Renderer[] renderers = importedInstance.GetComponentsInChildren<Renderer>(true);
+            string[] lines = new string[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                Material material = renderer != null ? renderer.sharedMaterial : null;
+                Color color = material != null ? material.color : Color.clear;
+                lines[i] = $"{renderer?.name ?? "missing"} | {material?.name ?? "missing"} | {color.r:0.00},{color.g:0.00},{color.b:0.00}";
+            }
+
+            return lines;
         }
 
         private void SetGrayboxRenderersVisible(bool visible)
