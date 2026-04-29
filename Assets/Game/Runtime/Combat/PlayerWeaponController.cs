@@ -847,7 +847,7 @@ namespace FrontierDepths.Combat
 
         private void QueueAutoReload(float currentTime, float delay)
         {
-            if (!autoReloadOnEmpty || weaponState == null || weaponState.ReserveAmmo <= 0)
+            if (!autoReloadOnEmpty || weaponState == null)
             {
                 return;
             }

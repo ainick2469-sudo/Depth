@@ -14,11 +14,14 @@ namespace FrontierDepths.Combat
         private bool attemptedLoad;
         private bool modelLoaded;
         private bool fallbackMaterialsApplied;
+        private bool poseApplied;
 
         internal bool ModelLoadedForTests => modelLoaded;
         internal bool IsGrayboxFallbackActiveForTests => !modelLoaded;
         internal int InstanceCountForTests => weaponBlockoutRoot != null ? CountNamedChildren(weaponBlockoutRoot, ImportedModelName) : 0;
         internal bool FallbackMaterialsAppliedForTests => fallbackMaterialsApplied;
+        internal bool PoseAppliedForTests => poseApplied;
+        internal Vector3 ImportedLocalEulerForTests => importedInstance != null ? importedInstance.transform.localEulerAngles : Vector3.zero;
 
         public void Configure(Transform blockoutRoot, string weaponId)
         {
@@ -52,14 +55,17 @@ namespace FrontierDepths.Combat
                 {
                     importedInstance = Instantiate(prefab, weaponBlockoutRoot, false);
                     importedInstance.name = ImportedModelName;
-                    importedInstance.transform.localPosition = Vector3.zero;
-                    importedInstance.transform.localRotation = Quaternion.identity;
-                    importedInstance.transform.localScale = Vector3.one;
+                    ApplyPose(importedInstance.transform, GetPose(activeWeaponId));
                     ApplyReadableFallbackMaterials(importedInstance);
                 }
             }
 
             modelLoaded = importedInstance != null;
+            if (modelLoaded && !poseApplied)
+            {
+                ApplyPose(importedInstance.transform, GetPose(activeWeaponId));
+            }
+
             if (modelLoaded && !fallbackMaterialsApplied)
             {
                 ApplyReadableFallbackMaterials(importedInstance);
@@ -87,6 +93,34 @@ namespace FrontierDepths.Combat
             importedInstance = null;
             attemptedLoad = false;
             fallbackMaterialsApplied = false;
+            poseApplied = false;
+        }
+
+        private void ApplyPose(Transform target, WeaponViewPose pose)
+        {
+            if (target == null)
+            {
+                poseApplied = false;
+                return;
+            }
+
+            target.localPosition = pose.localPosition;
+            target.localRotation = Quaternion.Euler(pose.localEulerAngles);
+            target.localScale = pose.localScale;
+            poseApplied = true;
+        }
+
+        private static WeaponViewPose GetPose(string weaponId)
+        {
+            if (weaponId == WeaponCatalog.FrontierRevolverId)
+            {
+                return new WeaponViewPose(
+                    new Vector3(0.02f, -0.04f, 0.08f),
+                    new Vector3(0f, 180f, 0f),
+                    Vector3.one * 0.78f);
+            }
+
+            return WeaponViewPose.Identity;
         }
 
         private void ApplyReadableFallbackMaterials(GameObject modelRoot)
@@ -185,6 +219,22 @@ namespace FrontierDepths.Combat
             }
 
             return count;
+        }
+
+        internal readonly struct WeaponViewPose
+        {
+            public static readonly WeaponViewPose Identity = new WeaponViewPose(Vector3.zero, Vector3.zero, Vector3.one);
+
+            public readonly Vector3 localPosition;
+            public readonly Vector3 localEulerAngles;
+            public readonly Vector3 localScale;
+
+            public WeaponViewPose(Vector3 localPosition, Vector3 localEulerAngles, Vector3 localScale)
+            {
+                this.localPosition = localPosition;
+                this.localEulerAngles = localEulerAngles;
+                this.localScale = localScale;
+            }
         }
     }
 }

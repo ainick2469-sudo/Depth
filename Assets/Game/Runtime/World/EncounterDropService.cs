@@ -166,12 +166,6 @@ namespace FrontierDepths.World
                 drops.Add(EncounterDropKind.Health);
             }
 
-            if (drops.Count < MaxDropsPerEnemyDeath &&
-                (definition.ammoDropChance >= 1f || Random.value <= Mathf.Max(0f, definition.ammoDropChance)))
-            {
-                drops.Add(EncounterDropKind.Ammo);
-            }
-
             return drops;
         }
 

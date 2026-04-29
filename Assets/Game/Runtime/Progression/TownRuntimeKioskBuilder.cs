@@ -6,13 +6,14 @@ namespace FrontierDepths.Progression
     public sealed class TownRuntimeKioskBuilder : MonoBehaviour
     {
         public const string RootName = "RuntimeTownKiosks";
+        private static readonly Vector3 TownCenter = Vector3.zero;
 
         private static readonly KioskDefinition[] Kiosks =
         {
-            new KioskDefinition("Blacksmith", "shop.blacksmith", "Talk to the Blacksmith", new Vector3(-18f, 0f, 14f), 32f, new Color(0.55f, 0.28f, 0.18f)),
-            new KioskDefinition("Quartermaster", "shop.quartermaster", "Browse the General Store", new Vector3(18f, 0f, 14f), -32f, new Color(0.22f, 0.42f, 0.62f)),
-            new KioskDefinition("Saloon / Inn", "shop.saloon", "Visit the Saloon", new Vector3(-18f, 0f, -12f), 145f, new Color(0.56f, 0.38f, 0.16f)),
-            new KioskDefinition("Bounty Board", "shop.bounty_board", "Read the Bounty Board", new Vector3(18f, 0f, -12f), -145f, new Color(0.25f, 0.5f, 0.28f))
+            new KioskDefinition("Blacksmith", "shop.blacksmith", "Talk to the Blacksmith", new Vector3(-17f, 0f, 9f), new Color(0.55f, 0.28f, 0.18f)),
+            new KioskDefinition("Quartermaster", "shop.quartermaster", "Browse the General Store", new Vector3(17f, 0f, 9f), new Color(0.22f, 0.42f, 0.62f)),
+            new KioskDefinition("Saloon / Inn", "shop.saloon", "Visit the Saloon", new Vector3(-15f, 0f, -13f), new Color(0.56f, 0.38f, 0.16f)),
+            new KioskDefinition("Bounty Board", "shop.bounty_board", "Read the Bounty Board", new Vector3(12f, 0f, -10f), new Color(0.25f, 0.5f, 0.28f))
         };
 
         private void Start()
@@ -79,7 +80,7 @@ namespace FrontierDepths.Progression
             GameObject kiosk = new GameObject($"Kiosk_{definition.label}");
             kiosk.transform.SetParent(root, false);
             kiosk.transform.localPosition = definition.position;
-            kiosk.transform.localRotation = Quaternion.Euler(0f, definition.yaw, 0f);
+            kiosk.transform.localRotation = Quaternion.Euler(0f, GetYawWithFrontFacingCenterForTests(definition.position), 0f);
 
             CreateBox(kiosk.transform, "BackWall", new Vector3(0f, 2f, 1.2f), new Vector3(5.8f, 3.4f, 0.35f), definition.color);
             CreateBox(kiosk.transform, "LeftPost", new Vector3(-2.8f, 1.5f, -0.8f), new Vector3(0.35f, 3f, 2.4f), definition.color);
@@ -155,18 +156,47 @@ namespace FrontierDepths.Progression
             public readonly string shopId;
             public readonly string prompt;
             public readonly Vector3 position;
-            public readonly float yaw;
             public readonly Color color;
 
-            public KioskDefinition(string label, string shopId, string prompt, Vector3 position, float yaw, Color color)
+            public KioskDefinition(string label, string shopId, string prompt, Vector3 position, Color color)
             {
                 this.label = label;
                 this.shopId = shopId;
                 this.prompt = prompt;
                 this.position = position;
-                this.yaw = yaw;
                 this.color = color;
             }
+        }
+
+        internal static float GetYawWithFrontFacingCenterForTests(Vector3 kioskPosition)
+        {
+            Vector3 outward = kioskPosition - TownCenter;
+            outward.y = 0f;
+            if (outward.sqrMagnitude <= 0.0001f)
+            {
+                outward = Vector3.back;
+            }
+
+            return Quaternion.LookRotation(outward.normalized, Vector3.up).eulerAngles.y;
+        }
+
+        internal static bool DoesKioskFrontFaceTownCenterForTests(Transform kiosk)
+        {
+            if (kiosk == null)
+            {
+                return false;
+            }
+
+            Vector3 toCenter = TownCenter - kiosk.localPosition;
+            toCenter.y = 0f;
+            if (toCenter.sqrMagnitude <= 0.0001f)
+            {
+                return true;
+            }
+
+            Vector3 front = -kiosk.forward;
+            front.y = 0f;
+            return Vector3.Dot(front.normalized, toCenter.normalized) > 0.85f;
         }
     }
 }

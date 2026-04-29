@@ -254,7 +254,7 @@ namespace FrontierDepths.Tests.EditMode
 
                 StringAssert.Contains("Damage 15 -> 16.5", text);
                 StringAssert.Contains("Range 45", text);
-                StringAssert.Contains("Reserve", text);
+                StringAssert.Contains("Basic ammo infinite", text);
             }
             finally
             {

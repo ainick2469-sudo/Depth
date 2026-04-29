@@ -218,7 +218,8 @@ namespace FrontierDepths.UI
             string slot = profile.primaryWeaponId == weaponId ? "Primary" : profile.secondaryWeaponId == weaponId ? "Secondary" : "Owned";
             string active = profile.GetActiveWeaponId() == weaponId ? "EQUIPPED" : slot;
             RunWeaponAmmoState ammo = run?.GetWeaponAmmoState(weaponId);
-            string ammoText = ammo != null ? $" {ammo.currentMagazineAmmo}/{ammo.reserveAmmo}" : string.Empty;
+            int magazineSize = WeaponCatalog.TryGet(weaponId, out WeaponDefinition definition) ? Mathf.Max(1, definition.magazineSize) : 6;
+            string ammoText = ammo != null ? $" {Mathf.Clamp(ammo.currentMagazineAmmo, 0, magazineSize)}/{magazineSize}" : string.Empty;
             return $"{WeaponCatalog.GetDisplayName(weaponId)}\n{active}{ammoText}";
         }
 
@@ -231,7 +232,7 @@ namespace FrontierDepths.UI
                 ? "No weapon stats available."
                 : $"Damage {definition.baseDamage:0.#}\nRate {definition.fireRate:0.##}/s\nMagazine {definition.magazineSize}\nRange {definition.maxRange:0}m\nReload {definition.reloadDuration:0.##}s";
             string ammoText = ammo != null
-                ? $"\n\nAmmo\nMagazine {ammo.currentMagazineAmmo}\nReserve {ammo.reserveAmmo}/{ammo.maxReserveAmmo}"
+                ? $"\n\nAmmo\nLoaded {Mathf.Clamp(ammo.currentMagazineAmmo, 0, definition != null ? Mathf.Max(1, definition.magazineSize) : 6)}/{(definition != null ? Mathf.Max(1, definition.magazineSize) : 6)}\nBasic ammo infinite"
                 : string.Empty;
             string upgrades = run != null && run.runUpgrades != null && run.runUpgrades.Count > 0
                 ? $"\n\nRun Upgrades\n{FormatUpgrades(run)}"

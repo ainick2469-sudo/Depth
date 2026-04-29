@@ -61,7 +61,7 @@ namespace FrontierDepths.Progression
             shop.shopId = "shop.quartermaster";
             shop.serviceType = TownServiceType.Quartermaster;
             shop.displayName = "Quartermaster";
-            shop.greeting = "Ammo, sigils, and the boring things that keep brave people alive.";
+            shop.greeting = "Sigils, field gear, and the boring things that keep brave people alive.";
             shop.offers = new[]
             {
                 new ShopOffer
@@ -73,16 +73,6 @@ namespace FrontierDepths.Progression
                     purchaseLimit = 1,
                     action = ShopOfferAction.BuyPortalSigil,
                     rewardId = "item.town_sigil"
-                },
-                new ShopOffer
-                {
-                    offerId = "offer.reserve_restock",
-                    displayName = "Reserve Ammo Restock",
-                    description = "Refill your current revolver reserve to max.",
-                    cost = 35,
-                    purchaseLimit = 0,
-                    action = ShopOfferAction.RestockAmmo,
-                    rewardId = "ammo.reserve"
                 }
             };
             return shop;

@@ -31,11 +31,19 @@ namespace FrontierDepths.UI
         private string lastWeaponId = string.Empty;
         private int lastMagazineSize = -1;
         private int lastCurrentAmmo = -1;
-        private int lastReserveAmmo = -1;
         private bool lastReloading;
         private int lastReloadProgressBucket = -1;
         private Color hitMarkerColor = new Color(1f, 0.95f, 0.62f, 0.95f);
         private Vector2 hitMarkerSize = new Vector2(22f, 22f);
+        private static readonly Vector2[] RevolverChamberPositions =
+        {
+            new Vector2(0f, 24f),
+            new Vector2(20.8f, 12f),
+            new Vector2(20.8f, -12f),
+            new Vector2(0f, -24f),
+            new Vector2(-20.8f, -12f),
+            new Vector2(-20.8f, 12f)
+        };
 
         internal int ChamberCountForTests => chamberFills.Count;
         internal int FilledChamberCountForTests => CountFilledChambers();
@@ -90,7 +98,6 @@ namespace FrontierDepths.UI
                 lastWeaponId != weapon.WeaponId ||
                 lastMagazineSize != weapon.MagazineSize ||
                 lastCurrentAmmo != weapon.CurrentAmmo ||
-                lastReserveAmmo != weapon.ReserveAmmo ||
                 lastReloading != weapon.IsReloading ||
                 lastReloadProgressBucket != reloadBucket;
 
@@ -195,7 +202,6 @@ namespace FrontierDepths.UI
             lastWeaponId = weapon.WeaponId;
             lastMagazineSize = Mathf.Max(1, weapon.MagazineSize);
             lastCurrentAmmo = Mathf.Clamp(weapon.CurrentAmmo, 0, lastMagazineSize);
-            lastReserveAmmo = Mathf.Max(0, weapon.ReserveAmmo);
             lastReloading = weapon.IsReloading;
             lastReloadProgressBucket = weapon.IsReloading ? Mathf.RoundToInt(weapon.ReloadProgress * 100f) : -1;
 
@@ -213,7 +219,7 @@ namespace FrontierDepths.UI
 
             if (ammoText != null)
             {
-                ammoText.text = $"{lastCurrentAmmo} / {lastReserveAmmo}";
+                ammoText.text = $"{lastCurrentAmmo} / {lastMagazineSize}";
             }
 
             ConfigureWeaponIcon(lastWeaponId);
@@ -287,10 +293,6 @@ namespace FrontierDepths.UI
 
             for (int i = 0; i < slotCount; i++)
             {
-                float angle = 90f - i * 60f;
-                float radians = angle * Mathf.Deg2Rad;
-                Vector2 position = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * 25f;
-
                 GameObject chamberObject = new GameObject($"CylinderChamber_{i}", typeof(RectTransform), typeof(Image));
                 chamberObject.transform.SetParent(chamberRoot, false);
                 Image chamber = chamberObject.GetComponent<Image>();
@@ -300,8 +302,8 @@ namespace FrontierDepths.UI
                 RectTransform rect = chamber.rectTransform;
                 rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.sizeDelta = new Vector2(15f, 15f);
-                rect.anchoredPosition = position;
+                rect.sizeDelta = new Vector2(14f, 14f);
+                rect.anchoredPosition = RevolverChamberPositions[i];
                 chamberFills.Add(chamber);
             }
         }

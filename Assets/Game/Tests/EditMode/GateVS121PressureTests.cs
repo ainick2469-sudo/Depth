@@ -10,32 +10,31 @@ namespace FrontierDepths.Tests.EditMode
     public sealed class GateVS121PressureTests
     {
         [Test]
-        public void WeaponRuntimeState_ReloadConsumesReserveAndAllowsPartialReload()
+        public void WeaponRuntimeState_ReloadUsesInfiniteBasicReserve()
         {
             WeaponRuntimeState state = new WeaponRuntimeState(6, 2, 60, 1);
 
             Assert.IsTrue(state.TryStartReload(0f, 0.1f));
             Assert.IsTrue(state.Tick(0.2f));
 
-            Assert.AreEqual(3, state.CurrentAmmo);
-            Assert.AreEqual(0, state.ReserveAmmo);
+            Assert.AreEqual(6, state.CurrentAmmo);
+            Assert.AreEqual(2, state.ReserveAmmo);
             Assert.IsFalse(state.TryStartReload(0.3f, 0.1f));
         }
 
         [Test]
-        public void WeaponRuntimeState_ReservePickupRespectsCapAndAutoReloadRequiresReserve()
+        public void WeaponRuntimeState_AutoReloadNoLongerRequiresReserve()
         {
             WeaponRuntimeState empty = new WeaponRuntimeState(6, 0, 12, 0);
 
-            Assert.IsFalse(empty.TryQueueAutoReload(0f, 0f));
-            Assert.AreEqual(5, empty.TryAddAmmoToReserve(5, true));
             Assert.IsTrue(empty.TryQueueAutoReload(0f, 0f));
             Assert.IsTrue(empty.TryStartQueuedAutoReload(0f, 0.1f));
             Assert.IsTrue(empty.Tick(0.2f));
 
-            Assert.AreEqual(5, empty.CurrentAmmo);
+            Assert.AreEqual(6, empty.CurrentAmmo);
             Assert.AreEqual(0, empty.ReserveAmmo);
-            Assert.AreEqual(12, empty.TryAddAmmoToReserve(99, true));
+            Assert.AreEqual(5, empty.TryAddAmmoToReserve(5, true));
+            Assert.AreEqual(7, empty.TryAddAmmoToReserve(99, true));
             Assert.AreEqual(12, empty.ReserveAmmo);
             Assert.AreEqual(0, empty.TryAddAmmoToReserve(1, true));
         }

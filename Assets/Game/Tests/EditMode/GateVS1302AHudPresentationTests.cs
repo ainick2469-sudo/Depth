@@ -92,15 +92,14 @@ namespace FrontierDepths.Tests.EditMode
                 WeaponHudView view = hud.AddComponent<WeaponHudView>();
                 weapon.HandleWeaponInputFrame(0f, false, false, false);
                 view.SetWeaponForTests(weapon);
-                int initialReserve = weapon.ReserveAmmo;
 
-                Assert.AreEqual($"6 / {initialReserve}", view.AmmoTextForTests);
+                Assert.AreEqual("6 / 6", view.AmmoTextForTests);
                 Assert.AreEqual(6, view.FilledChamberCountForTests);
 
                 Assert.IsTrue(weapon.HandleWeaponInputFrame(0f, true, true, false).fired);
                 view.RefreshFromWeaponStateForTests();
 
-                Assert.AreEqual($"5 / {initialReserve}", view.AmmoTextForTests);
+                Assert.AreEqual("5 / 6", view.AmmoTextForTests);
                 Assert.AreEqual(5, view.FilledChamberCountForTests);
 
                 Assert.IsTrue(weapon.HandleWeaponInputFrame(0.5f, false, false, true).reloadStarted);
@@ -108,7 +107,7 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(weapon.TickReloadCompletion(2.0f));
                 view.RefreshFromWeaponStateForTests();
 
-                Assert.AreEqual($"6 / {initialReserve - 1}", view.AmmoTextForTests);
+                Assert.AreEqual("6 / 6", view.AmmoTextForTests);
                 Assert.AreEqual(6, view.FilledChamberCountForTests);
             }
             finally
@@ -128,7 +127,6 @@ namespace FrontierDepths.Tests.EditMode
                 WeaponHudView view = hud.AddComponent<WeaponHudView>();
                 weapon.HandleWeaponInputFrame(0f, false, false, false);
                 view.SetWeaponForTests(weapon);
-                int initialReserve = weapon.ReserveAmmo;
                 for (int i = 0; i < 6; i++)
                 {
                     Assert.IsTrue(weapon.HandleWeaponInputFrame(i * 0.5f, true, i == 0, false).fired);
@@ -137,7 +135,7 @@ namespace FrontierDepths.Tests.EditMode
                 weapon.HandleWeaponInputFrame(3.1f, true, true, false);
                 view.RefreshFromWeaponStateForTests();
 
-                Assert.AreEqual($"0 / {initialReserve}", view.AmmoTextForTests);
+                Assert.AreEqual("0 / 6", view.AmmoTextForTests);
                 Assert.AreEqual(0, view.FilledChamberCountForTests);
             }
             finally
@@ -181,7 +179,7 @@ namespace FrontierDepths.Tests.EditMode
                 view.RefreshFromWeaponStateForTests();
 
                 Assert.AreEqual("FRONTIER RIFLE", view.WeaponNameTextForTests);
-                Assert.AreEqual("5 / 24", view.AmmoTextForTests);
+                Assert.AreEqual("5 / 5", view.AmmoTextForTests);
                 Assert.AreEqual(0, view.ChamberCountForTests);
                 Assert.AreEqual(0, view.FilledChamberCountForTests);
             }
@@ -316,6 +314,7 @@ namespace FrontierDepths.Tests.EditMode
 
                 Assert.IsTrue(view.ModelLoadedForTests, "FrontierRevolver_Model prefab should be loadable from Resources.");
                 Assert.AreEqual(1, view.InstanceCountForTests);
+                Assert.IsTrue(view.PoseAppliedForTests, "Imported revolver should receive the first-person visual pose.");
                 Assert.IsTrue(view.FallbackMaterialsAppliedForTests, "Imported revolver should receive readable fallback materials when imported white.");
                 Assert.IsFalse(graybox.GetComponent<Renderer>().enabled, "Graybox renderers should hide when the imported model loads.");
             }

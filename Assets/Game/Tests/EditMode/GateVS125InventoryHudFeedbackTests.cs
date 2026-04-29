@@ -102,7 +102,9 @@ namespace FrontierDepths.Tests.EditMode
 
             Assert.NotNull(service);
             Assert.AreEqual(32, service.PoolSizeForTests);
-            Assert.NotNull(service.transform.Find("SharedCombatDamageNumberPool"));
+            Transform canvas = service.transform.Find("ScreenSpaceDamageNumberCanvas");
+            Assert.NotNull(canvas);
+            Assert.NotNull(canvas.Find("SharedCombatDamageNumberPool"));
             Object.DestroyImmediate(service.gameObject);
         }
 

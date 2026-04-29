@@ -192,7 +192,7 @@ namespace FrontierDepths.UI
             if (interactor == null || !interactor.HasFocusedInteractable)
             {
                 PlayerWeaponController weapon = playerController != null ? playerController.GetComponent<PlayerWeaponController>() : null;
-                if (weapon != null && (weapon.ReserveAmmo <= 0 || weapon.CurrentAmmo <= 0))
+                if (weapon != null && weapon.CurrentAmmo <= 0)
                 {
                     ShowPrompt($"{InputBindingService.GetDisplay(GameplayInputAction.PistolWhip)}: Pistol Whip", PromptPausedColor);
                     return;

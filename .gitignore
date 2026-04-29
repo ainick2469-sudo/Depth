@@ -23,4 +23,7 @@
 Thumbs.db
 Desktop.ini
 
+ProjectSnapshot/AI_CONTEXT_EXPORT.zip
+ProjectSnapshot/_export_tmp/
+
 !/[Aa]ssets/**/*.meta

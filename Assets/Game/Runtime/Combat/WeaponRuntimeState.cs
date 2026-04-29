@@ -25,6 +25,7 @@ namespace FrontierDepths.Combat
         public int MagazineSize { get; private set; }
         public int ReserveAmmo { get; private set; }
         public int MaxReserveAmmo { get; private set; }
+        public bool InfiniteReserveAmmo { get; private set; } = true;
         public bool IsReloading { get; private set; }
         public float ReloadStartTime => reloadStartTime;
         public float ReloadCompleteTime => reloadCompleteTime;
@@ -50,7 +51,7 @@ namespace FrontierDepths.Combat
 
         public bool TryStartReload(float currentTime, float reloadDuration)
         {
-            if (IsReloading || CurrentAmmo >= MagazineSize || ReserveAmmo <= 0)
+            if (IsReloading || CurrentAmmo >= MagazineSize || (!InfiniteReserveAmmo && ReserveAmmo <= 0))
             {
                 return false;
             }
@@ -64,7 +65,7 @@ namespace FrontierDepths.Combat
 
         public bool TryQueueAutoReload(float currentTime, float delay)
         {
-            if (IsReloading || CurrentAmmo >= MagazineSize || ReserveAmmo <= 0 || autoReloadQueued)
+            if (IsReloading || CurrentAmmo >= MagazineSize || (!InfiniteReserveAmmo && ReserveAmmo <= 0) || autoReloadQueued)
             {
                 return false;
             }
@@ -148,9 +149,12 @@ namespace FrontierDepths.Combat
 
             IsReloading = false;
             int missingAmmo = UnityEngine.Mathf.Max(0, MagazineSize - CurrentAmmo);
-            int loadedAmmo = UnityEngine.Mathf.Min(missingAmmo, ReserveAmmo);
+            int loadedAmmo = InfiniteReserveAmmo ? missingAmmo : UnityEngine.Mathf.Min(missingAmmo, ReserveAmmo);
             CurrentAmmo += loadedAmmo;
-            ReserveAmmo -= loadedAmmo;
+            if (!InfiniteReserveAmmo)
+            {
+                ReserveAmmo -= loadedAmmo;
+            }
             reloadStartTime = 0f;
             reloadCompleteTime = 0f;
             ClearPendingAutoReload();
