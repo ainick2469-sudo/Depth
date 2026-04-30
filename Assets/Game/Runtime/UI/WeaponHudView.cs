@@ -413,7 +413,7 @@ namespace FrontierDepths.UI
             nameRect.anchorMax = new Vector2(0.7f, 1f);
             nameRect.pivot = new Vector2(0.5f, 1f);
             nameRect.sizeDelta = new Vector2(0f, 24f);
-            nameRect.anchoredPosition = new Vector2(0f, -48f);
+            nameRect.anchoredPosition = new Vector2(0f, -58f);
             weaponNameText.fontSize = 16;
             weaponNameText.alignment = TextAnchor.MiddleCenter;
             weaponNameText.color = new Color(0.96f, 0.86f, 0.55f, 0.98f);
@@ -428,7 +428,7 @@ namespace FrontierDepths.UI
             subtitleRect.anchorMax = new Vector2(0.7f, 1f);
             subtitleRect.pivot = new Vector2(0.5f, 1f);
             subtitleRect.sizeDelta = new Vector2(0f, 20f);
-            subtitleRect.anchoredPosition = new Vector2(0f, -26f);
+            subtitleRect.anchoredPosition = new Vector2(0f, -36f);
             weaponSubtitleText.fontSize = 13;
             weaponSubtitleText.alignment = TextAnchor.MiddleCenter;
             weaponSubtitleText.color = new Color(0.82f, 0.72f, 0.5f, 0.92f);
@@ -759,7 +759,7 @@ namespace FrontierDepths.UI
         private readonly struct RevolverChamberLayout
         {
             public static readonly RevolverChamberLayout Default = new RevolverChamberLayout(
-                new Vector2(-61f, 114f),
+                new Vector2(-55f, 116f),
                 new Vector2(58f, 58f),
                 8.5f,
                 new[]

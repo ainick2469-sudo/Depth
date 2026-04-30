@@ -173,6 +173,14 @@ namespace FrontierDepths.Core
             UpdateUiCaptureState();
         }
 
+        public void PauseGameplayCapture()
+        {
+            manualPauseCaptured = true;
+            externalUiCaptured = true;
+            suppressLookFrames = 0;
+            UpdateUiCaptureState();
+        }
+
         public void ToggleManualPause()
         {
             manualPauseCaptured = !manualPauseCaptured;
@@ -186,12 +194,8 @@ namespace FrontierDepths.Core
 
         public void ResumeGameplayCapture()
         {
-            if (!manualPauseCaptured)
-            {
-                return;
-            }
-
             manualPauseCaptured = false;
+            externalUiCaptured = false;
             suppressLookFrames = 1;
             UpdateUiCaptureState();
         }

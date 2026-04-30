@@ -24,6 +24,7 @@ namespace FrontierDepths.Tests.EditMode
         [TearDown]
         public void TearDown()
         {
+            Time.timeScale = 1f;
             GameplayEventBus.ClearForTests();
             HudSpriteCatalog.ClearCacheForTests();
             DestroyRuntimeFeedbackRoot();
@@ -105,6 +106,41 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Object.DestroyImmediate(hud);
                 Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
+            }
+        }
+
+        [Test]
+        public void PauseMenu_ShowFreezesGameplayAndHideRestoresCapture()
+        {
+            Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
+            GameObject hud = CreateRectObject("Hud");
+            GameObject player = new GameObject("Player", typeof(CharacterController), typeof(PlayerInteractor), typeof(PlayerResourceController), typeof(FirstPersonController));
+            try
+            {
+                PauseMenuController pause = hud.AddComponent<PauseMenuController>();
+                FirstPersonController controller = player.GetComponent<FirstPersonController>();
+
+                pause.Show(controller);
+
+                Assert.IsTrue(pause.IsVisible);
+                Assert.IsTrue(controller.IsUiCaptured);
+                Assert.IsTrue(controller.IsManualPauseActive);
+                Assert.AreEqual(0f, Time.timeScale);
+                Assert.AreEqual(CursorLockMode.None, Cursor.lockState);
+                Assert.IsTrue(Cursor.visible);
+
+                pause.Hide();
+
+                Assert.IsFalse(pause.IsVisible);
+                Assert.IsFalse(controller.IsUiCaptured);
+                Assert.AreEqual(1f, Time.timeScale);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
+                Time.timeScale = 1f;
             }
         }
 

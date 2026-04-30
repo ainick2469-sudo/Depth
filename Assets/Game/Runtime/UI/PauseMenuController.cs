@@ -18,6 +18,7 @@ namespace FrontierDepths.UI
         private Text keybindingsText;
         private SharedSettingsPanelController sharedSettingsPanel;
         private FirstPersonController playerController;
+        private float timeScaleBeforePause = 1f;
         private int returnConfirmFrame = -999;
         private int quitConfirmFrame = -999;
         private GameplayInputAction? pendingRebind;
@@ -66,7 +67,11 @@ namespace FrontierDepths.UI
             }
             pendingRebind = null;
             messageText.text = "Paused";
-            playerController?.SetUiCaptured(true);
+            timeScaleBeforePause = Time.timeScale <= 0f ? 1f : Time.timeScale;
+            Time.timeScale = 0f;
+            playerController?.PauseGameplayCapture();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
             RefreshSettingsText();
             RefreshKeybindingsText();
         }
@@ -90,7 +95,8 @@ namespace FrontierDepths.UI
             }
 
             playerController ??= FindAnyObjectByType<FirstPersonController>();
-            playerController?.SetUiCaptured(false);
+            playerController?.ResumeGameplayCapture();
+            Time.timeScale = Mathf.Approximately(timeScaleBeforePause, 0f) ? 1f : timeScaleBeforePause;
         }
 
         private void EnsureUi()
