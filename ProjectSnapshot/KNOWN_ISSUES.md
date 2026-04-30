@@ -5,6 +5,8 @@
 - Town service layout now uses deterministic wrapper visuals, but the town is still an art-first hybrid shell rather than final buildings.
 - Town labels/signage are readable runtime labels; polished sign art and final typography are still deferred.
 - Curated town import intentionally uses small identity props only; full building exteriors are deferred until dependency chains are proven clean.
+- Dungeon shell adapter currently uses primitive game-owned wrappers; curated `DungeonModularPack` art is deferred until a small dependency-safe copy set is selected.
+- Dungeon shell visuals are intentionally visual-only; existing graybox collision primitives remain authoritative and may still look simple when wrappers are missing.
 - Damage-number readability should be manually confirmed.
 - Enemy attack families are still mostly data/fallback, not fully bespoke.
 - Dungeon generation is still grid/simple and needs a future foundation pass.

@@ -18,8 +18,8 @@
 
 - Path: `Assets/Game/Runtime/World`
 - Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
-- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
-- Do not edit casually: world-floor persistence semantics, scene YAML, safe/transit room rules, encounter spacing, and room purpose reward policy.
+- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
+- Do not edit casually: world-floor persistence semantics, dungeon shell visual wrapper paths, scene YAML, safe/transit room rules, encounter spacing, collision records, and room purpose reward policy.
 
 ## Progression
 
@@ -72,5 +72,7 @@
 - Paths: `Assets/Game/Art`, `Assets/Game/Resources`, `Assets/Game/Prefabs`, `Assets/Game/Data`
 - Contains: project-side art, resource-prefabs, gameplay prefabs, and lightweight data.
 - Town wrapper path: `Assets/Game/Resources/TownVisuals`.
+- Dungeon wrapper path: `Assets/Game/Resources/DungeonVisuals`.
 - Curated town vendor source path: `Assets/Game/Art/Imported/Town/VendorSource`.
+- Curated dungeon vendor source path for future use: `Assets/Game/Art/Imported/Dungeon/VendorSource`.
 - Do not edit casually: imported assets, FBX/material import state, or prefab references without Unity validation. Runtime systems should load wrapper prefabs, not random vendor prefabs.

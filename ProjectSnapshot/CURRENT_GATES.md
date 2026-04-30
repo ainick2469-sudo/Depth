@@ -2,22 +2,22 @@
 
 ## Latest Stable Gameplay Base
 
-- `32546d3 Gate VS-1.4.1A: scan staging assets and plan integration`
+- `c163b65 Gate VS-1.4.1B: integrate curated town visuals and layout`
 
 ## Current Gate
 
-- `Gate VS-1.4.1B: Curated Town Asset Integration and Town Layout Replacement`
+- `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
 Purpose:
 
-- Replace confusing runtime graybox town service placement with deterministic, front-facing service stations.
-- Use a tiny curated identity-prop import from staging, not whole vendor packs.
-- Load only game-owned wrapper prefabs from `Assets/Game/Resources/TownVisuals`.
-- Preserve Blacksmith, Quartermaster, Saloon / Inn, Bounty Board, and existing scene Dungeon Gate behavior.
-- Keep dungeon generation, enemies, skill trees, scene YAML, and ProjectSettings untouched.
+- Add a visual-only dungeon shell adapter over the existing `DungeonSceneController` build path.
+- Load only game-owned wrapper prefabs from `Assets/Game/Resources/DungeonVisuals`.
+- Keep current dungeon graph generation, collision, spawning, minimap, stairs, pickups, and room-purpose behavior authoritative.
+- Do not import the Dungeon Generation Pack, demo scenes, vendor scripts, scene YAML, or ProjectSettings churn.
+- Use primitive/game-owned wrappers for this gate; raw dungeon vendor assets remain deferred.
 
 ## Next Planned Gate
 
-- `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
+- `Gate VS-1.4.2: World Floor 1 Graybox Overworld Runtime`
 
-Use `DungeonModularPack` as curated wrapper-prefab shell art without changing dungeon graph generation. Do not import or adopt `ADoorToGaming` generator scripts.
+Build the first simple runtime overworld wrapper around Frontier Outpost, the safe settlement, outer field, road, and existing Training Labyrinth gate.

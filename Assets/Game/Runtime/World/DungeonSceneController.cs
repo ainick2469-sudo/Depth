@@ -1652,6 +1652,15 @@ namespace FrontierDepths.World
                 visualFloorScale,
                 new Color(0.19f, 0.18f, 0.17f));
             SetColliderEnabled(visualFloor, false);
+            if (TryCreateShellVisual(
+                    DungeonShellVisualKind.Corridor,
+                    segmentRoot.transform,
+                    visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
+                    visualFloorScale,
+                    Quaternion.identity))
+            {
+                SetRendererEnabled(visualFloor, false);
+            }
 
             GameObject collisionFloor = CreatePrimitive(
                 "FloorCollision",
@@ -1703,6 +1712,16 @@ namespace FrontierDepths.World
 
             GameObject leftWall = CreatePrimitive("LeftWall", parent, midpoint + leftOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
             GameObject rightWall = CreatePrimitive("RightWall", parent, midpoint + rightOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
+            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, parent, midpoint + leftOffset, wallScale, Quaternion.identity))
+            {
+                SetRendererEnabled(leftWall, false);
+            }
+
+            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, parent, midpoint + rightOffset, wallScale, Quaternion.identity))
+            {
+                SetRendererEnabled(rightWall, false);
+            }
+
             RecordCorridorWall(edgeKey, GetBounds(leftWall.transform.position, wallScale));
             RecordCorridorWall(edgeKey, GetBounds(rightWall.transform.position, wallScale));
         }
@@ -2435,6 +2454,12 @@ namespace FrontierDepths.World
             GameObject openingMarker = new GameObject($"DoorOpening_{node.nodeId}_{DirectionToToken(direction)}");
             openingMarker.transform.SetParent(roomRoot, false);
             openingMarker.transform.localPosition = GetDoorLocalPosition(node, direction);
+            TryCreateShellVisual(
+                DungeonShellVisualKind.Doorway,
+                roomRoot,
+                GetDoorLocalPosition(node, direction) + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f),
+                visualOpeningSize,
+                Quaternion.identity);
 
             activeBuildResult.doorOpenings.Add(new DungeonDoorOpeningRecord
             {
@@ -2605,7 +2630,11 @@ namespace FrontierDepths.World
                     -FloorThickness * 0.5f,
                     (origin.y + (height - 1) * 0.5f) * CellSize);
                 Vector3 localScale = new Vector3(width * CellSize, FloorThickness, height * CellSize);
-                CreatePrimitive($"Floor_{origin.x}_{origin.y}_{width}_{height}", roomRoot, localPosition, localScale, color);
+                GameObject floor = CreatePrimitive($"Floor_{origin.x}_{origin.y}_{width}_{height}", roomRoot, localPosition, localScale, color);
+                if (TryCreateShellVisual(DungeonShellVisualKind.Floor, roomRoot, localPosition, localScale, Quaternion.identity))
+                {
+                    SetRendererEnabled(floor, false);
+                }
 
                 for (int x = 0; x < width; x++)
                 {
@@ -2793,6 +2822,11 @@ namespace FrontierDepths.World
                 localPosition,
                 scale,
                 GetWallColor(kind));
+            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, roomRoot, localPosition, scale, Quaternion.identity))
+            {
+                SetRendererEnabled(wall, false);
+            }
+
             roomRecord.wallCount++;
             activeBuildResult?.wallSpans.Add(new DungeonWallSpanRecord
             {
@@ -2901,6 +2935,10 @@ namespace FrontierDepths.World
             float width = maxX - minX;
             float length = maxZ - minZ;
             Color accent = Color.Lerp(GetFloorColor(node.nodeKind), Color.white, 0.14f);
+            DungeonShellVisualKind accentKind = node.nodeKind == DungeonNodeKind.Secret
+                ? DungeonShellVisualKind.SecretAccent
+                : DungeonShellVisualKind.RoomAccent;
+            TryCreateShellVisual(accentKind, roomRoot, center + Vector3.up * 1.1f, new Vector3(2f, 2f, 2f), Quaternion.identity);
 
             switch (feature)
             {
@@ -2999,6 +3037,7 @@ namespace FrontierDepths.World
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(6f, 0.75f, 6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
+                TryCreateShellVisual(DungeonShellVisualKind.StairsDown, stairs.transform, Vector3.zero, Vector3.one, Quaternion.identity);
                 stairs.AddComponent<DungeonStairsInteractable>();
                 RecordInteractable(node.nodeId, "StairsDown", stairs, false, false, false);
             }
@@ -3010,6 +3049,7 @@ namespace FrontierDepths.World
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(5.6f, 0.75f, 5.6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
+                TryCreateShellVisual(DungeonShellVisualKind.StairsUp, stairs.transform, Vector3.zero, Vector3.one, Quaternion.identity);
                 stairs.AddComponent<DungeonAscendInteractable>();
                 bool requiredReturnRoute = activeBuildResult != null && activeBuildResult.floorIndex == 1;
                 RecordInteractable(node.nodeId, "ReturnLift", stairs, false, true, requiredReturnRoute);
@@ -3296,6 +3336,11 @@ namespace FrontierDepths.World
             primitive.transform.localScale = localScale;
             ApplyColor(primitive.GetComponent<Renderer>(), color);
             return primitive;
+        }
+
+        private static bool TryCreateShellVisual(DungeonShellVisualKind kind, Transform parent, Vector3 localPosition, Vector3 localScale, Quaternion localRotation)
+        {
+            return DungeonShellVisualResolver.TryInstantiateVisual(kind, parent, localPosition, localScale, localRotation, out _);
         }
 
         private static void SetColliderEnabled(GameObject target, bool enabled)

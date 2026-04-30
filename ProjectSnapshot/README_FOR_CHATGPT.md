@@ -26,9 +26,11 @@ Use this folder as the project memory layer when the full Unity project is too l
 20. `ASSET_IMPORT_POLICY.md`
 21. `ASSET_TOWN_SELECTION.md`
 22. `ASSET_TOWN_COPY_MANIFEST.md`
-23. `ENEMY_ROSTER.md`
-24. `ENEMY_PACKS.md`
-25. `TEST_INDEX.md`
+23. `DUNGEON_SHELL_ADAPTER.md`
+24. `ASSET_DUNGEON_COPY_MANIFEST.md`
+25. `ENEMY_ROSTER.md`
+26. `ENEMY_PACKS.md`
+27. `TEST_INDEX.md`
 
 ## Lightweight Export
 
@@ -69,3 +71,15 @@ Raw copied vendor files, when intentionally selected, must stay isolated under:
 - `Assets/Game/Art/Imported/Town/VendorSource`
 
 Do not point runtime systems directly at staging paths or vendor prefabs.
+
+## Current Dungeon Asset Rule
+
+Runtime dungeon shell code should load only game-owned wrappers from:
+
+- `Assets/Game/Resources/DungeonVisuals`
+
+No raw dungeon vendor assets were copied in `Gate VS-1.4.1C`. Future curated dungeon art should be selected through `ASSET_DUNGEON_COPY_MANIFEST.md` and remain isolated under:
+
+- `Assets/Game/Art/Imported/Dungeon/VendorSource`
+
+Do not import or adopt vendor dungeon generator scripts.
