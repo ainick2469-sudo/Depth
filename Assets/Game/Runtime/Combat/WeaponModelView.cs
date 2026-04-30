@@ -136,6 +136,7 @@ namespace FrontierDepths.Combat
             }
 
             Renderer[] renderers = modelRoot.GetComponentsInChildren<Renderer>(true);
+            int totalMaterialSlots = CountMaterialSlots(renderers);
             for (int i = 0; i < renderers.Length; i++)
             {
                 Renderer renderer = renderers[i];
@@ -147,7 +148,7 @@ namespace FrontierDepths.Combat
                 Material[] sourceMaterials = renderer.sharedMaterials;
                 if (sourceMaterials == null || sourceMaterials.Length == 0)
                 {
-                    renderer.sharedMaterial = CreateFallbackMaterial(renderer.name, i, 0);
+                    renderer.sharedMaterial = CreateFallbackMaterial(renderer.name, i, 0, totalMaterialSlots);
                     fallbackMaterialsApplied = true;
                     continue;
                 }
@@ -156,7 +157,7 @@ namespace FrontierDepths.Combat
                 for (int slot = 0; slot < sourceMaterials.Length; slot++)
                 {
                     Material sourceMaterial = sourceMaterials[slot];
-                    runtimeMaterials[slot] = CreateFallbackMaterial($"{renderer.name}_{sourceMaterial?.name}", i, slot);
+                    runtimeMaterials[slot] = CreateFallbackMaterial($"{renderer.name}_{sourceMaterial?.name}", i, slot, totalMaterialSlots);
                 }
 
                 renderer.sharedMaterials = runtimeMaterials;
@@ -200,7 +201,39 @@ namespace FrontierDepths.Combat
             }
         }
 
-        private static Material CreateFallbackMaterial(string rendererName, int rendererIndex, int materialIndex)
+        private static Material CreateFallbackMaterial(string rendererName, int rendererIndex, int materialIndex, int totalMaterialSlots)
+        {
+            RevolverMaterialCategory category = GetFallbackMaterialCategory(rendererName, rendererIndex, materialIndex, totalMaterialSlots);
+            Color color = GetFallbackMaterialColor(category);
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Diffuse") ?? Shader.Find("Sprites/Default");
+            Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
+            material.name = $"RuntimeRevolverFallbackMaterial_{category}";
+            material.color = color;
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            bool grip = category == RevolverMaterialCategory.Grip;
+            if (material.HasProperty("_Metallic"))
+            {
+                material.SetFloat("_Metallic", grip ? 0.05f : 0.5f);
+            }
+
+            if (material.HasProperty("_Smoothness"))
+            {
+                material.SetFloat("_Smoothness", grip ? 0.24f : 0.42f);
+            }
+
+            if (material.HasProperty("_Glossiness"))
+            {
+                material.SetFloat("_Glossiness", grip ? 0.24f : 0.42f);
+            }
+
+            return material;
+        }
+
+        private static RevolverMaterialCategory GetFallbackMaterialCategory(string rendererName, int rendererIndex, int materialIndex, int totalMaterialSlots)
         {
             string lowerName = (rendererName ?? string.Empty).ToLowerInvariant();
             bool grip = lowerName.Contains("grip") || lowerName.Contains("handle") || lowerName.Contains("wood");
@@ -208,44 +241,48 @@ namespace FrontierDepths.Combat
                                lowerName.Contains("cylinder") ||
                                lowerName.Contains("chamber") ||
                                lowerName.Contains("sight");
-            bool darkMetal = lowerName.Contains("trigger") || lowerName.Contains("hammer") || lowerName.Contains("frame");
+            bool accentMetal = lowerName.Contains("trigger") || lowerName.Contains("hammer");
+            bool bodyMetal = lowerName.Contains("frame") || lowerName.Contains("body") || lowerName.Contains("receiver");
 
-            if (!grip && !brightMetal && !darkMetal)
+            if (grip)
             {
-                int bucket = Mathf.Abs(rendererIndex + materialIndex) % 5;
-                grip = bucket == 3;
-                brightMetal = bucket == 1 || bucket == 2;
-                darkMetal = !grip && !brightMetal;
+                return RevolverMaterialCategory.Grip;
             }
 
-            Color color = grip
-                ? new Color(0.36f, 0.22f, 0.11f, 1f)
-                : brightMetal
-                    ? new Color(0.68f, 0.7f, 0.66f, 1f)
-                    : darkMetal
-                        ? new Color(0.29f, 0.31f, 0.32f, 1f)
-                        : new Color(0.44f, 0.46f, 0.44f, 1f);
-
-            Shader shader = Shader.Find("Standard") ?? Shader.Find("Diffuse") ?? Shader.Find("Universal Render Pipeline/Lit");
-            Material material = shader != null ? new Material(shader) : new Material(Shader.Find("Sprites/Default"));
-            material.name = "RuntimeRevolverFallbackMaterial";
-            material.color = color;
-            if (material.HasProperty("_BaseColor"))
+            if (brightMetal)
             {
-                material.SetColor("_BaseColor", color);
+                return RevolverMaterialCategory.Steel;
             }
 
-            if (material.HasProperty("_Metallic"))
+            if (accentMetal)
             {
-                material.SetFloat("_Metallic", grip ? 0.04f : 0.48f);
+                return RevolverMaterialCategory.AccentMetal;
             }
 
-            if (material.HasProperty("_Glossiness"))
+            if (bodyMetal || totalMaterialSlots <= 1)
             {
-                material.SetFloat("_Glossiness", grip ? 0.26f : 0.32f);
+                return RevolverMaterialCategory.BodyGunmetal;
             }
 
-            return material;
+            int bucket = Mathf.Abs((rendererIndex * 3) + materialIndex) % 5;
+            return bucket switch
+            {
+                1 or 2 => RevolverMaterialCategory.Steel,
+                3 => RevolverMaterialCategory.Grip,
+                4 => RevolverMaterialCategory.AccentMetal,
+                _ => RevolverMaterialCategory.BodyGunmetal
+            };
+        }
+
+        private static Color GetFallbackMaterialColor(RevolverMaterialCategory category)
+        {
+            return category switch
+            {
+                RevolverMaterialCategory.Steel => new Color(0.72f, 0.74f, 0.70f, 1f),
+                RevolverMaterialCategory.Grip => new Color(0.43f, 0.27f, 0.14f, 1f),
+                RevolverMaterialCategory.AccentMetal => new Color(0.38f, 0.39f, 0.38f, 1f),
+                _ => new Color(0.48f, 0.50f, 0.49f, 1f)
+            };
         }
 
         private Color[] GetRendererColors()
@@ -256,11 +293,22 @@ namespace FrontierDepths.Combat
             }
 
             Renderer[] renderers = importedInstance.GetComponentsInChildren<Renderer>(true);
-            Color[] colors = new Color[renderers.Length];
+            int totalMaterials = CountMaterialSlots(renderers);
+            Color[] colors = new Color[totalMaterials];
+            int colorIndex = 0;
             for (int i = 0; i < renderers.Length; i++)
             {
-                Material material = renderers[i] != null ? renderers[i].sharedMaterial : null;
-                colors[i] = material != null ? material.color : Color.clear;
+                Material[] materials = renderers[i] != null ? renderers[i].sharedMaterials : null;
+                if (materials == null)
+                {
+                    continue;
+                }
+
+                for (int slot = 0; slot < materials.Length; slot++)
+                {
+                    Material material = materials[slot];
+                    colors[colorIndex++] = material != null ? material.color : Color.clear;
+                }
             }
 
             return colors;
@@ -274,13 +322,27 @@ namespace FrontierDepths.Combat
             }
 
             Renderer[] renderers = importedInstance.GetComponentsInChildren<Renderer>(true);
-            string[] lines = new string[renderers.Length];
+            int totalMaterials = CountMaterialSlots(renderers);
+            string[] lines = new string[totalMaterials];
+            int lineIndex = 0;
             for (int i = 0; i < renderers.Length; i++)
             {
                 Renderer renderer = renderers[i];
-                Material material = renderer != null ? renderer.sharedMaterial : null;
-                Color color = material != null ? material.color : Color.clear;
-                lines[i] = $"{renderer?.name ?? "missing"} | {material?.name ?? "missing"} | {color.r:0.00},{color.g:0.00},{color.b:0.00}";
+                Material[] materials = renderer != null ? renderer.sharedMaterials : null;
+                if (materials == null)
+                {
+                    continue;
+                }
+
+                for (int slot = 0; slot < materials.Length; slot++)
+                {
+                    Material material = materials[slot];
+                    Color color = material != null ? material.color : Color.clear;
+                    string category = material != null && material.name.StartsWith("RuntimeRevolverFallbackMaterial_")
+                        ? material.name.Substring("RuntimeRevolverFallbackMaterial_".Length)
+                        : "Imported";
+                    lines[lineIndex++] = $"{renderer?.name ?? "missing"}[{slot}] | {category} | {material?.name ?? "missing"} | {color.r:0.00},{color.g:0.00},{color.b:0.00}";
+                }
             }
 
             return lines;
@@ -322,6 +384,31 @@ namespace FrontierDepths.Combat
             }
 
             return count;
+        }
+
+        private static int CountMaterialSlots(Renderer[] renderers)
+        {
+            if (renderers == null || renderers.Length == 0)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Material[] materials = renderers[i] != null ? renderers[i].sharedMaterials : null;
+                count += materials != null && materials.Length > 0 ? materials.Length : 1;
+            }
+
+            return count;
+        }
+
+        private enum RevolverMaterialCategory
+        {
+            BodyGunmetal,
+            Steel,
+            Grip,
+            AccentMetal
         }
 
         internal readonly struct WeaponViewPose

@@ -74,6 +74,9 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.AreEqual(1, CountNamedChildren(hud.transform, "BackgroundFrameImage"));
                 Assert.AreEqual(1, CountNamedChildren(hud.transform, "CylinderChamberRoot"));
                 Assert.AreEqual(6, view.ChamberCountForTests);
+                Assert.AreEqual("Revolver", view.WeaponNameTextForTests);
+                Assert.AreEqual("Gunslinger Sidearm", view.WeaponSubtitleTextForTests);
+                Assert.IsFalse(view.HasLegacyWeaponIconBlockForTests);
             }
             finally
             {

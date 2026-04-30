@@ -13,9 +13,6 @@ namespace FrontierDepths.UI
 
         [SerializeField] private RectTransform panelRoot;
         [SerializeField] private Image backgroundFrameImage;
-        [SerializeField] private RectTransform weaponIconRoot;
-        [SerializeField] private Image weaponIconImage;
-        [SerializeField] private Text weaponIconLabel;
         [SerializeField] private Text weaponNameText;
         [SerializeField] private Text weaponSubtitleText;
         [SerializeField] private Text ammoText;
@@ -35,16 +32,7 @@ namespace FrontierDepths.UI
         private int lastReloadProgressBucket = -1;
         private Color hitMarkerColor = new Color(1f, 0.95f, 0.62f, 0.95f);
         private Vector2 hitMarkerSize = new Vector2(22f, 22f);
-        private static readonly Vector2[] RevolverChamberNormalizedPositions =
-        {
-            new Vector2(0f, 0.24f),
-            new Vector2(0.21f, 0.12f),
-            new Vector2(0.21f, -0.12f),
-            new Vector2(0f, -0.24f),
-            new Vector2(-0.21f, -0.12f),
-            new Vector2(-0.21f, 0.12f)
-        };
-        private const float ChamberPipSizeFraction = 0.14f;
+        private static readonly RevolverChamberLayout ChamberLayout = RevolverChamberLayout.Default;
 
         internal int ChamberCountForTests => chamberFills.Count;
         internal int FilledChamberCountForTests => CountFilledChambers();
@@ -64,7 +52,10 @@ namespace FrontierDepths.UI
         internal bool IsWeaponTextInsidePanelForTests => IsRectInsidePanel(weaponNameText != null ? weaponNameText.rectTransform : null) &&
                                                          IsRectInsidePanel(ammoText != null ? ammoText.rectTransform : null);
         internal bool HasOldAmmoPipStripForTests => FindNamedTransform(transform, "AmmoPipContainer") != null;
-        internal bool IsIconFallbackVisibleForTests => weaponIconLabel != null && weaponIconLabel.enabled;
+        internal bool HasLegacyWeaponIconBlockForTests => FindNamedTransform(transform, "WeaponIconRoot") != null ||
+                                                          FindNamedTransform(transform, "WeaponIconImage") != null ||
+                                                          FindNamedTransform(transform, "WeaponIconLabel") != null;
+        internal bool IsIconFallbackVisibleForTests => false;
         internal bool UsesAmmoBulletFallbackForTests => chamberFills.Count > 0 && chamberFills[0] != null && chamberFills[0].sprite == null;
 
         private void Awake()
@@ -214,7 +205,7 @@ namespace FrontierDepths.UI
 
             if (weaponNameText != null)
             {
-                weaponNameText.text = GetDisplayWeaponName(weapon.WeaponName);
+                weaponNameText.text = GetDisplayWeaponName(lastWeaponId, weapon.WeaponName);
             }
 
             if (weaponSubtitleText != null)
@@ -229,7 +220,6 @@ namespace FrontierDepths.UI
                 ammoText.text = $"{lastCurrentAmmo} / {lastMagazineSize}";
             }
 
-            ConfigureWeaponIcon(lastWeaponId);
             ConfigureChambers(lastWeaponId, lastMagazineSize);
             UpdateChambers(lastCurrentAmmo, lastMagazineSize);
 
@@ -242,42 +232,13 @@ namespace FrontierDepths.UI
             }
         }
 
-        private void ConfigureWeaponIcon(string weaponId)
+        private static string GetDisplayWeaponName(string weaponId, string weaponName)
         {
-            if (weaponIconImage == null || weaponIconLabel == null)
+            if (weaponId == WeaponCatalog.FrontierRevolverId)
             {
-                return;
+                return "Revolver";
             }
 
-            Sprite sprite = HudSpriteCatalog.TryGetWeaponIcon(weaponId);
-            if (sprite != null)
-            {
-                weaponIconImage.sprite = sprite;
-                weaponIconImage.type = Image.Type.Simple;
-                weaponIconImage.preserveAspect = true;
-                weaponIconImage.color = Color.white;
-                weaponIconLabel.enabled = false;
-                return;
-            }
-
-            weaponIconImage.sprite = null;
-            weaponIconImage.color = new Color(0.12f, 0.1f, 0.07f, 0.78f);
-            weaponIconLabel.enabled = true;
-            weaponIconLabel.text = GetWeaponIconFallbackLabel(weaponId);
-        }
-
-        private static string GetWeaponIconFallbackLabel(string weaponId)
-        {
-            return weaponId switch
-            {
-                WeaponCatalog.FrontierRifleId => "RIF",
-                WeaponCatalog.FrontierRevolverId => "REV",
-                _ => "WEPN"
-            };
-        }
-
-        private static string GetDisplayWeaponName(string weaponName)
-        {
             return string.IsNullOrWhiteSpace(weaponName)
                 ? "FRONTIER REVOLVER"
                 : weaponName.ToUpperInvariant();
@@ -289,6 +250,7 @@ namespace FrontierDepths.UI
             int slotCount = revolver ? 6 : 0;
             if (chamberFills.Count == slotCount)
             {
+                ApplyChamberLayout();
                 return;
             }
 
@@ -309,16 +271,10 @@ namespace FrontierDepths.UI
                 RectTransform rect = chamber.rectTransform;
                 rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
-                float rootSize = chamberRoot != null ? Mathf.Min(chamberRoot.rect.width, chamberRoot.rect.height) : 58f;
-                if (rootSize <= 0.001f)
-                {
-                    rootSize = Mathf.Min(chamberRoot.sizeDelta.x, chamberRoot.sizeDelta.y);
-                }
-
-                rect.sizeDelta = Vector2.one * Mathf.Max(8f, rootSize * ChamberPipSizeFraction);
-                rect.anchoredPosition = GetChamberLocalPosition(i, rootSize);
                 chamberFills.Add(chamber);
             }
+
+            ApplyChamberLayout();
         }
 
         private void UpdateChambers(int currentMagazineAmmo, int magazineSize)
@@ -406,9 +362,6 @@ namespace FrontierDepths.UI
             Font font = UiTheme.RuntimeFont;
             panelRoot ??= FindNamedComponent<RectTransform>("WeaponPanelRoot");
             backgroundFrameImage ??= FindNamedComponent<Image>("BackgroundFrameImage");
-            weaponIconRoot ??= FindNamedComponent<RectTransform>("WeaponIconRoot");
-            weaponIconImage ??= FindNamedComponent<Image>("WeaponIconImage");
-            weaponIconLabel ??= FindNamedComponent<Text>("WeaponIconLabel");
             weaponNameText ??= FindNamedComponent<Text>("WeaponNameText");
             weaponSubtitleText ??= FindNamedComponent<Text>("WeaponSubtitleText");
             ammoText ??= FindNamedComponent<Text>("AmmoText");
@@ -418,6 +371,7 @@ namespace FrontierDepths.UI
             {
                 DestroyUiObject(oldPipStrip.gameObject);
             }
+            DestroyLegacyWeaponIconBlock();
             reloadText ??= FindNamedComponent<Text>("ReloadStatusText");
             hitMarkerImage ??= FindNamedComponent<Image>("WeaponHitMarker");
 
@@ -455,11 +409,14 @@ namespace FrontierDepths.UI
             }
 
             RectTransform nameRect = weaponNameText.rectTransform;
-            nameRect.anchorMin = new Vector2(0.08f, 1f);
-            nameRect.anchorMax = new Vector2(0.92f, 1f);
+            nameRect.anchorMin = new Vector2(0.12f, 1f);
+            nameRect.anchorMax = new Vector2(0.7f, 1f);
             nameRect.pivot = new Vector2(0.5f, 1f);
-            nameRect.sizeDelta = new Vector2(0f, 30f);
-            nameRect.anchoredPosition = new Vector2(0f, -14f);
+            nameRect.sizeDelta = new Vector2(0f, 24f);
+            nameRect.anchoredPosition = new Vector2(0f, -34f);
+            weaponNameText.fontSize = 16;
+            weaponNameText.alignment = TextAnchor.MiddleCenter;
+            weaponNameText.color = new Color(0.96f, 0.86f, 0.55f, 0.98f);
 
             if (weaponSubtitleText == null)
             {
@@ -467,53 +424,14 @@ namespace FrontierDepths.UI
             }
 
             RectTransform subtitleRect = weaponSubtitleText.rectTransform;
-            subtitleRect.anchorMin = new Vector2(0.08f, 1f);
-            subtitleRect.anchorMax = new Vector2(0.92f, 1f);
+            subtitleRect.anchorMin = new Vector2(0.12f, 1f);
+            subtitleRect.anchorMax = new Vector2(0.7f, 1f);
             subtitleRect.pivot = new Vector2(0.5f, 1f);
             subtitleRect.sizeDelta = new Vector2(0f, 20f);
-            subtitleRect.anchoredPosition = new Vector2(0f, -38f);
+            subtitleRect.anchoredPosition = new Vector2(0f, -14f);
+            weaponSubtitleText.fontSize = 13;
+            weaponSubtitleText.alignment = TextAnchor.MiddleCenter;
             weaponSubtitleText.color = new Color(0.82f, 0.72f, 0.5f, 0.92f);
-
-            if (weaponIconRoot == null)
-            {
-                GameObject iconRootObject = new GameObject("WeaponIconRoot", typeof(RectTransform), typeof(Image));
-                iconRootObject.transform.SetParent(panelRoot, false);
-                weaponIconRoot = iconRootObject.GetComponent<RectTransform>();
-                Image iconBackground = iconRootObject.GetComponent<Image>();
-                iconBackground.color = new Color(0.02f, 0.02f, 0.018f, 0.58f);
-                iconBackground.raycastTarget = false;
-            }
-
-            weaponIconRoot.anchorMin = weaponIconRoot.anchorMax = new Vector2(0f, 0f);
-            weaponIconRoot.pivot = new Vector2(0f, 0f);
-            weaponIconRoot.sizeDelta = new Vector2(88f, 64f);
-            weaponIconRoot.anchoredPosition = new Vector2(28f, 50f);
-
-            if (weaponIconImage == null)
-            {
-                GameObject iconObject = new GameObject("WeaponIconImage", typeof(RectTransform), typeof(Image));
-                iconObject.transform.SetParent(weaponIconRoot, false);
-                weaponIconImage = iconObject.GetComponent<Image>();
-            }
-
-            RectTransform iconRect = weaponIconImage.rectTransform;
-            iconRect.anchorMin = Vector2.zero;
-            iconRect.anchorMax = Vector2.one;
-            iconRect.offsetMin = new Vector2(8f, 8f);
-            iconRect.offsetMax = new Vector2(-8f, -8f);
-            weaponIconImage.raycastTarget = false;
-
-            if (weaponIconLabel == null)
-            {
-                weaponIconLabel = CreateText("WeaponIconLabel", weaponIconRoot, font, 18, TextAnchor.MiddleCenter);
-            }
-
-            RectTransform iconLabelRect = weaponIconLabel.rectTransform;
-            iconLabelRect.anchorMin = Vector2.zero;
-            iconLabelRect.anchorMax = Vector2.one;
-            iconLabelRect.offsetMin = Vector2.zero;
-            iconLabelRect.offsetMax = Vector2.zero;
-            weaponIconLabel.color = new Color(0.98f, 0.82f, 0.36f, 0.94f);
 
             if (ammoText == null)
             {
@@ -539,8 +457,8 @@ namespace FrontierDepths.UI
 
             chamberRoot.anchorMin = chamberRoot.anchorMax = new Vector2(1f, 0f);
             chamberRoot.pivot = new Vector2(0.5f, 0.5f);
-            chamberRoot.sizeDelta = new Vector2(58f, 58f);
-            chamberRoot.anchoredPosition = new Vector2(-84f, 92f);
+            chamberRoot.sizeDelta = ChamberLayout.rootSize;
+            chamberRoot.anchoredPosition = ChamberLayout.rootAnchoredPosition;
 
             if (reloadText == null)
             {
@@ -574,8 +492,8 @@ namespace FrontierDepths.UI
             ConfigureText(weaponSubtitleText);
             ConfigureText(ammoText);
             ConfigureText(reloadText);
-            ConfigureText(weaponIconLabel);
             ConfigurePanelFrame();
+            ApplyChamberLayout();
         }
 
         private Text CreateText(string name, Transform parent, Font font, int size, TextAnchor alignment)
@@ -654,10 +572,32 @@ namespace FrontierDepths.UI
             return count;
         }
 
-        private static Vector2 GetChamberLocalPosition(int index, float rootSize)
+        private static Vector2 GetChamberLocalPosition(int index)
         {
-            int safeIndex = Mathf.Clamp(index, 0, RevolverChamberNormalizedPositions.Length - 1);
-            return RevolverChamberNormalizedPositions[safeIndex] * Mathf.Max(1f, rootSize);
+            int safeIndex = Mathf.Clamp(index, 0, ChamberLayout.localPositions.Length - 1);
+            return ChamberLayout.localPositions[safeIndex];
+        }
+
+        private void ApplyChamberLayout()
+        {
+            if (chamberRoot != null)
+            {
+                chamberRoot.sizeDelta = ChamberLayout.rootSize;
+                chamberRoot.anchoredPosition = ChamberLayout.rootAnchoredPosition;
+            }
+
+            for (int i = 0; i < chamberFills.Count; i++)
+            {
+                Image chamber = chamberFills[i];
+                if (chamber == null)
+                {
+                    continue;
+                }
+
+                RectTransform rect = chamber.rectTransform;
+                rect.sizeDelta = Vector2.one * ChamberLayout.pipSize;
+                rect.anchoredPosition = GetChamberLocalPosition(i);
+            }
         }
 
         private Vector2[] GetChamberLocalPositions()
@@ -804,6 +744,45 @@ namespace FrontierDepths.UI
             else
             {
                 DestroyImmediate(target);
+            }
+        }
+
+        private void DestroyLegacyWeaponIconBlock()
+        {
+            Transform iconRoot = FindNamedTransform(transform, "WeaponIconRoot");
+            if (iconRoot != null)
+            {
+                DestroyUiObject(iconRoot.gameObject);
+            }
+        }
+
+        private readonly struct RevolverChamberLayout
+        {
+            public static readonly RevolverChamberLayout Default = new RevolverChamberLayout(
+                new Vector2(-66f, 110f),
+                new Vector2(58f, 58f),
+                8.5f,
+                new[]
+                {
+                    new Vector2(0f, 14f),
+                    new Vector2(13f, 7f),
+                    new Vector2(13f, -7f),
+                    new Vector2(0f, -14f),
+                    new Vector2(-13f, -7f),
+                    new Vector2(-13f, 7f)
+                });
+
+            public readonly Vector2 rootAnchoredPosition;
+            public readonly Vector2 rootSize;
+            public readonly float pipSize;
+            public readonly Vector2[] localPositions;
+
+            private RevolverChamberLayout(Vector2 rootAnchoredPosition, Vector2 rootSize, float pipSize, Vector2[] localPositions)
+            {
+                this.rootAnchoredPosition = rootAnchoredPosition;
+                this.rootSize = rootSize;
+                this.pipSize = pipSize;
+                this.localPositions = localPositions;
             }
         }
     }

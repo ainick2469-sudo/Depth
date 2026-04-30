@@ -78,10 +78,24 @@ namespace FrontierDepths.Tests.EditMode
                 view.SetWeaponForTests(weapon);
 
                 Assert.AreEqual("6 / 6", view.AmmoTextForTests);
+                Assert.AreEqual("Revolver", view.WeaponNameTextForTests);
+                Assert.AreEqual("Gunslinger Sidearm", view.WeaponSubtitleTextForTests);
                 Assert.AreEqual(6, view.ChamberCountForTests);
                 Assert.IsTrue(view.AreChambersParentedToRootForTests);
                 Assert.IsTrue(view.AreChambersInsideRootForTests);
                 Assert.IsFalse(view.HasOldAmmoPipStripForTests);
+                Assert.IsFalse(view.HasLegacyWeaponIconBlockForTests);
+                CollectionAssert.AreEquivalent(
+                    new[]
+                    {
+                        new Vector2(0f, 14f),
+                        new Vector2(13f, 7f),
+                        new Vector2(13f, -7f),
+                        new Vector2(0f, -14f),
+                        new Vector2(-13f, -7f),
+                        new Vector2(-13f, 7f)
+                    },
+                    view.ChamberLocalPositionsForTests);
                 Assert.IsTrue(view.ChamberLocalPositionsForTests.All(position => position.magnitude < 18f));
                 Assert.IsTrue(view.IsWeaponPanelInsideSafeAreaForTests);
                 Assert.IsTrue(view.IsWeaponTextInsidePanelForTests);
@@ -132,8 +146,9 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.IsTrue(view.FallbackMaterialColorsForTests.Any(color => color.r < 0.8f && color.g < 0.8f && color.b < 0.8f));
                 Assert.IsFalse(view.FallbackMaterialColorsForTests.Any(color => color.r > 0.9f && color.g > 0.9f && color.b > 0.9f));
                 Assert.IsFalse(view.FallbackMaterialColorsForTests.Any(IsNearBlack));
-                Assert.Greater(AverageBrightness(view.FallbackMaterialColorsForTests), 0.28f);
+                Assert.Greater(AverageBrightness(view.FallbackMaterialColorsForTests), 0.42f);
                 Assert.IsNotEmpty(view.MaterialDebugLinesForTests);
+                Assert.IsTrue(view.MaterialDebugLinesForTests.Any(line => line.Contains("BodyGunmetal") || line.Contains("Steel")));
                 if (view.FallbackMaterialColorsForTests.Length > 1)
                 {
                     int distinctReadableColors = view.FallbackMaterialColorsForTests
