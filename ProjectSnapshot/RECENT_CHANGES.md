@@ -1,5 +1,6 @@
 # Recent Changes
 
+- `Gate VS-1.4.1D`: stabilize dungeon shell traversal with validated AdapterVisuals, SafeGraybox fallback, doorway/corridor clearance checks, source-owned wall visuals, and tighter world-label scaling.
 - `Gate VS-1.4.1C`: add a visual-only dungeon shell adapter, primitive game-owned dungeon wrapper prefabs, dungeon shell tests, and dungeon visual import manifest with no raw vendor copy.
 - `Gate VS-1.4.1B`: add curated town visual wrappers, deterministic front-facing town service layout, exact service prompts, lightweight identity-prop import manifest, and town layout tests.
 - `Gate VS-1.4.1A`: audit staging Asset Store packs, create asset candidate/import/risk docs, and reinforce lightweight AI export rules.

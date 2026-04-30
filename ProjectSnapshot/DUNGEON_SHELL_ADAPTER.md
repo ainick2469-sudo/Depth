@@ -16,6 +16,8 @@ This gate does not rewrite `GraphFirstDungeonGenerator`, adopt vendor dungeon ge
 - `DungeonShellVisualDefinition`: describes display name, wrapper resource path, fallback color/scale metadata, visual-only policy, collider stripping policy, and warning label.
 - `DungeonShellVisualCatalog`: fixed game-owned definitions for all required shell kinds.
 - `DungeonShellVisualResolver`: loads wrappers from `Resources/DungeonVisuals`, strips unsafe colliders from instances, warns once per bad/missing resource, and safely leaves graybox primitives visible when wrappers are unavailable.
+- `DungeonShellVisualMode`: selects `Off`, `SafeGraybox`, or validated `AdapterVisuals`.
+- `DungeonShellVisualTruthReport`: records active mode, fallback reason, spawned visuals, skipped risky visuals, clearance counts, violations, and failing visual/source ids.
 - `DungeonVisualWrapperPrefabBuilder`: editor-only helper that creates primitive wrapper prefabs and game-owned fallback materials.
 
 ## Wrapper Policy
@@ -32,11 +34,23 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 
 ## Current Implementation
 
-- Room floors, corridor floors, corridor walls, room walls, doorway markers, stairs up/down, and room accents attempt to instantiate shell wrappers.
-- If a wrapper loads, the old visible primitive renderer is hidden where safe.
+- The normal graybox dungeon builds first and remains visible during shell validation.
+- Shell wrappers spawn under a temporary `DungeonShellVisuals` root.
+- Only after validation passes may eligible graybox renderers be hidden.
+- If validation fails, shell visuals are destroyed and SafeGraybox remains visible.
+- Room floors, corridor floors, and source-owned room wall visuals can use wrapper visuals.
+- Solid doorway wrappers, corridor wall wrappers, corners, pillars, stairs, room accents, secret accents, headers, caps, and trim are skipped until they can satisfy clearance checks.
 - Existing primitive colliders and build records remain authoritative.
 - Missing wrappers fall back to current graybox visuals with one controlled warning per missing resource path.
 - Wrapper prefabs are primitive/game-owned in this gate; no raw DungeonModularPack files were copied.
+
+## Visual Truth Rules
+
+- Every wall-like visual must link to a trusted source wall primitive or `DungeonWallSpanRecord`.
+- Doorway and corridor clearance bounds include player-size padding and must remain visually clear.
+- Shell visuals stay non-colliding; gameplay collision is still the existing graybox collision.
+- Adapter visuals must report zero violations or fallback to SafeGraybox.
+- SafeGraybox must never hide graybox renderers.
 
 ## Deferred
 

@@ -33,6 +33,7 @@ namespace FrontierDepths.World
         public float averageCorridorLength;
         public float maxCorridorLength;
         public float percentCorridorsOverTarget;
+        public DungeonShellVisualTruthReport shellVisualReport;
 
         public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
         public readonly List<DungeonRoomBuildRecord> rooms = new List<DungeonRoomBuildRecord>();

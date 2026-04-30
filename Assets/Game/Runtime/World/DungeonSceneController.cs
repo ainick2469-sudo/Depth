@@ -18,6 +18,9 @@ namespace FrontierDepths.World
         private const float RoomBoundsHeight = WallHeight + FloorThickness;
         private const float CorridorZoneHeight = 6f;
         private const float DoorwayClearance = 0.25f;
+        private const float ShellPlayerRadius = 1.1f;
+        private const float ShellClearancePadding = 0.55f;
+        private const float ShellPlayerHeight = 4.5f;
         internal const float CorridorRoomOverlap = 0.75f;
         internal const float CorridorVisualRoomOverlap = 0.02f;
         internal const float CorridorVisualFloorYOffset = -0.015f;
@@ -88,6 +91,7 @@ namespace FrontierDepths.World
         [SerializeField] private bool enableEncounterDirector = true;
         [SerializeField] private bool enableCombatTestEnemies;
         [SerializeField] private bool allowCombatTestEnemiesWithEncounters;
+        [SerializeField] private DungeonShellVisualMode shellVisualMode = DungeonShellVisualMode.AdapterVisuals;
 
         private readonly GraphFirstDungeonGenerator generator = new GraphFirstDungeonGenerator();
         private readonly Dictionary<string, int> activePurposeCounts = new Dictionary<string, int>();
@@ -95,6 +99,8 @@ namespace FrontierDepths.World
         private DungeonBuildResult activeBuildResult;
         private DungeonBuildResult currentBuildResult;
         private DungeonBuildResult emergencyDebugBuildResult;
+        private DungeonShellVisualTruthReport activeShellVisualReport;
+        private Transform activeShellVisualRoot;
         private WorldFloorSceneContext worldFloorContext;
         private bool debugOverlayVisible;
         private string statusMessage = string.Empty;
@@ -104,6 +110,13 @@ namespace FrontierDepths.World
             ? worldFloorContext
             : WorldFloorSceneContext.ResolveForScene(FrontierDepths.Core.GameSceneCatalog.DungeonRuntime, GameBootstrap.Instance?.ProfileService?.Current);
         internal WorldFloorSceneContext CurrentWorldFloorContextForTests => CurrentWorldFloorContext;
+        internal DungeonShellVisualMode ShellVisualModeForTests
+        {
+            get => shellVisualMode;
+            set => shellVisualMode = value;
+        }
+
+        internal bool ForceShellVisualValidationFailureForTests { get; set; }
 
         public string GetStatusLine()
         {
@@ -285,6 +298,7 @@ namespace FrontierDepths.World
                 landmarkNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Landmark),
                 secretNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Secret)
             };
+            BeginShellVisualStaging(activeBuildResult);
             activePurposeCounts.Clear();
 
             for (int edgeIndex = 0; edgeIndex < graph.edges.Count; edgeIndex++)
@@ -309,6 +323,7 @@ namespace FrontierDepths.World
             activeBuildResult.playerSpawn = GetSpawnPosition(graph);
             SampleCombatSpawnCandidates(activeBuildResult.playerSpawn);
             UpdateBuildMetrics(activeBuildResult);
+            FinalizeShellVisualStaging(activeBuildResult);
             DungeonBuildResult completed = activeBuildResult;
             activeBuildResult = null;
             buildStopwatch.Stop();
@@ -1652,15 +1667,6 @@ namespace FrontierDepths.World
                 visualFloorScale,
                 new Color(0.19f, 0.18f, 0.17f));
             SetColliderEnabled(visualFloor, false);
-            if (TryCreateShellVisual(
-                    DungeonShellVisualKind.Corridor,
-                    segmentRoot.transform,
-                    visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
-                    visualFloorScale,
-                    Quaternion.identity))
-            {
-                SetRendererEnabled(visualFloor, false);
-            }
 
             GameObject collisionFloor = CreatePrimitive(
                 "FloorCollision",
@@ -1670,6 +1676,17 @@ namespace FrontierDepths.World
                 new Color(0.19f, 0.18f, 0.17f));
             SetRendererEnabled(collisionFloor, false);
             Bounds collisionBounds = GetBounds(collisionFloor.transform.position, collisionFloorScale);
+            TryStageShellVisual(
+                DungeonShellVisualKind.Corridor,
+                segmentRoot.transform,
+                visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
+                visualFloorScale,
+                Quaternion.identity,
+                visualFloor,
+                collisionBounds,
+                $"corridor_floor:{edgeKey}:{segmentIndex}",
+                sourceIsBlocking: false,
+                canHideSourceRenderer: true);
             activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
             {
                 edgeKey = edgeKey,
@@ -1712,15 +1729,28 @@ namespace FrontierDepths.World
 
             GameObject leftWall = CreatePrimitive("LeftWall", parent, midpoint + leftOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
             GameObject rightWall = CreatePrimitive("RightWall", parent, midpoint + rightOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
-            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, parent, midpoint + leftOffset, wallScale, Quaternion.identity))
-            {
-                SetRendererEnabled(leftWall, false);
-            }
-
-            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, parent, midpoint + rightOffset, wallScale, Quaternion.identity))
-            {
-                SetRendererEnabled(rightWall, false);
-            }
+            TryStageShellVisual(
+                DungeonShellVisualKind.Wall,
+                parent,
+                midpoint + leftOffset,
+                wallScale,
+                Quaternion.identity,
+                leftWall,
+                GetBounds(leftWall.transform.position, wallScale),
+                $"corridor_wall:{edgeKey}:left",
+                sourceIsBlocking: true,
+                canHideSourceRenderer: true);
+            TryStageShellVisual(
+                DungeonShellVisualKind.Wall,
+                parent,
+                midpoint + rightOffset,
+                wallScale,
+                Quaternion.identity,
+                rightWall,
+                GetBounds(rightWall.transform.position, wallScale),
+                $"corridor_wall:{edgeKey}:right",
+                sourceIsBlocking: true,
+                canHideSourceRenderer: true);
 
             RecordCorridorWall(edgeKey, GetBounds(leftWall.transform.position, wallScale));
             RecordCorridorWall(edgeKey, GetBounds(rightWall.transform.position, wallScale));
@@ -2242,7 +2272,10 @@ namespace FrontierDepths.World
             }
 
             string validationState = buildResult.validationPassed ? "VALID" : "UNKNOWN";
-            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | {BuildMetadataSummary(buildResult)} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | CorridorOver36 {buildResult.percentCorridorsOverTarget:0.#}% | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
+            string shellSummary = buildResult.shellVisualReport != null
+                ? $" | ShellMode {buildResult.shellVisualReport.activeMode} ShellFallback {(buildResult.shellVisualReport.fallbackTriggered ? "Yes" : "No")} ShellViolations {buildResult.shellVisualReport.violationCount}"
+                : string.Empty;
+            return $"{buildResult.GetBuildModeLabel()} | Dungeon build {validationState} | Floor {buildResult.floorIndex} | Seed {buildResult.seed} | Attempt {Mathf.Max(1, buildResult.attemptNumber)}/{Mathf.Max(1, buildResult.attemptCount)} | RequestedFallback {(buildResult.requestedFallback ? "Yes" : "No")} | GeneratorFallback {(buildResult.generatorReturnedFallbackGraph ? "Yes" : "No")} | Emergency {(buildResult.isEmergencyDebugBuild ? "Yes" : "No")} | Rooms {buildResult.rooms.Count} | {BuildMetadataSummary(buildResult)} | AvgRoom {buildResult.averageRoomFootprint:0.#} | LargestRoom {buildResult.largestRoomFootprint:0.#} | Corridor Segments {buildResult.corridors.Count} | AvgCorridor {buildResult.averageCorridorLength:0.#} | MaxCorridor {buildResult.maxCorridorLength:0.#} | CorridorOver36 {buildResult.percentCorridorsOverTarget:0.#}% | SpawnPts P{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.PlayerSpawn)} M{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyMelee)} R{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EnemyRanged)} E{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.EliteEnemy)} T{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.TargetDummy)} C{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Chest)} S{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Shrine)} W{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Reward)} I{buildResult.GetSpawnPointCount(DungeonSpawnPointCategory.Interactable)}{shellSummary} | Warnings {buildResult.validationWarningCount} | Failures {buildResult.validationFailureCount}";
         }
 
         private static string BuildMetadataSummary(DungeonBuildResult buildResult)
@@ -2594,7 +2627,7 @@ namespace FrontierDepths.World
             };
         }
 
-        private static void CreateMergedFloors(Transform roomRoot, HashSet<Vector2Int> floorCells, Color color)
+        private void CreateMergedFloors(Transform roomRoot, HashSet<Vector2Int> floorCells, Color color)
         {
             HashSet<Vector2Int> remaining = new HashSet<Vector2Int>(floorCells);
             while (remaining.Count > 0)
@@ -2631,10 +2664,17 @@ namespace FrontierDepths.World
                     (origin.y + (height - 1) * 0.5f) * CellSize);
                 Vector3 localScale = new Vector3(width * CellSize, FloorThickness, height * CellSize);
                 GameObject floor = CreatePrimitive($"Floor_{origin.x}_{origin.y}_{width}_{height}", roomRoot, localPosition, localScale, color);
-                if (TryCreateShellVisual(DungeonShellVisualKind.Floor, roomRoot, localPosition, localScale, Quaternion.identity))
-                {
-                    SetRendererEnabled(floor, false);
-                }
+                TryStageShellVisual(
+                    DungeonShellVisualKind.Floor,
+                    roomRoot,
+                    localPosition,
+                    localScale,
+                    Quaternion.identity,
+                    floor,
+                    GetBounds(floor.transform.position, localScale),
+                    $"room_floor:{roomRoot.name}:{origin.x}:{origin.y}:{width}:{height}",
+                    sourceIsBlocking: false,
+                    canHideSourceRenderer: true);
 
                 for (int x = 0; x < width; x++)
                 {
@@ -2822,10 +2862,17 @@ namespace FrontierDepths.World
                 localPosition,
                 scale,
                 GetWallColor(kind));
-            if (TryCreateShellVisual(DungeonShellVisualKind.Wall, roomRoot, localPosition, scale, Quaternion.identity))
-            {
-                SetRendererEnabled(wall, false);
-            }
+            TryStageShellVisual(
+                DungeonShellVisualKind.Wall,
+                roomRoot,
+                localPosition,
+                scale,
+                Quaternion.identity,
+                wall,
+                GetBounds(wall.transform.position, scale),
+                $"room_wall:{ownerNodeId}:{DirectionToToken(direction)}:{roomRecord.wallCount}",
+                sourceIsBlocking: true,
+                canHideSourceRenderer: true);
 
             roomRecord.wallCount++;
             activeBuildResult?.wallSpans.Add(new DungeonWallSpanRecord
@@ -2922,7 +2969,7 @@ namespace FrontierDepths.World
             }
         }
 
-        private static void CreateInteriorFeature(Transform roomRoot, DungeonNode node, HashSet<Vector2Int> floorCells)
+        private void CreateInteriorFeature(Transform roomRoot, DungeonNode node, HashSet<Vector2Int> floorCells)
         {
             DungeonTemplateFeature feature = DungeonRoomTemplateLibrary.GetFeature(node);
             if (feature == DungeonTemplateFeature.Flat)
@@ -3338,9 +3385,332 @@ namespace FrontierDepths.World
             return primitive;
         }
 
-        private static bool TryCreateShellVisual(DungeonShellVisualKind kind, Transform parent, Vector3 localPosition, Vector3 localScale, Quaternion localRotation)
+        private void BeginShellVisualStaging(DungeonBuildResult buildResult)
         {
-            return DungeonShellVisualResolver.TryInstantiateVisual(kind, parent, localPosition, localScale, localRotation, out _);
+            activeShellVisualReport = new DungeonShellVisualTruthReport
+            {
+                requestedMode = shellVisualMode,
+                activeMode = shellVisualMode == DungeonShellVisualMode.Off
+                    ? DungeonShellVisualMode.Off
+                    : DungeonShellVisualMode.SafeGraybox
+            };
+            buildResult.shellVisualReport = activeShellVisualReport;
+            activeShellVisualRoot = null;
+
+            if (shellVisualMode != DungeonShellVisualMode.AdapterVisuals)
+            {
+                activeShellVisualReport.fallbackReason = shellVisualMode == DungeonShellVisualMode.SafeGraybox
+                    ? "SafeGraybox mode selected."
+                    : "Shell visuals disabled.";
+                return;
+            }
+
+            GameObject root = new GameObject("DungeonShellVisuals");
+            root.transform.SetParent(runtimeRoot != null ? runtimeRoot : transform, false);
+            activeShellVisualRoot = root.transform;
+        }
+
+        private void FinalizeShellVisualStaging(DungeonBuildResult buildResult)
+        {
+            DungeonShellVisualTruthReport report = activeShellVisualReport;
+            if (report == null)
+            {
+                return;
+            }
+
+            report.doorwayClearanceCount = buildResult.doorOpenings.Count;
+            report.corridorClearanceCount = buildResult.corridors.Count;
+
+            if (report.requestedMode == DungeonShellVisualMode.Off)
+            {
+                report.activeMode = DungeonShellVisualMode.Off;
+                DestroyShellVisualRoot();
+                Debug.Log(report.ToSummaryString());
+                return;
+            }
+
+            if (report.requestedMode == DungeonShellVisualMode.SafeGraybox)
+            {
+                report.activeMode = DungeonShellVisualMode.SafeGraybox;
+                DestroyShellVisualRoot();
+                Debug.Log(report.ToSummaryString());
+                return;
+            }
+
+            ValidateShellVisualTruth(buildResult, report);
+            if (report.violationCount > 0)
+            {
+                report.activeMode = DungeonShellVisualMode.SafeGraybox;
+                report.fallbackTriggered = true;
+                if (string.IsNullOrWhiteSpace(report.fallbackReason))
+                {
+                    report.fallbackReason = "Adapter visual truth validation failed.";
+                }
+
+                DestroyShellVisualRoot();
+                Debug.LogWarning(report.ToSummaryString());
+                return;
+            }
+
+            report.activeMode = DungeonShellVisualMode.AdapterVisuals;
+            for (int i = 0; i < report.visuals.Count; i++)
+            {
+                DungeonShellVisualSpawnRecord visual = report.visuals[i];
+                if (visual.canHideSourceRenderer && visual.sourceRenderer != null)
+                {
+                    visual.sourceRenderer.enabled = false;
+                }
+            }
+
+            Debug.Log(report.ToSummaryString());
+        }
+
+        private void ValidateShellVisualTruth(DungeonBuildResult buildResult, DungeonShellVisualTruthReport report)
+        {
+            if (ForceShellVisualValidationFailureForTests && report.visuals.Count > 0)
+            {
+                AddShellViolation(report, report.visuals[0], "forced validation failure for tests");
+                return;
+            }
+
+            for (int i = 0; i < report.visuals.Count; i++)
+            {
+                DungeonShellVisualSpawnRecord visual = report.visuals[i];
+                if (visual.kind != DungeonShellVisualKind.Wall)
+                {
+                    continue;
+                }
+
+                if (!visual.sourceOwned || !visual.sourceIsBlocking)
+                {
+                    AddShellViolation(report, visual, "wall visual has no trusted blocking source");
+                    continue;
+                }
+
+                if (!BoundsOverlapNearlyEqual(visual.bounds, visual.sourceBounds))
+                {
+                    AddShellViolation(report, visual, "wall visual does not align with source wall bounds");
+                    continue;
+                }
+
+                if (IntersectsAnyDoorwayClearance(visual.bounds, buildResult))
+                {
+                    AddShellViolation(report, visual, "wall visual intersects doorway clearance");
+                    continue;
+                }
+
+                if (IntersectsAnyCorridorClearance(visual.bounds, buildResult))
+                {
+                    AddShellViolation(report, visual, "wall visual intersects corridor center clearance");
+                }
+            }
+        }
+
+        private static void AddShellViolation(DungeonShellVisualTruthReport report, DungeonShellVisualSpawnRecord visual, string reason)
+        {
+            report.violationCount++;
+            report.skippedMismatchVisualCount++;
+            string visualId = string.IsNullOrWhiteSpace(visual.visualId) ? visual.kind.ToString() : visual.visualId;
+            report.failingVisualIds.Add($"{visualId}: {reason}");
+            if (string.IsNullOrWhiteSpace(report.fallbackReason))
+            {
+                report.fallbackReason = $"{visualId}: {reason}";
+            }
+        }
+
+        private bool TryCreateShellVisual(DungeonShellVisualKind kind, Transform parent, Vector3 localPosition, Vector3 localScale, Quaternion localRotation)
+        {
+            return TryStageShellVisual(kind, parent, localPosition, localScale, localRotation, null, default, string.Empty, false, false);
+        }
+
+        private bool TryStageShellVisual(
+            DungeonShellVisualKind kind,
+            Transform parent,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Quaternion localRotation,
+            GameObject sourceObject,
+            Bounds sourceBounds,
+            string sourceId,
+            bool sourceIsBlocking,
+            bool canHideSourceRenderer)
+        {
+            DungeonShellVisualTruthReport report = activeShellVisualReport;
+            if (report == null || report.requestedMode != DungeonShellVisualMode.AdapterVisuals || activeShellVisualRoot == null)
+            {
+                return false;
+            }
+
+            if (!IsShellVisualKindEnabledForAdapter(kind))
+            {
+                if (kind == DungeonShellVisualKind.Doorway)
+                {
+                    report.skippedDoorwayVisualCount++;
+                }
+                else
+                {
+                    report.skippedRiskyVisualCount++;
+                }
+
+                return false;
+            }
+
+            if (kind == DungeonShellVisualKind.Wall &&
+                !string.IsNullOrWhiteSpace(sourceId) &&
+                sourceId.StartsWith("corridor_wall:", StringComparison.Ordinal))
+            {
+                report.skippedMismatchVisualCount++;
+                return false;
+            }
+
+            if ((kind == DungeonShellVisualKind.Wall || kind == DungeonShellVisualKind.Floor || kind == DungeonShellVisualKind.Corridor) &&
+                (sourceObject == null || string.IsNullOrWhiteSpace(sourceId)))
+            {
+                report.skippedMismatchVisualCount++;
+                return false;
+            }
+
+            Vector3 worldPosition = parent != null ? parent.TransformPoint(localPosition) : localPosition;
+            Quaternion worldRotation = parent != null ? parent.rotation * localRotation : localRotation;
+            Vector3 worldScale = parent != null ? Vector3.Scale(parent.lossyScale, localScale) : localScale;
+            Vector3 shellLocalPosition = activeShellVisualRoot.InverseTransformPoint(worldPosition);
+            Quaternion shellLocalRotation = Quaternion.Inverse(activeShellVisualRoot.rotation) * worldRotation;
+
+            if (!DungeonShellVisualResolver.TryInstantiateVisual(
+                    kind,
+                    activeShellVisualRoot,
+                    shellLocalPosition,
+                    worldScale,
+                    shellLocalRotation,
+                    out GameObject visual))
+            {
+                return false;
+            }
+
+            Bounds visualBounds = sourceObject != null
+                ? sourceBounds
+                : GetBounds(worldPosition, worldScale);
+            Renderer sourceRenderer = sourceObject != null ? sourceObject.GetComponent<Renderer>() : null;
+            string visualId = $"{kind}:{(string.IsNullOrWhiteSpace(sourceId) ? visual.name : sourceId)}";
+            report.visuals.Add(new DungeonShellVisualSpawnRecord
+            {
+                visualId = visualId,
+                sourceId = sourceId ?? string.Empty,
+                kind = kind,
+                bounds = visualBounds,
+                sourceBounds = sourceBounds,
+                sourceIsBlocking = sourceIsBlocking,
+                sourceOwned = sourceObject != null,
+                canHideSourceRenderer = canHideSourceRenderer,
+                visualObject = visual,
+                sourceRenderer = sourceRenderer
+            });
+
+            report.spawnedVisualCount++;
+            if (kind == DungeonShellVisualKind.Wall)
+            {
+                report.spawnedWallVisualCount++;
+            }
+            else if (kind == DungeonShellVisualKind.Floor)
+            {
+                report.spawnedFloorVisualCount++;
+            }
+            else if (kind == DungeonShellVisualKind.Corridor)
+            {
+                report.spawnedCorridorVisualCount++;
+            }
+
+            return true;
+        }
+
+        private static bool IsShellVisualKindEnabledForAdapter(DungeonShellVisualKind kind)
+        {
+            return kind == DungeonShellVisualKind.Floor ||
+                   kind == DungeonShellVisualKind.Wall ||
+                   kind == DungeonShellVisualKind.Corridor;
+        }
+
+        private void DestroyShellVisualRoot()
+        {
+            if (activeShellVisualRoot == null)
+            {
+                return;
+            }
+
+            GameObject root = activeShellVisualRoot.gameObject;
+            activeShellVisualRoot = null;
+            if (Application.isPlaying)
+            {
+                Destroy(root);
+            }
+            else
+            {
+                DestroyImmediate(root);
+            }
+        }
+
+        private static bool BoundsOverlapNearlyEqual(Bounds visualBounds, Bounds sourceBounds)
+        {
+            return Vector3.Distance(visualBounds.center, sourceBounds.center) <= 0.05f &&
+                   Vector3.Distance(visualBounds.size, sourceBounds.size) <= 0.05f;
+        }
+
+        private static bool IntersectsAnyDoorwayClearance(Bounds bounds, DungeonBuildResult buildResult)
+        {
+            for (int i = 0; i < buildResult.doorOpenings.Count; i++)
+            {
+                if (bounds.Intersects(GetDoorwayShellClearanceBounds(buildResult.doorOpenings[i])))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IntersectsAnyCorridorClearance(Bounds bounds, DungeonBuildResult buildResult)
+        {
+            for (int i = 0; i < buildResult.corridors.Count; i++)
+            {
+                if (bounds.Intersects(GetCorridorShellClearanceBounds(buildResult.corridors[i])))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static Bounds GetDoorwayShellClearanceBounds(DungeonDoorOpeningRecord opening)
+        {
+            float depthPadding = ShellClearancePadding * 2f;
+            float openingWidth = Mathf.Max(0.5f, opening.visualOpeningWidth - 0.2f);
+            Vector3 size = opening.direction.x == 0
+                ? new Vector3(openingWidth, ShellPlayerHeight, WallThickness * 2f + depthPadding)
+                : new Vector3(WallThickness * 2f + depthPadding, ShellPlayerHeight, openingWidth);
+            size.y = Mathf.Max(size.y, ShellPlayerHeight);
+            Vector3 center = opening.bounds.center;
+            center.y = ShellPlayerHeight * 0.5f;
+            return new Bounds(center, size);
+        }
+
+        internal static Bounds GetCorridorShellClearanceBounds(DungeonCorridorBuildRecord corridor)
+        {
+            float edgePadding = (ShellPlayerRadius + ShellClearancePadding + WallThickness) * 2f;
+            Vector3 size = corridor.bounds.size;
+            if (corridor.horizontal)
+            {
+                size.z = Mathf.Max(0.5f, corridor.width - edgePadding);
+            }
+            else
+            {
+                size.x = Mathf.Max(0.5f, corridor.width - edgePadding);
+            }
+
+            size.y = ShellPlayerHeight;
+            Vector3 center = corridor.bounds.center;
+            center.y = ShellPlayerHeight * 0.5f;
+            return new Bounds(center, size);
         }
 
         private static void SetColliderEnabled(GameObject target, bool enabled)

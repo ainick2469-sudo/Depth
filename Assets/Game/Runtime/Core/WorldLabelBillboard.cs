@@ -6,8 +6,10 @@ namespace FrontierDepths.Core
     public sealed class WorldLabelBillboard : MonoBehaviour
     {
         [SerializeField] private float maxVisibleDistance = 28f;
-        [SerializeField] private float minScale = 0.75f;
-        [SerializeField] private float maxScale = 1.35f;
+        [SerializeField] private float minVisibleDistance = 1.35f;
+        [SerializeField] private float minScale = 0.55f;
+        [SerializeField] private float maxScale = 0.95f;
+        [SerializeField] private float scaleDistanceDivisor = 18f;
         [SerializeField] private bool useOcclusion = true;
         [SerializeField] private LayerMask occlusionMask = ~0;
         [SerializeField] private Transform occlusionRoot;
@@ -17,6 +19,9 @@ namespace FrontierDepths.Core
         private Renderer cachedRenderer;
 
         public float MaxVisibleDistance => maxVisibleDistance;
+        public float MinVisibleDistance => minVisibleDistance;
+        public float MinScale => minScale;
+        public float MaxScale => maxScale;
         public bool UseOcclusion => useOcclusion;
         public Transform OcclusionRoot => occlusionRoot;
 
@@ -39,7 +44,7 @@ namespace FrontierDepths.Core
 
             Vector3 toLabel = transform.position - camera.transform.position;
             float distance = toLabel.magnitude;
-            if (distance > maxVisibleDistance || distance <= 0.01f || IsOccluded(camera, distance))
+            if (distance > maxVisibleDistance || distance < minVisibleDistance || distance <= 0.01f || IsOccluded(camera, distance))
             {
                 SetVisible(false);
                 return;
@@ -47,7 +52,7 @@ namespace FrontierDepths.Core
 
             SetVisible(true);
             transform.rotation = GetBillboardRotation(camera.transform.position, transform.position);
-            float scale = Mathf.Clamp(distance / 14f, minScale, maxScale);
+            float scale = CalculateScaleForDistance(distance, minScale, maxScale, scaleDistanceDivisor);
             transform.localScale = baseScale * scale;
         }
 
@@ -88,6 +93,11 @@ namespace FrontierDepths.Core
             }
 
             return Quaternion.LookRotation(awayFromCamera.normalized, Vector3.up);
+        }
+
+        public static float CalculateScaleForDistance(float distance, float minScale, float maxScale, float divisor)
+        {
+            return Mathf.Clamp(distance / Mathf.Max(1f, divisor), minScale, maxScale);
         }
 
         private bool IsOccluded(Camera camera, float distance)

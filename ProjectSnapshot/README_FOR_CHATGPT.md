@@ -78,6 +78,8 @@ Runtime dungeon shell code should load only game-owned wrappers from:
 
 - `Assets/Game/Resources/DungeonVisuals`
 
+Dungeon shell wrappers must validate against source wall/collision records before hiding graybox renderers. If validation fails, SafeGraybox keeps the original graybox dungeon visible.
+
 No raw dungeon vendor assets were copied in `Gate VS-1.4.1C`. Future curated dungeon art should be selected through `ASSET_DUNGEON_COPY_MANIFEST.md` and remain isolated under:
 
 - `Assets/Game/Art/Imported/Dungeon/VendorSource`

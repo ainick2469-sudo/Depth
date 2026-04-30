@@ -44,7 +44,7 @@ namespace FrontierDepths.World
                 Vector3.up * 3.35f,
                 new Color(1f, 0.82f, 0.18f, 1f),
                 38f,
-                false);
+                true);
         }
     }
 }

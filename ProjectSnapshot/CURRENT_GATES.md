@@ -2,19 +2,18 @@
 
 ## Latest Stable Gameplay Base
 
-- `c163b65 Gate VS-1.4.1B: integrate curated town visuals and layout`
+- `f9b7313 Gate VS-1.4.1C: add dungeon modular shell adapter`
 
 ## Current Gate
 
-- `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
+- `Gate VS-1.4.1D: Stabilize Dungeon Shell Traversal And Doorway Visuals`
 
 Purpose:
 
-- Add a visual-only dungeon shell adapter over the existing `DungeonSceneController` build path.
-- Load only game-owned wrapper prefabs from `Assets/Game/Resources/DungeonVisuals`.
-- Keep current dungeon graph generation, collision, spawning, minimap, stairs, pickups, and room-purpose behavior authoritative.
-- Do not import the Dungeon Generation Pack, demo scenes, vendor scripts, scene YAML, or ProjectSettings churn.
-- Use primitive/game-owned wrappers for this gate; raw dungeon vendor assets remain deferred.
+- Make dungeon shell visuals validate against actual playable collision and clearance before hiding graybox renderers.
+- Skip solid doorway wrappers, risky trim/caps/accent wrappers, and corridor wall wrappers until they can respect doorway/corridor clearances.
+- Add `DungeonShellVisualMode` with AdapterVisuals, SafeGraybox fallback, and Off.
+- Keep current dungeon generation, collisions, minimap, room purposes, spawns, stairs, pickups, town, enemies, and assets unchanged.
 
 ## Next Planned Gate
 
