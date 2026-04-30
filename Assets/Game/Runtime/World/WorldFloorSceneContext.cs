@@ -68,7 +68,7 @@ namespace FrontierDepths.World
 
             if (sceneName == GameSceneCatalog.DungeonRuntime)
             {
-                return Create(WorldLocationKind.Labyrinth, floor);
+                return Create(WorldLocationKind.Labyrinth, floor, GetCurrentLabyrinthDepth());
             }
 
             return Create(WorldLocationKind.OuterField, floor);
@@ -76,9 +76,18 @@ namespace FrontierDepths.World
 
         public static WorldFloorSceneContext Create(WorldLocationKind kind, int floor)
         {
+            return Create(kind, floor, 0);
+        }
+
+        public static WorldFloorSceneContext Create(WorldLocationKind kind, int floor, int labyrinthDepth)
+        {
             floor = floor <= 0 ? 1 : floor;
+            labyrinthDepth = labyrinthDepth <= 0 ? 1 : labyrinthDepth;
             WorldFloorCatalog.TryGet(floor, out WorldFloorDefinition definition);
             string floorName = definition != null ? definition.floorName : WorldFloorCatalog.GetFloorDisplayName(floor);
+            string labyrinthName = definition != null && !string.IsNullOrWhiteSpace(definition.labyrinthName)
+                ? definition.labyrinthName
+                : "Labyrinth";
 
             return kind switch
             {
@@ -95,8 +104,8 @@ namespace FrontierDepths.World
                     floor,
                     floorName,
                     definition != null ? definition.labyrinthId : string.Empty,
-                    definition != null ? definition.labyrinthName : string.Empty,
-                    definition != null && !string.IsNullOrWhiteSpace(definition.labyrinthName) ? definition.labyrinthName : "Labyrinth"),
+                    labyrinthName,
+                    $"{labyrinthName} - Depth {labyrinthDepth}"),
                 WorldLocationKind.SafeRoom => new WorldFloorSceneContext(kind, floor, floorName, "safe_room", "Safe Room", "Safe Room"),
                 WorldLocationKind.BossRoom => new WorldFloorSceneContext(kind, floor, floorName, "boss_room", "Boss Room", "Boss Room"),
                 _ => new WorldFloorSceneContext(kind, floor, floorName, "outer_field", "Outer Field", "Outer Field")
@@ -113,6 +122,14 @@ namespace FrontierDepths.World
             profile.worldFloorProgression ??= new WorldFloorProgressionProfileState();
             profile.worldFloorProgression.Normalize();
             return profile.worldFloorProgression.currentWorldFloor;
+        }
+
+        private static int GetCurrentLabyrinthDepth()
+        {
+            RunState run = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current
+                : null;
+            return run != null ? run.floorIndex : 1;
         }
     }
 }

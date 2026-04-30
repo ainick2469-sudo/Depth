@@ -55,6 +55,7 @@ namespace FrontierDepths.UI
         internal bool HasLegacyWeaponIconBlockForTests => FindNamedTransform(transform, "WeaponIconRoot") != null ||
                                                           FindNamedTransform(transform, "WeaponIconImage") != null ||
                                                           FindNamedTransform(transform, "WeaponIconLabel") != null;
+        internal bool HasOpaqueChamberBackingForTests => HasOpaqueChamberBacking();
         internal bool IsIconFallbackVisibleForTests => false;
         internal bool UsesAmmoBulletFallbackForTests => chamberFills.Count > 0 && chamberFills[0] != null && chamberFills[0].sprite == null;
 
@@ -446,14 +447,11 @@ namespace FrontierDepths.UI
 
             if (chamberRoot == null)
             {
-                GameObject chamberRootObject = new GameObject("CylinderChamberRoot", typeof(RectTransform), typeof(Image));
+                GameObject chamberRootObject = new GameObject("CylinderChamberRoot", typeof(RectTransform));
                 chamberRootObject.transform.SetParent(panelRoot, false);
                 chamberRoot = chamberRootObject.GetComponent<RectTransform>();
-                Image cylinderBackground = chamberRootObject.GetComponent<Image>();
-                cylinderBackground.sprite = HudRuntimeSpriteFactory.GetFilledCircleSprite();
-                cylinderBackground.color = new Color(0.04f, 0.035f, 0.03f, 0.78f);
-                cylinderBackground.raycastTarget = false;
             }
+            RemoveChamberBackingImage();
 
             chamberRoot.anchorMin = chamberRoot.anchorMax = new Vector2(1f, 0f);
             chamberRoot.pivot = new Vector2(0.5f, 0.5f);
@@ -643,6 +641,28 @@ namespace FrontierDepths.UI
             }
 
             return true;
+        }
+
+        private void RemoveChamberBackingImage()
+        {
+            if (chamberRoot == null)
+            {
+                return;
+            }
+
+            Image backing = chamberRoot.GetComponent<Image>();
+            if (backing != null)
+            {
+                backing.enabled = false;
+                backing.color = Color.clear;
+                backing.raycastTarget = false;
+            }
+        }
+
+        private bool HasOpaqueChamberBacking()
+        {
+            Image backing = chamberRoot != null ? chamberRoot.GetComponent<Image>() : null;
+            return backing != null && backing.enabled && backing.color.a > 0.01f;
         }
 
         private bool AreChambersParentedToRoot()

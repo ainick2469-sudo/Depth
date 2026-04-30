@@ -83,6 +83,7 @@ namespace FrontierDepths.Tests.EditMode
                 Assert.AreEqual(6, view.ChamberCountForTests);
                 Assert.IsTrue(view.AreChambersParentedToRootForTests);
                 Assert.IsTrue(view.AreChambersInsideRootForTests);
+                Assert.IsFalse(view.HasOpaqueChamberBackingForTests);
                 Assert.IsFalse(view.HasOldAmmoPipStripForTests);
                 Assert.IsFalse(view.HasLegacyWeaponIconBlockForTests);
                 CollectionAssert.AreEquivalent(

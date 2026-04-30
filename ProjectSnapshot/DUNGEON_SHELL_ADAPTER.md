@@ -2,7 +2,7 @@
 
 ## Gate
 
-Current: `Gate VS-1.4.1E: Curated Dungeon Modular Visual Pass`
+Current: `Gate VS-1.4.1E.1: Fix Shell Floor Alignment And Descent State Regressions`
 
 Foundation: `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
@@ -20,6 +20,7 @@ This gate does not rewrite `GraphFirstDungeonGenerator`, adopt vendor dungeon ge
 - `DungeonShellVisualResolver`: loads wrappers from `Resources/DungeonVisuals`, strips unsafe colliders from instances, warns once per bad/missing resource, and safely leaves graybox primitives visible when wrappers are unavailable.
 - `DungeonShellVisualMode`: selects `Off`, `SafeGraybox`, or validated `AdapterVisuals`.
 - `DungeonShellVisualTruthReport`: records active mode, fallback reason, spawned visuals, skipped risky visuals, clearance counts, violations, and failing visual/source ids.
+- `DungeonShellVisualTruthReport`: also records floor veneer counts, raised-floor violations, skipped raised floor visuals, floor checks, corridor floor checks, and max floor vertical offset.
 - `DungeonVisualWrapperPrefabBuilder`: editor-only helper that creates primitive wrapper prefabs and game-owned fallback materials.
 
 ## Wrapper Policy
@@ -40,7 +41,8 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Shell wrappers spawn under a temporary `DungeonShellVisuals` root.
 - Only after validation passes may eligible graybox renderers be hidden.
 - If validation fails, shell visuals are destroyed and SafeGraybox remains visible.
-- Room floors, corridor floors, source-owned room wall visuals, side-only doorway trim, stair markers, and subtle room-purpose floor markers can use wrapper visuals.
+- Room floors, corridor floors, stair markers, and subtle room-purpose floor markers use thin validated floor veneers instead of full-height floor slabs.
+- Source-owned room wall visuals and side-only doorway trim can use wrapper visuals.
 - Solid doorway wrappers, corridor wall wrappers, corners, pillars, overhead headers/caps, freestanding props, room accents, and secret reveal visuals stay disabled until a later prop/dressing pass.
 - Visual intensity tiers are enforced: Tier 1 floors/material swaps, Tier 2 validated trims/markers, Tier 3 risky props disabled.
 - Secret/hidden rooms must remain neutral before discovery and must not get special tints, markers, trim, accents, or minimap spoilers.
@@ -55,6 +57,8 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Shell visuals stay non-colliding; gameplay collision is still the existing graybox collision.
 - Doorway side trim must sit outside doorway/corridor clearance and may never fill the passable opening.
 - Purpose markers are thin floor-level tints only; they must not block pickups, enemies, stairs, interactables, doorways, or corridors.
+- Floor-like visuals must validate as flush veneers: thin Y height, X/Z footprint aligned to approved source bounds, top surface within tolerance of the source walkable floor, and no raised non-colliding slabs.
+- Raised floor veneers are skipped or trigger SafeGraybox fallback before any graybox renderer is hidden.
 - Adapter visuals must report zero violations or fallback to SafeGraybox.
 - SafeGraybox must never hide graybox renderers.
 

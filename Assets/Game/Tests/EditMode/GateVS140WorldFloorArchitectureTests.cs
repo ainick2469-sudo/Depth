@@ -118,7 +118,8 @@ namespace FrontierDepths.Tests.EditMode
             Assert.AreEqual("World Floor 1 - Frontier Outpost\nSettlement: Safe Zone", town.FormatHudLabel());
             Assert.AreEqual(WorldLocationKind.Labyrinth, dungeon.locationKind);
             Assert.AreEqual("training_labyrinth", dungeon.areaId);
-            Assert.AreEqual("World Floor 1 - Frontier Outpost\nTraining Labyrinth", dungeon.FormatHudLabel());
+            Assert.AreEqual("World Floor 1 - Frontier Outpost\nTraining Labyrinth - Depth 1", dungeon.FormatHudLabel());
+            Assert.AreEqual("World Floor 1 - Frontier Outpost\nTraining Labyrinth - Depth 4", WorldFloorSceneContext.Create(WorldLocationKind.Labyrinth, 1, 4).FormatHudLabel());
         }
     }
 }

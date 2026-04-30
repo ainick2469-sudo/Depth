@@ -8,6 +8,8 @@ namespace FrontierDepths.Core
         public const float DefaultMaxStamina = 100f;
         public const float DefaultStaminaRegenPerSecond = 24f;
         public const float DefaultStaminaRegenDelay = 0.75f;
+        public const float DefaultStaminaExhaustionUnlockThreshold = 20f;
+        public const float DefaultSprintExhaustionResumeThreshold = 15f;
         public const float DefaultMaxFocus = 100f;
         public const float DefaultFocusRegenPerSecond = 8f;
         public const float DefaultMaxMana = 100f;
@@ -29,6 +31,7 @@ namespace FrontierDepths.Core
         private float staminaRegenBlockedUntil;
         private float focusRegenBlockedUntil;
         private float manaRegenBlockedUntil;
+        private bool staminaExhausted;
         private string statusMessage = string.Empty;
         private float statusMessageUntil;
 
@@ -39,6 +42,8 @@ namespace FrontierDepths.Core
         public float StaminaNormalized => maxStamina <= 0f ? 0f : Mathf.Clamp01(currentStamina / maxStamina);
         public float StaminaRegenPerSecond => staminaRegenPerSecond;
         public float StaminaRegenDelayAfterSpend => staminaRegenDelayAfterSpend;
+        public bool IsStaminaExhausted => staminaExhausted;
+        public bool IsStaminaExhaustedForTests => staminaExhausted;
         public float MaxFocus => maxFocus;
         public float CurrentFocus => currentFocus;
         public float FocusNormalized => maxFocus <= 0f ? 0f : Mathf.Clamp01(currentFocus / maxFocus);
@@ -64,6 +69,7 @@ namespace FrontierDepths.Core
         {
             maxStamina = Mathf.Max(1f, maxStamina);
             currentStamina = Mathf.Clamp(currentStamina <= 0f ? maxStamina : currentStamina, 0f, maxStamina);
+            staminaExhausted &= currentStamina < DefaultStaminaExhaustionUnlockThreshold;
             staminaRegenPerSecond = Mathf.Max(0f, staminaRegenPerSecond);
             staminaRegenDelayAfterSpend = Mathf.Max(0f, staminaRegenDelayAfterSpend);
             maxFocus = Mathf.Max(1f, maxFocus);
@@ -84,6 +90,19 @@ namespace FrontierDepths.Core
                 return true;
             }
 
+            bool sprintSpend = string.Equals(reason, "Sprint", StringComparison.OrdinalIgnoreCase);
+            float unlockThreshold = sprintSpend ? DefaultSprintExhaustionResumeThreshold : DefaultStaminaExhaustionUnlockThreshold;
+            if (staminaExhausted && currentStamina + 0.001f < unlockThreshold)
+            {
+                SetStatusMessage(sprintSpend ? "Catching breath." : "Stamina exhausted.");
+                return false;
+            }
+
+            if (staminaExhausted && currentStamina + 0.001f >= DefaultStaminaExhaustionUnlockThreshold)
+            {
+                staminaExhausted = false;
+            }
+
             if (currentStamina + 0.001f < amount)
             {
                 SetStatusMessage(string.IsNullOrWhiteSpace(reason) ? "Not enough stamina." : $"Not enough stamina for {reason}.");
@@ -91,6 +110,10 @@ namespace FrontierDepths.Core
             }
 
             currentStamina = Mathf.Clamp(currentStamina - amount, 0f, maxStamina);
+            if (currentStamina <= 0.001f)
+            {
+                staminaExhausted = true;
+            }
             staminaRegenBlockedUntil = Time.time + staminaRegenDelayAfterSpend;
             RaiseChanged();
             return true;
@@ -140,6 +163,10 @@ namespace FrontierDepths.Core
         {
             float before = currentStamina;
             currentStamina = Mathf.Clamp(currentStamina + Mathf.Max(0f, amount), 0f, maxStamina);
+            if (staminaExhausted && currentStamina + 0.001f >= DefaultStaminaExhaustionUnlockThreshold)
+            {
+                staminaExhausted = false;
+            }
             if (!Mathf.Approximately(before, currentStamina))
             {
                 RaiseChanged();
@@ -181,6 +208,7 @@ namespace FrontierDepths.Core
         public void SetResourceValuesForTests(float stamina, float focus, float mana = -1f)
         {
             currentStamina = Mathf.Clamp(stamina, 0f, maxStamina);
+            staminaExhausted = currentStamina <= 0.001f;
             currentFocus = Mathf.Clamp(focus, 0f, maxFocus);
             if (mana >= 0f)
             {
@@ -207,6 +235,10 @@ namespace FrontierDepths.Core
             {
                 float before = currentStamina;
                 currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerSecond * deltaTime);
+                if (staminaExhausted && currentStamina + 0.001f >= DefaultStaminaExhaustionUnlockThreshold)
+                {
+                    staminaExhausted = false;
+                }
                 changed |= !Mathf.Approximately(before, currentStamina);
             }
 

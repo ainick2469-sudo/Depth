@@ -10,6 +10,9 @@ namespace FrontierDepths.Core
         public bool isActive;
         public int seed;
         public int floorIndex = 1;
+        public bool playerHealthInitialized;
+        public float playerCurrentHealth = 100f;
+        public float playerMaxHealth = 100f;
         public string equippedWeaponId = "weapon.frontier_revolver";
         public List<string> acceptedBountyIds = new List<string>();
         public List<RunUpgradeRecord> runUpgrades = new List<RunUpgradeRecord>();
@@ -23,6 +26,8 @@ namespace FrontierDepths.Core
         public void Normalize()
         {
             acceptedBountyIds ??= new List<string>();
+            playerMaxHealth = Math.Max(1f, playerMaxHealth);
+            playerCurrentHealth = Math.Max(0f, Math.Min(playerCurrentHealth <= 0f && !playerHealthInitialized ? playerMaxHealth : playerCurrentHealth, playerMaxHealth));
             runUpgrades ??= new List<RunUpgradeRecord>();
             bool legacyAmmoState = version < 3 || weaponAmmo == null;
             weaponAmmo ??= new RunWeaponAmmoState();

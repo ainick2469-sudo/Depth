@@ -1,6 +1,6 @@
 # Known Issues
 
-- HUD weapon cylinder alignment may still need manual adjustment.
+- HUD weapon cylinder alignment may still need manual adjustment, but the black chamber backing has been removed.
 - Revolver material/readability needs manual visual confirmation.
 - Town service layout now uses deterministic wrapper visuals, but the town is still an art-first hybrid shell rather than final buildings.
 - Town labels/signage are readable runtime labels; polished sign art and final typography are still deferred.
@@ -8,6 +8,7 @@
 - Dungeon shell adapter currently uses primitive game-owned wrappers; curated `DungeonModularPack` art is deferred until a small dependency-safe copy set is selected.
 - Dungeon shell visuals are intentionally visual-only and validated before graybox renderers hide; existing graybox collision primitives remain authoritative.
 - VS-1.4.1E enables safe floor/corridor materials, side-only doorway trim, stair markers, and subtle room-purpose floor markers; caps, headers, pillars, overhead pieces, freestanding props, and secret reveal props remain disabled.
+- VS-1.4.1E.1 converts floor/corridor/purpose/stair shell visuals to thin validated veneers; any future floor art must preserve flush vertical alignment and remain non-colliding.
 - Secret rooms should remain visually neutral until discovered; future room dressing must not reveal hidden routes or special room identity early.
 - Damage-number readability should be manually confirmed.
 - Enemy attack families are still mostly data/fallback, not fully bespoke.

@@ -96,6 +96,36 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void PlayerHealth_CanPersistDamagedHealthAcrossFloorTransitionState()
+        {
+            GameObject player = new GameObject("PlayerHealthRunPersistence");
+            try
+            {
+                RunState run = new RunState { isActive = true, floorIndex = 1 };
+                run.Normalize();
+                PlayerHealth health = player.AddComponent<PlayerHealth>();
+                health.HydrateFromRunHealthState(run);
+
+                health.ApplyDamage(CreateDamageInfo(25f, player), 1f);
+                health.WriteHealthToRunState(run);
+                Assert.AreEqual(75f, run.playerCurrentHealth, 0.01f);
+
+                run.floorIndex = 2;
+                PlayerHealth rebuiltHealth = player.AddComponent<PlayerHealth>();
+                rebuiltHealth.HydrateFromRunHealthState(run);
+                Assert.AreEqual(75f, rebuiltHealth.CurrentHealth, 0.01f);
+
+                rebuiltHealth.Heal(10f);
+                rebuiltHealth.WriteHealthToRunState(run);
+                Assert.AreEqual(85f, run.playerCurrentHealth, 0.01f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void EnemyHealth_TakesDamageAndPublishesEnemyKilledOnce()
         {
             GameObject enemy = GameObject.CreatePrimitive(PrimitiveType.Capsule);

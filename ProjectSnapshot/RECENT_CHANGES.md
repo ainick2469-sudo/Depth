@@ -1,5 +1,6 @@
 # Recent Changes
 
+- `Gate VS-1.4.1E.1`: hotfixes raised shell floor/corridor visuals by converting floor-like wrappers to thin validated veneers, adds floor alignment report metrics, persists current HP across dungeon descents, separates world-floor and labyrinth-depth HUD text, removes the black chamber-pip backing, and adds stamina exhaustion thresholds.
 - `Gate VS-1.4.1E`: adds curated dungeon shell visual roles, Training Labyrinth profile hooks, safer primitive material tuning, side-only doorway trim, stair markers, and subtle non-colliding room-purpose floor markers while keeping generation and gameplay unchanged.
 - `Gate VS-1.4.1D`: stabilize dungeon shell traversal with validated AdapterVisuals, SafeGraybox fallback, doorway/corridor clearance checks, source-owned wall visuals, and tighter world-label scaling.
 - `Gate VS-1.4.1C`: add a visual-only dungeon shell adapter, primitive game-owned dungeon wrapper prefabs, dungeon shell tests, and dungeon visual import manifest with no raw vendor copy.

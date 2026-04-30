@@ -6,14 +6,16 @@
 
 ## Current Gate
 
-- `Gate VS-1.4.1E: Curated Dungeon Modular Visual Pass`
+- `Gate VS-1.4.1E.1: Fix Shell Floor Alignment And Descent State Regressions`
 
 Purpose:
 
-- Make the validated dungeon shell more readable and dungeon-like with safer game-owned primitive wrappers/materials.
-- Add visual intensity tiers, shell visual profiles, side-only doorway trim, stair markers, and subtle room-purpose floor markers.
-- Preserve the VS-1.4.1D visual-truth contract: no blocked doorways, no walk-through wall lies, and SafeGraybox fallback on validation failure.
-- Keep dungeon generation, room placement, corridors, enemies, town, rewards, bounties, overworld, and floor progression unchanged.
+- Fix raised non-colliding corridor/room floor visuals by validating floor wrappers as thin flush veneers.
+- Preserve the VS-1.4.1D/E visual-truth contract: no blocked doorways, no walk-through wall/floor lies, and SafeGraybox fallback on validation failure.
+- Persist current player health across dungeon depth transitions.
+- Refresh HUD location text so world floor and labyrinth depth are distinct.
+- Remove the black chamber-bullet backing while keeping yellow revolver pips.
+- Add stamina exhaustion lockout/resume thresholds without changing combat balance.
 
 ## Next Planned Gate
 

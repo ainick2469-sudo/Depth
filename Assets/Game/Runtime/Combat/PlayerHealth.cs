@@ -96,6 +96,7 @@ namespace FrontierDepths.Combat
 
             PlayHurtFeedback();
             PublishDamageTaken(damageInfo, result);
+            PersistCurrentHealthToRun();
             Damaged?.Invoke(this, result);
 
             if (killed)
@@ -119,6 +120,7 @@ namespace FrontierDepths.Combat
             float healed = currentHealth - before;
             if (healed > 0f)
             {
+                PersistCurrentHealthToRun();
                 Healed?.Invoke(this, healed);
             }
 
@@ -134,6 +136,7 @@ namespace FrontierDepths.Combat
             isDead = false;
             deathEventRaised = false;
             initialized = true;
+            PersistCurrentHealthToRun(forceInitialize: true);
         }
 
         public void RefreshRunStatBonuses(bool healAddedMaximum = true)
@@ -143,8 +146,8 @@ namespace FrontierDepths.Combat
             maxHealth = Mathf.Max(1f, baseMaxHealth + RunStatAggregator.Current.maxHealthFlat);
             if (!initialized)
             {
-                currentHealth = maxHealth;
                 initialized = true;
+                HydrateFromRunHealthState();
                 return;
             }
 
@@ -156,6 +159,8 @@ namespace FrontierDepths.Combat
             {
                 currentHealth = Mathf.Min(currentHealth, maxHealth);
             }
+
+            PersistCurrentHealthToRun();
         }
 
         private void EnsureInitialized()
@@ -165,7 +170,58 @@ namespace FrontierDepths.Combat
                 return;
             }
 
-            ResetHealth();
+            HydrateFromRunHealthState();
+        }
+
+        public void HydrateFromRunHealthState()
+        {
+            RunState run = GameBootstrap.Instance != null && GameBootstrap.Instance.RunService != null
+                ? GameBootstrap.Instance.RunService.Current
+                : null;
+            HydrateFromRunHealthState(run);
+        }
+
+        internal void HydrateFromRunHealthState(RunState run)
+        {
+            CaptureBaseMaxHealth();
+            maxHealth = Mathf.Max(1f, baseMaxHealth + RunStatAggregator.Current.maxHealthFlat);
+            if (run != null && run.playerHealthInitialized)
+            {
+                maxHealth = Mathf.Max(maxHealth, run.playerMaxHealth);
+                currentHealth = Mathf.Clamp(run.playerCurrentHealth, run.playerCurrentHealth <= 0f ? 0f : 1f, maxHealth);
+                isDead = currentHealth <= 0f;
+                initialized = true;
+                return;
+            }
+
+            currentHealth = maxHealth;
+            isDead = false;
+            deathEventRaised = false;
+            initialized = true;
+            PersistCurrentHealthToRun(forceInitialize: true);
+        }
+
+        internal void PersistCurrentHealthToRun(bool forceInitialize = false)
+        {
+            RunService runService = GameBootstrap.Instance != null ? GameBootstrap.Instance.RunService : null;
+            RunState run = runService != null ? runService.Current : null;
+            WriteHealthToRunState(run, forceInitialize);
+            if (runService != null && run != null && run.isActive)
+            {
+                runService.Save();
+            }
+        }
+
+        internal void WriteHealthToRunState(RunState run, bool forceInitialize = false)
+        {
+            if (run == null || (!run.isActive && !forceInitialize))
+            {
+                return;
+            }
+
+            run.playerHealthInitialized = true;
+            run.playerMaxHealth = Mathf.Max(1f, maxHealth);
+            run.playerCurrentHealth = Mathf.Clamp(currentHealth, 0f, run.playerMaxHealth);
         }
 
         private void CaptureBaseMaxHealth()

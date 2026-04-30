@@ -114,6 +114,15 @@ namespace FrontierDepths.Tests.EditMode
             foreach (DungeonShellVisualSpawnRecord visual in build.shellVisualReport.visuals.Where(visual => visual.sourceOwned))
             {
                 Assert.AreEqual(0, visual.visualObject.GetComponentsInChildren<Collider>(true).Length, visual.visualId);
+                if (visual.kind == DungeonShellVisualKind.RoomFloor || visual.kind == DungeonShellVisualKind.CorridorFloor)
+                {
+                    Assert.LessOrEqual(visual.bounds.size.y, 0.04f, visual.visualId);
+                    Assert.LessOrEqual(visual.floorVisualHeightAboveSurface, 0.04f, visual.visualId);
+                    Assert.LessOrEqual(Mathf.Abs(visual.bounds.size.x - visual.sourceBounds.size.x), 0.08f, visual.visualId);
+                    Assert.LessOrEqual(Mathf.Abs(visual.bounds.size.z - visual.sourceBounds.size.z), 0.08f, visual.visualId);
+                    continue;
+                }
+
                 Assert.LessOrEqual(Vector3.Distance(visual.bounds.center, visual.sourceBounds.center), 0.06f, visual.visualId);
                 Assert.LessOrEqual(Vector3.Distance(visual.bounds.size, visual.sourceBounds.size), 0.06f, visual.visualId);
             }

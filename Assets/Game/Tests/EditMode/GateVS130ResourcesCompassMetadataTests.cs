@@ -40,6 +40,33 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
+        public void PlayerResources_ExhaustionLocksStaminaUntilThresholdButAllowsHeldSprintResume()
+        {
+            GameObject player = new GameObject("PlayerResourcesExhaustion");
+            try
+            {
+                PlayerResourceController resources = player.AddComponent<PlayerResourceController>();
+                resources.SetResourceValuesForTests(5f, 100f);
+
+                Assert.IsTrue(resources.TrySpendStamina(5f, "Dash"));
+                Assert.IsTrue(resources.IsStaminaExhaustedForTests);
+                resources.RestoreStamina(14f);
+                Assert.IsFalse(resources.TrySpendStamina(1f, "Dash"), "Non-sprint actions stay locked below 20 stamina.");
+                Assert.IsFalse(resources.TrySpendStamina(1f, "Sprint"), "Held sprint waits until 15 stamina.");
+                resources.RestoreStamina(1f);
+                Assert.IsTrue(resources.TrySpendStamina(1f, "Sprint"), "Held sprint can resume at 15 stamina.");
+                Assert.IsFalse(resources.TrySpendStamina(1f, "Dash"), "Other stamina actions remain locked until 20 stamina.");
+                resources.RestoreStamina(6f);
+                Assert.IsTrue(resources.TrySpendStamina(1f, "Dash"));
+                Assert.IsFalse(resources.IsStaminaExhaustedForTests);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void CompassUtility_MapsUnityYawToDungeonCardinals()
         {
             Assert.AreEqual("N", DungeonDirectionUtility.GetCardinalLabel(0f));

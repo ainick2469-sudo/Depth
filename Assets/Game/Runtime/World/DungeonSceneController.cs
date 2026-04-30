@@ -21,6 +21,9 @@ namespace FrontierDepths.World
         private const float ShellPlayerRadius = 1.1f;
         private const float ShellClearancePadding = 0.55f;
         private const float ShellPlayerHeight = 4.5f;
+        private const float ShellFloorVeneerThickness = 0.02f;
+        private const float ShellFloorVeneerSurfaceOffset = 0.003f;
+        private const float ShellFloorVeneerMaxSurfaceError = 0.04f;
         private const float DoorwayTrimWidth = 0.34f;
         private const float DoorwayTrimClearanceGap = 0.28f;
         private const float PurposeMarkerHeight = 0.06f;
@@ -1680,7 +1683,7 @@ namespace FrontierDepths.World
                 new Color(0.19f, 0.18f, 0.17f));
             SetRendererEnabled(collisionFloor, false);
             Bounds collisionBounds = GetBounds(collisionFloor.transform.position, collisionFloorScale);
-            TryStageShellVisual(
+            TryStageFloorVeneerVisual(
                 DungeonShellVisualKind.CorridorFloor,
                 segmentRoot.transform,
                 visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
@@ -1689,7 +1692,6 @@ namespace FrontierDepths.World
                 visualFloor,
                 collisionBounds,
                 $"corridor_floor:{edgeKey}:{segmentIndex}",
-                sourceIsBlocking: false,
                 canHideSourceRenderer: true);
             activeBuildResult?.corridors.Add(new DungeonCorridorBuildRecord
             {
@@ -2663,7 +2665,7 @@ namespace FrontierDepths.World
                     (origin.y + (height - 1) * 0.5f) * CellSize);
                 Vector3 localScale = new Vector3(width * CellSize, FloorThickness, height * CellSize);
                 GameObject floor = CreatePrimitive($"Floor_{origin.x}_{origin.y}_{width}_{height}", roomRoot, localPosition, localScale, color);
-                TryStageShellVisual(
+                TryStageFloorVeneerVisual(
                     DungeonShellVisualKind.RoomFloor,
                     roomRoot,
                     localPosition,
@@ -2672,7 +2674,6 @@ namespace FrontierDepths.World
                     floor,
                     GetBounds(floor.transform.position, localScale),
                     $"room_floor:{roomRoot.name}:{origin.x}:{origin.y}:{width}:{height}",
-                    sourceIsBlocking: false,
                     canHideSourceRenderer: true);
 
                 for (int x = 0; x < width; x++)
@@ -3306,18 +3307,18 @@ namespace FrontierDepths.World
                 return;
             }
 
-            Vector3 markerPosition = new Vector3(stairLocalPosition.x, -FloorThickness * 0.45f + PurposeMarkerHeight, stairLocalPosition.z);
+            Vector3 markerPosition = new Vector3(stairLocalPosition.x, 0f, stairLocalPosition.z);
             Vector3 markerScale = new Vector3(3.4f, PurposeMarkerHeight, 3.4f);
-            TryStageShellVisual(
+            Bounds sourceBounds = GetFloorSurfaceSourceBounds(roomRoot.TransformPoint(markerPosition), markerScale);
+            TryStageFloorVeneerVisual(
                 DungeonShellVisualKind.StairMarker,
                 roomRoot,
                 markerPosition,
                 markerScale,
                 Quaternion.identity,
                 null,
-                default,
+                sourceBounds,
                 $"stair_marker:{roomRoot.name}:{stairLocalPosition.x:0.0}:{stairLocalPosition.z:0.0}",
-                sourceIsBlocking: false,
                 canHideSourceRenderer: false,
                 applyTint: true,
                 visualTint: tint);
@@ -3345,24 +3346,24 @@ namespace FrontierDepths.World
             Color tint = GetPurposeShellTint(purpose);
             for (int i = 0; i < candidateOffsets.Length; i++)
             {
-                Vector3 localPosition = new Vector3(roomCenterLocal.x, -FloorThickness * 0.45f + PurposeMarkerHeight, roomCenterLocal.z) + candidateOffsets[i];
-                Bounds markerBounds = GetBounds(roomRoot.TransformPoint(localPosition), markerScale);
+                Vector3 localPosition = new Vector3(roomCenterLocal.x, 0f, roomCenterLocal.z) + candidateOffsets[i];
+                Bounds sourceBounds = GetFloorSurfaceSourceBounds(roomRoot.TransformPoint(localPosition), markerScale);
+                Bounds markerBounds = CreateFloorVeneerBounds(sourceBounds);
                 if (!IsRoomPurposeVisualPlacementSafe(roomRecord, markerBounds))
                 {
                     activeShellVisualReport.skippedMismatchVisualCount++;
                     continue;
                 }
 
-                TryStageShellVisual(
+                TryStageFloorVeneerVisual(
                     DungeonShellVisualKind.RoomPurposeFloorTint,
                     roomRoot,
                     localPosition,
                     markerScale,
                     Quaternion.identity,
                     null,
-                    default,
+                    sourceBounds,
                     $"purpose_marker:{node.nodeId}:{purpose.purposeId}",
-                    sourceIsBlocking: false,
                     canHideSourceRenderer: false,
                     applyTint: true,
                     visualTint: tint);
@@ -3654,6 +3655,25 @@ namespace FrontierDepths.World
             for (int i = 0; i < report.visuals.Count; i++)
             {
                 DungeonShellVisualSpawnRecord visual = report.visuals[i];
+                if (IsFloorVeneerShellVisual(visual.kind))
+                {
+                    report.floorVisualsChecked++;
+                    if (visual.kind == DungeonShellVisualKind.CorridorFloor)
+                    {
+                        report.corridorFloorVisualsChecked++;
+                    }
+
+                    if (!ValidateFloorVeneerAlignment(visual.kind, visual.bounds, visual.sourceBounds, out float heightAboveSurface))
+                    {
+                        report.raisedFloorViolations++;
+                        report.maxFloorVisualHeightAboveSurface = Mathf.Max(report.maxFloorVisualHeightAboveSurface, heightAboveSurface);
+                        AddShellViolation(report, visual, $"floor veneer rises above walkable surface ({heightAboveSurface:0.###})");
+                        continue;
+                    }
+
+                    report.maxFloorVisualHeightAboveSurface = Mathf.Max(report.maxFloorVisualHeightAboveSurface, heightAboveSurface);
+                }
+
                 if (!IsWallLikeShellVisual(visual.kind) &&
                     visual.kind != DungeonShellVisualKind.DoorwaySideTrim &&
                     visual.kind != DungeonShellVisualKind.RoomPurposeFloorTint &&
@@ -3714,6 +3734,71 @@ namespace FrontierDepths.World
             return TryStageShellVisual(kind, parent, localPosition, localScale, localRotation, null, default, string.Empty, false, false);
         }
 
+        private bool TryStageFloorVeneerVisual(
+            DungeonShellVisualKind kind,
+            Transform parent,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Quaternion localRotation,
+            GameObject sourceObject,
+            Bounds sourceBounds,
+            string sourceId,
+            bool canHideSourceRenderer,
+            bool applyTint = false,
+            Color visualTint = default)
+        {
+            DungeonShellVisualTruthReport report = activeShellVisualReport;
+            if (report == null)
+            {
+                return false;
+            }
+
+            if (!IsFloorVeneerShellVisual(kind) || sourceBounds.size == Vector3.zero)
+            {
+                report.skippedRaisedFloorVisuals++;
+                report.skippedMismatchVisualCount++;
+                return false;
+            }
+
+            Vector3 worldCenter = parent != null ? parent.TransformPoint(localPosition) : localPosition;
+            float surfaceY = sourceBounds.max.y;
+            Vector3 worldScale = parent != null ? Vector3.Scale(parent.lossyScale, localScale) : localScale;
+            Bounds floorSourceBounds = new Bounds(
+                new Vector3(worldCenter.x, surfaceY - FloorThickness * 0.5f, worldCenter.z),
+                new Vector3(Mathf.Abs(worldScale.x), FloorThickness, Mathf.Abs(worldScale.z)));
+            worldCenter.y = surfaceY + ShellFloorVeneerSurfaceOffset - ShellFloorVeneerThickness * 0.5f;
+            Vector3 adjustedLocalPosition = parent != null ? parent.InverseTransformPoint(worldCenter) : worldCenter;
+            Vector3 veneerScale = localScale;
+            veneerScale.y = ShellFloorVeneerThickness;
+            Bounds visualBounds = CreateFloorVeneerBounds(floorSourceBounds);
+            if (!ValidateFloorVeneerAlignment(kind, visualBounds, floorSourceBounds, out float heightAboveSurface))
+            {
+                report.skippedRaisedFloorVisuals++;
+                report.raisedFloorViolations++;
+                report.skippedMismatchVisualCount++;
+                report.maxFloorVisualHeightAboveSurface = Mathf.Max(report.maxFloorVisualHeightAboveSurface, heightAboveSurface);
+                report.failingVisualIds.Add($"{kind}:{sourceId}: raised floor veneer rejected ({heightAboveSurface:0.###})");
+                return false;
+            }
+
+            return TryStageShellVisual(
+                kind,
+                parent,
+                adjustedLocalPosition,
+                veneerScale,
+                localRotation,
+                sourceObject,
+                floorSourceBounds,
+                sourceId,
+                sourceIsBlocking: false,
+                canHideSourceRenderer: canHideSourceRenderer,
+                applyTint: applyTint,
+                visualTint: visualTint,
+                hasVisualBoundsOverride: true,
+                visualBoundsOverride: visualBounds,
+                sourceSurfaceY: floorSourceBounds.max.y);
+        }
+
         private bool TryStageShellVisual(
             DungeonShellVisualKind kind,
             Transform parent,
@@ -3726,7 +3811,10 @@ namespace FrontierDepths.World
             bool sourceIsBlocking,
             bool canHideSourceRenderer,
             bool applyTint = false,
-            Color visualTint = default)
+            Color visualTint = default,
+            bool hasVisualBoundsOverride = false,
+            Bounds visualBoundsOverride = default,
+            float sourceSurfaceY = float.NaN)
         {
             DungeonShellVisualTruthReport report = activeShellVisualReport;
             if (report == null || report.requestedMode != DungeonShellVisualMode.AdapterVisuals || activeShellVisualRoot == null)
@@ -3787,9 +3875,15 @@ namespace FrontierDepths.World
                 return false;
             }
 
-            Bounds visualBounds = sourceObject != null
-                ? sourceBounds
-                : GetBounds(worldPosition, worldScale);
+            Bounds visualBounds = hasVisualBoundsOverride
+                ? visualBoundsOverride
+                : sourceObject != null
+                    ? sourceBounds
+                    : GetBounds(worldPosition, worldScale);
+            if (float.IsNaN(sourceSurfaceY) && IsFloorVeneerShellVisual(kind))
+            {
+                sourceSurfaceY = sourceBounds.max.y;
+            }
             Renderer sourceRenderer = sourceObject != null ? sourceObject.GetComponent<Renderer>() : null;
             string visualId = $"{kind}:{(string.IsNullOrWhiteSpace(sourceId) ? visual.name : sourceId)}";
             report.visuals.Add(new DungeonShellVisualSpawnRecord
@@ -3799,6 +3893,8 @@ namespace FrontierDepths.World
                 kind = kind,
                 bounds = visualBounds,
                 sourceBounds = sourceBounds,
+                sourceSurfaceY = sourceSurfaceY,
+                floorVisualHeightAboveSurface = float.IsNaN(sourceSurfaceY) ? 0f : visualBounds.max.y - sourceSurfaceY,
                 sourceIsBlocking = sourceIsBlocking,
                 sourceOwned = sourceObject != null,
                 canHideSourceRenderer = canHideSourceRenderer,
@@ -3826,6 +3922,15 @@ namespace FrontierDepths.World
             else if (IsPurposeShellVisual(kind))
             {
                 report.spawnedPurposeVisualCount++;
+            }
+
+            if (IsFloorVeneerShellVisual(kind))
+            {
+                report.floorVeneerCount++;
+                if (kind == DungeonShellVisualKind.CorridorFloor)
+                {
+                    report.corridorVeneerCount++;
+                }
             }
 
             return true;
@@ -3858,6 +3963,17 @@ namespace FrontierDepths.World
                    kind == DungeonShellVisualKind.RoomFloor;
         }
 
+        private static bool IsFloorVeneerShellVisual(DungeonShellVisualKind kind)
+        {
+            return kind == DungeonShellVisualKind.Floor ||
+                   kind == DungeonShellVisualKind.RoomFloor ||
+                   kind == DungeonShellVisualKind.Corridor ||
+                   kind == DungeonShellVisualKind.CorridorFloor ||
+                   kind == DungeonShellVisualKind.StairMarker ||
+                   kind == DungeonShellVisualKind.RoomPurposeFloorTint ||
+                   kind == DungeonShellVisualKind.RoomPurposeMarker;
+        }
+
         private static bool IsPurposeShellVisual(DungeonShellVisualKind kind)
         {
             return kind == DungeonShellVisualKind.RoomPurposeFloorTint ||
@@ -3878,6 +3994,24 @@ namespace FrontierDepths.World
             }
 
             Bounds expected = GetBounds(worldPosition, worldScale);
+            if (IsFloorVeneerShellVisual(kind))
+            {
+                Bounds veneerBounds = CreateFloorVeneerBounds(sourceBounds);
+                if (Mathf.Abs(expected.center.x - veneerBounds.center.x) <= 0.08f &&
+                    Mathf.Abs(expected.center.z - veneerBounds.center.z) <= 0.08f &&
+                    Mathf.Abs(expected.size.x - veneerBounds.size.x) <= 0.08f &&
+                    Mathf.Abs(expected.size.z - veneerBounds.size.z) <= 0.08f &&
+                    ValidateFloorVeneerAlignment(kind, expected, sourceBounds, out _))
+                {
+                    return true;
+                }
+
+                report.skippedMismatchVisualCount++;
+                report.skippedRaisedFloorVisuals++;
+                report.failingVisualIds.Add($"{kind}: floor veneer scale/pivot audit failed");
+                return false;
+            }
+
             if (Vector3.Distance(expected.center, sourceBounds.center) <= 0.06f &&
                 Vector3.Distance(expected.size, sourceBounds.size) <= 0.06f)
             {
@@ -3912,6 +4046,59 @@ namespace FrontierDepths.World
         {
             return Vector3.Distance(visualBounds.center, sourceBounds.center) <= 0.05f &&
                    Vector3.Distance(visualBounds.size, sourceBounds.size) <= 0.05f;
+        }
+
+        private static Bounds GetFloorSurfaceSourceBounds(Vector3 worldCenter, Vector3 footprintScale)
+        {
+            Vector3 size = new Vector3(Mathf.Abs(footprintScale.x), FloorThickness, Mathf.Abs(footprintScale.z));
+            Vector3 center = new Vector3(worldCenter.x, -FloorThickness * 0.5f, worldCenter.z);
+            return new Bounds(center, size);
+        }
+
+        internal static Bounds CreateFloorVeneerBounds(Bounds sourceBounds)
+        {
+            Vector3 center = sourceBounds.center;
+            center.y = sourceBounds.max.y + ShellFloorVeneerSurfaceOffset - ShellFloorVeneerThickness * 0.5f;
+            Vector3 size = sourceBounds.size;
+            size.y = ShellFloorVeneerThickness;
+            return new Bounds(center, size);
+        }
+
+        internal static bool ValidateFloorVeneerAlignmentForTests(DungeonShellVisualKind kind, Bounds visualBounds, Bounds sourceBounds, out float heightAboveSurface)
+        {
+            return ValidateFloorVeneerAlignment(kind, visualBounds, sourceBounds, out heightAboveSurface);
+        }
+
+        private static bool ValidateFloorVeneerAlignment(DungeonShellVisualKind kind, Bounds visualBounds, Bounds sourceBounds, out float heightAboveSurface)
+        {
+            heightAboveSurface = visualBounds.max.y - sourceBounds.max.y;
+            if (!IsFloorVeneerShellVisual(kind))
+            {
+                return true;
+            }
+
+            if (visualBounds.size.y > ShellFloorVeneerThickness + 0.01f)
+            {
+                return false;
+            }
+
+            if (heightAboveSurface > ShellFloorVeneerMaxSurfaceError)
+            {
+                return false;
+            }
+
+            if (visualBounds.min.y > sourceBounds.max.y + 0.005f)
+            {
+                return false;
+            }
+
+            if (visualBounds.size.x - sourceBounds.size.x > 0.08f ||
+                visualBounds.size.z - sourceBounds.size.z > 0.08f)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static bool IntersectsAnyDoorwayClearance(Bounds bounds, DungeonBuildResult buildResult)
