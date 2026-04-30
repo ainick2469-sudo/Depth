@@ -1,5 +1,6 @@
 using FrontierDepths.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -22,6 +23,14 @@ namespace FrontierDepths.UI
         private GameplayInputAction? pendingRebind;
 
         public bool IsVisible => panel != null && panel.gameObject.activeSelf;
+        internal bool HasEventSystemForTests
+        {
+            get
+            {
+                EventSystem eventSystem = EventSystem.current ?? FindAnyObjectByType<EventSystem>();
+                return eventSystem != null && eventSystem.GetComponent<BaseInputModule>() != null;
+            }
+        }
 
         private void Awake()
         {
@@ -86,6 +95,7 @@ namespace FrontierDepths.UI
 
         private void EnsureUi()
         {
+            EnsureEventSystem();
             if (panel != null)
             {
                 return;
@@ -125,6 +135,26 @@ namespace FrontierDepths.UI
             sideObject.GetComponent<Image>().color = UiTheme.PanelAlt;
             sideObject.SetActive(false);
             return rect;
+        }
+
+        private static void EnsureEventSystem()
+        {
+            EventSystem existing = EventSystem.current ?? FindAnyObjectByType<EventSystem>();
+            if (existing == null)
+            {
+                GameObject eventSystemObject = new GameObject("RuntimeEventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+                if (Application.isPlaying)
+                {
+                    Object.DontDestroyOnLoad(eventSystemObject);
+                }
+
+                return;
+            }
+
+            if (existing.GetComponent<BaseInputModule>() == null)
+            {
+                existing.gameObject.AddComponent<StandaloneInputModule>();
+            }
         }
 
         private void CreateSettingsButtons(RectTransform parent)

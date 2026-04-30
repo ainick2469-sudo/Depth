@@ -6,6 +6,7 @@ using FrontierDepths.UI;
 using FrontierDepths.World;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -26,6 +27,7 @@ namespace FrontierDepths.Tests.EditMode
             GameplayEventBus.ClearForTests();
             HudSpriteCatalog.ClearCacheForTests();
             DestroyRuntimeFeedbackRoot();
+            Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
         }
 
         [Test]
@@ -82,6 +84,27 @@ namespace FrontierDepths.Tests.EditMode
             {
                 Object.DestroyImmediate(hud);
                 Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void PauseMenu_CreatesEventSystemSoButtonsCanReceiveClicks()
+        {
+            Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
+            GameObject hud = CreateRectObject("Hud");
+            try
+            {
+                PauseMenuController pause = hud.AddComponent<PauseMenuController>();
+                pause.Show(null);
+
+                Assert.IsTrue(pause.IsVisible);
+                Assert.IsNotNull(Object.FindAnyObjectByType<EventSystem>());
+                Assert.IsTrue(pause.HasEventSystemForTests);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hud);
+                Object.DestroyImmediate(GameObject.Find("RuntimeEventSystem"));
             }
         }
 
