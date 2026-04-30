@@ -25,7 +25,7 @@
 
 - Path: `Assets/Game/Runtime/Progression`
 - Contains: town services, shops, town kiosk builder, town layout, reputation-facing services, and service panels.
-- Key files: `TownHubController.cs`, `TownRuntimeKioskBuilder.cs`, `TownServiceLayoutManager.cs`, `TownShopCatalog.cs`, `TownShopService.cs`.
+- Key files: `TownHubController.cs`, `TownRuntimeKioskBuilder.cs`, `TownServiceLayoutManager.cs`, `TownServiceVisualCatalog.cs`, `TownServiceVisualResolver.cs`, `TownShopCatalog.cs`, `TownShopService.cs`.
 - Do not edit casually: runtime town layout authority or shop ammo policy.
 
 ## Core
@@ -71,4 +71,6 @@
 
 - Paths: `Assets/Game/Art`, `Assets/Game/Resources`, `Assets/Game/Prefabs`, `Assets/Game/Data`
 - Contains: project-side art, resource-prefabs, gameplay prefabs, and lightweight data.
-- Do not edit casually: imported assets, FBX/material import state, or prefab references without Unity validation.
+- Town wrapper path: `Assets/Game/Resources/TownVisuals`.
+- Curated town vendor source path: `Assets/Game/Art/Imported/Town/VendorSource`.
+- Do not edit casually: imported assets, FBX/material import state, or prefab references without Unity validation. Runtime systems should load wrapper prefabs, not random vendor prefabs.

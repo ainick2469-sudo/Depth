@@ -24,9 +24,11 @@ Use this folder as the project memory layer when the full Unity project is too l
 18. `ASSET_CANDIDATE_LIST.md`
 19. `ASSET_INTEGRATION_PLAN.md`
 20. `ASSET_IMPORT_POLICY.md`
-21. `ENEMY_ROSTER.md`
-22. `ENEMY_PACKS.md`
-23. `TEST_INDEX.md`
+21. `ASSET_TOWN_SELECTION.md`
+22. `ASSET_TOWN_COPY_MANIFEST.md`
+23. `ENEMY_ROSTER.md`
+24. `ENEMY_PACKS.md`
+25. `TEST_INDEX.md`
 
 ## Lightweight Export
 
@@ -55,3 +57,15 @@ To refresh the staging audit report:
 ```powershell
 powershell -ExecutionPolicy Bypass -File Tools/GenerateAssetStagingReport.ps1 -StagingProjectPath "C:\Users\nickb\FrontierDepths_AssetStaging"
 ```
+
+## Current Town Asset Rule
+
+Runtime town code should load only game-owned wrappers from:
+
+- `Assets/Game/Resources/TownVisuals`
+
+Raw copied vendor files, when intentionally selected, must stay isolated under:
+
+- `Assets/Game/Art/Imported/Town/VendorSource`
+
+Do not point runtime systems directly at staging paths or vendor prefabs.

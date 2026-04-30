@@ -2,15 +2,16 @@
 
 - HUD weapon cylinder alignment may still need manual adjustment.
 - Revolver material/readability needs manual visual confirmation.
-- Town building layout is still graybox and not final.
-- Town labels/signage are deferred until sign assets exist.
+- Town service layout now uses deterministic wrapper visuals, but the town is still an art-first hybrid shell rather than final buildings.
+- Town labels/signage are readable runtime labels; polished sign art and final typography are still deferred.
+- Curated town import intentionally uses small identity props only; full building exteriors are deferred until dependency chains are proven clean.
 - Damage-number readability should be manually confirmed.
 - Enemy attack families are still mostly data/fallback, not fully bespoke.
 - Dungeon generation is still grid/simple and needs a future foundation pass.
 - Full skill trees are not implemented.
 - Ascension Route is not implemented.
 - Dungeon Generation Pack is a future research/import candidate, not integrated.
-- Asset Store packs exist only in the staging project at `C:\Users\nickb\FrontierDepths_AssetStaging`; none are integrated into FrontierDepths yet.
+- Asset Store packs remain in staging at `C:\Users\nickb\FrontierDepths_AssetStaging`; only a tiny town identity-prop subset is copied into `Assets/Game/Art/Imported/Town/VendorSource`.
 - Staging contains demo scenes, imported scripts, custom shaders, huge textures, and large audio files that must be filtered before any curated import.
 - Root/local generated zips such as `ProjectSnapshot.zip` and `ProjectSnapshot/AI_CONTEXT_EXPORT.zip` are local artifacts and must not be committed.
 - Basic reserve ammo fields and pickup code remain serialized for compatibility, but current Gunslinger gameplay treats basic ammo as infinite and active rewards should not grant or mention ammo.

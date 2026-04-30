@@ -2,21 +2,22 @@
 
 ## Latest Stable Gameplay Base
 
-- `6912964 Gate VS-1.4.0: add world-floor architecture foundation`
+- `32546d3 Gate VS-1.4.1A: scan staging assets and plan integration`
 
 ## Current Gate
 
-- `Gate VS-1.4.1A: Scan Staging Assets and Plan Integration`
+- `Gate VS-1.4.1B: Curated Town Asset Integration and Town Layout Replacement`
 
 Purpose:
 
-- Audit `C:\Users\nickb\FrontierDepths_AssetStaging` without copying assets into FrontierDepths.
-- Classify town, dungeon, prop, road, weapon, and overworld candidates.
-- Document asset import risks and a safe wrapper-prefab integration path.
-- Keep generated review exports lightweight and free of vendor/art/cache payloads.
+- Replace confusing runtime graybox town service placement with deterministic, front-facing service stations.
+- Use a tiny curated identity-prop import from staging, not whole vendor packs.
+- Load only game-owned wrapper prefabs from `Assets/Game/Resources/TownVisuals`.
+- Preserve Blacksmith, Quartermaster, Saloon / Inn, Bounty Board, and existing scene Dungeon Gate behavior.
+- Keep dungeon generation, enemies, skill trees, scene YAML, and ProjectSettings untouched.
 
 ## Next Planned Gate
 
-- `Gate VS-1.4.1: Graybox World Floor Runtime`
+- `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
-Asset integration remains a later curated import pass. Do not import Asset Store packs directly into main.
+Use `DungeonModularPack` as curated wrapper-prefab shell art without changing dungeon graph generation. Do not import or adopt `ADoorToGaming` generator scripts.

@@ -6,9 +6,7 @@ namespace FrontierDepths.World
     public sealed class DungeonGateInteractable : MonoBehaviour, IInteractable
     {
         public string DisplayName => "Dungeon Gate";
-        public string Prompt => GameBootstrap.Instance != null && GameBootstrap.Instance.RunService.HasActiveRun
-            ? "Resume your expedition"
-            : "Begin a new descent";
+        public string Prompt => "Press E to enter Training Labyrinth";
 
         public bool CanInteract(PlayerInteractor interactor, out string reason)
         {

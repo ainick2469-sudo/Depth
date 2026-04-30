@@ -28,18 +28,19 @@ namespace FrontierDepths.Progression
         {
             using (LoadTimingLogger.Measure("Town layout build"))
             {
+                Transform layoutParent = parent != null ? parent : transform;
                 hiddenLegacyCount = 0;
                 skippedDuplicateCount = 0;
                 hiddenLegacyNames.Clear();
-                GetOrCreateRoot(parent != null ? parent : transform);
+                GetOrCreateRoot(layoutParent);
                 HideExplicitLegacyObjects();
                 HideLegacyServiceStations();
                 HideLegacyServiceGeometry();
                 HideCurioPlaceholders();
-                TownRuntimeKioskBuilder.EnsureRuntimeKiosks(parent != null ? parent : transform);
-                LabelRuntimeKiosks(parent != null ? parent : transform);
+                TownRuntimeKioskBuilder.EnsureRuntimeKiosks(layoutParent);
+                LabelRuntimeKiosks(layoutParent);
                 LabelExistingDungeonGate();
-                LogSummary();
+                LogSummary(layoutParent);
             }
         }
 
@@ -235,7 +236,7 @@ namespace FrontierDepths.Progression
             }
         }
 
-        private void LogSummary()
+        private void LogSummary(Transform layoutParent)
         {
             if (!Debug.isDebugBuild && !Application.isEditor)
             {
@@ -243,10 +244,10 @@ namespace FrontierDepths.Progression
             }
 
             int activeRuntimeServices = 0;
-            Transform kioskRoot = transform.Find(TownRuntimeKioskBuilder.RootName);
+            Transform kioskRoot = layoutParent != null ? layoutParent.Find(TownRuntimeKioskBuilder.RootName) : null;
             if (kioskRoot != null)
             {
-                activeRuntimeServices = kioskRoot.childCount;
+                activeRuntimeServices = kioskRoot.GetComponentsInChildren<TownServiceStation>(true).Length;
             }
 
             string hidden = hiddenLegacyNames.Count > 0 ? string.Join(", ", hiddenLegacyNames) : "none";

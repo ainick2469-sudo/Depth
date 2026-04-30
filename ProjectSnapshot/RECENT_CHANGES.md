@@ -1,5 +1,6 @@
 # Recent Changes
 
+- `Gate VS-1.4.1B`: add curated town visual wrappers, deterministic front-facing town service layout, exact service prompts, lightweight identity-prop import manifest, and town layout tests.
 - `Gate VS-1.4.1A`: audit staging Asset Store packs, create asset candidate/import/risk docs, and reinforce lightweight AI export rules.
 - `Gate VS-1.4.0`: add world-floor architecture foundation, persistent floor progression state, and world-aware HUD location context.
 - `Gate VS-1.3.1D`: add project vision bible, AI handoff docs, roadmap lock, and standardized `AI_CONTEXT_EXPORT.zip` review package.

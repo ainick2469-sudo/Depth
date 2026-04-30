@@ -4,13 +4,16 @@
 
 Goal: replace tilted graybox service blocks with curated, readable town landmarks while preserving current runtime town service logic.
 
-- Blacksmith uses `3DForge` smithy/forge wrappers.
-- Tavern/Inn uses `MedievalTavernPack` bar, tables, chairs, fireplace, and lamp wrappers.
-- Quartermaster uses a house/shop wrapper from `3DForge` or `Mega Fantasy Props Pack`.
-- Bounty Board uses a simple board/sign wrapper from generic wood/sign props.
-- Buildings face the town center/player approach.
-- Interaction stations remain at the front.
-- Duplicate/legacy visual clutter remains hidden or removed by runtime authority.
+Status: active in `Gate VS-1.4.1B`.
+
+- Blacksmith uses a game-owned wrapper with small `3DForge` forge identity props: anvil, forgebase, workbench, tool rack, and hammer.
+- Saloon / Inn uses a game-owned wrapper with small `MedievalTavernPack` identity props: bar counter, table, chair, and barrel.
+- Quartermaster uses a game-owned crate/counter/awning fallback wrapper for now.
+- Bounty Board uses a game-owned sign/notice-board wrapper for now.
+- Runtime systems load only `Assets/Game/Resources/TownVisuals/...` wrapper prefabs.
+- Raw copied vendor assets live only under `Assets/Game/Art/Imported/Town/VendorSource/...`.
+- Buildings face the town center/player approach, interaction stations remain at the front, and duplicate/legacy visual clutter is hidden by runtime authority.
+- Full exterior buildings remain deferred until dependency size, pivots, scale, materials, and colliders are verified.
 
 ## Pass 2: Dungeon Modular Visual Shell
 

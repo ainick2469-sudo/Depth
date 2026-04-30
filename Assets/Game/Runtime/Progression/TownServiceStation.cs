@@ -6,14 +6,21 @@ namespace FrontierDepths.Progression
     public sealed class TownServiceStation : MonoBehaviour, IInteractable
     {
         [SerializeField] private string shopId;
+        [SerializeField] private string displayName;
         [SerializeField] private string prompt = "Browse stock";
 
-        public string DisplayName => shopId;
+        public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? shopId : displayName;
         public string Prompt => prompt;
 
         public void Configure(string configuredShopId, string configuredPrompt)
         {
+            Configure(configuredShopId, configuredPrompt, configuredShopId);
+        }
+
+        public void Configure(string configuredShopId, string configuredPrompt, string configuredDisplayName)
+        {
             shopId = configuredShopId ?? string.Empty;
+            displayName = string.IsNullOrWhiteSpace(configuredDisplayName) ? shopId : configuredDisplayName;
             prompt = string.IsNullOrWhiteSpace(configuredPrompt) ? "Browse stock" : configuredPrompt;
         }
 
