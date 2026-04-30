@@ -1,25 +1,29 @@
-# Chat Review Export Contents
+# AI Context Export Contents
 
 Generate with:
 
 ```powershell
-Tools/GenerateChatReviewExport.ps1
+powershell -ExecutionPolicy Bypass -File Tools/GenerateChatReviewExport.ps1
 ```
 
 Output:
-- `ProjectSnapshot/CHAT_REVIEW_EXPORT.zip`
+- `ProjectSnapshot/AI_CONTEXT_EXPORT.zip`
 
 Included:
-- `Assets/Game/**/*.cs`
+- `Assets/Game/Runtime/**/*.cs`
+- `Assets/Game/Editor/**/*.cs`
+- `Assets/Game/Tests/**/*.cs`
 - `Assets/Game/**/*.asmdef`
 - `Assets/Game/**/*.asmref`
-- small text gameplay files under `Assets/Game` such as `.asset`, `.prefab`, `.json`, `.txt`, `.md`, `.uxml`, `.uss`, and `.inputactions`
-- `ProjectSnapshot/*.md`
+- selected small text gameplay files under `Assets/Game` such as `.asset`, `.prefab`, `.json`, `.txt`, `.md`, `.uxml`, `.uss`, and `.inputactions`
+- `ProjectSnapshot/**/*.md`
 - `Packages/manifest.json`
 - `Packages/packages-lock.json`
 - `ProjectSettings/ProjectVersion.txt`
 - `ProjectSettings/TagManager.asset`
 - `ProjectSettings/InputManager.asset`
+- `README.md` if present
+- `.gitignore`
 
 Excluded:
 - `Library`, `Logs`, `Temp`, `Obj`, `UserSettings`, `.git`, and build output folders
@@ -30,3 +34,4 @@ Excluded:
 Notes:
 - The export is allowlisted on purpose so Unity cache folders and heavyweight content cannot sneak into the review package.
 - The zip itself is ignored by git and should be regenerated locally when needed.
+- `Tools/GenerateProjectSnapshot.ps1` is now a safe wrapper around this export. It only refreshes generated runtime/test indexes when called with `-RefreshGeneratedIndexes`, so curated docs are not overwritten by accident.

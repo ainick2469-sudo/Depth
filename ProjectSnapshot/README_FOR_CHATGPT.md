@@ -1,17 +1,33 @@
-# Frontier Depths Chat Review Snapshot
+# Frontier Depths AI Review Snapshot
 
-Latest base before this pass: `0167726 Gate VS-1.3.1B: fix HUD chamber alignment weapon readability and town label`
+Use this folder as the project memory layer when the full Unity project is too large to upload.
 
-Frontier Depths is a Unity dungeon-crawler prototype centered on a Gunslinger loop: town hub -> dungeon floor -> combat/rewards -> return/deeper dive.
+## Reading Order
 
-Current design decisions:
-- Gunslinger uses Health, Stamina, Focus, and loaded weapon chambers.
-- Mana remains future support for caster classes.
-- Basic reserve ammo is inactive; reload/chamber timing remains.
-- Slime and Spitter Slime are debug-only compatibility content.
-- Dungeon generation overhaul, death recovery, and enemy attack-family behavior are deferred gates.
+1. `CHATGPT_HANDOFF.md`
+2. `GAME_VISION.md`
+3. `RECENT_CHANGES.md`
+4. `CURRENT_GATES.md`
+5. `KNOWN_ISSUES.md`
+6. `PROJECT_MAP.md`
+7. `IMPLEMENTED_SYSTEMS.md`
+8. `NOT_YET_IMPLEMENTED.md`
+9. `DESIGN_BACKLOG.md`
+10. `ROADMAP.md`
+11. `ENEMY_ROSTER.md`
+12. `ENEMY_PACKS.md`
+13. `TEST_INDEX.md`
 
-Lightweight export:
-- Run `Tools/GenerateChatReviewExport.ps1` from the repo root.
-- It writes `ProjectSnapshot/CHAT_REVIEW_EXPORT.zip`.
-- The export is allowlisted for code/docs/lightweight project metadata and intentionally excludes Unity caches, generated zips, imported heavy art/audio/models, and build outputs.
+## Lightweight Export
+
+Run from the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Tools/GenerateChatReviewExport.ps1
+```
+
+Output:
+
+- `ProjectSnapshot/AI_CONTEXT_EXPORT.zip`
+
+The export is allowlisted for code, tests, ProjectSnapshot docs, and lightweight project metadata. It intentionally excludes Unity caches, generated zips, imported heavy art/audio/models, build outputs, and third-party payloads.

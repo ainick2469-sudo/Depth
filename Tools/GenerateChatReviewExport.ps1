@@ -1,5 +1,5 @@
 param(
-    [string]$OutputZip = "ProjectSnapshot/CHAT_REVIEW_EXPORT.zip",
+    [string]$OutputZip = "ProjectSnapshot/AI_CONTEXT_EXPORT.zip",
     [int]$MaxTextAssetKB = 512
 )
 
@@ -8,11 +8,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
 $snapshotDir = Join-Path $repoRoot "ProjectSnapshot"
-$tempDir = Join-Path $snapshotDir "_chat_review_export_tmp"
+$tempDir = Join-Path $snapshotDir "_ai_context_export_tmp"
 $resolvedZip = Join-Path $repoRoot $OutputZip
 $maxTextAssetBytes = $MaxTextAssetKB * 1024
 $included = New-Object System.Collections.Generic.List[string]
 $skippedLarge = New-Object System.Collections.Generic.List[string]
+$timestamp = Get-Date -Format s
 
 function Copy-ExportFile {
     param([System.IO.FileInfo]$File)
@@ -72,11 +73,13 @@ if (Test-Path "Assets/Game") {
 }
 
 if (Test-Path "ProjectSnapshot") {
-    Get-ChildItem "ProjectSnapshot" -File -Filter *.md |
+    Get-ChildItem "ProjectSnapshot" -Recurse -File -Filter *.md |
         Sort-Object FullName |
         ForEach-Object { Copy-ExportFile $_ }
 }
 
+Include-IfExists "README.md"
+Include-IfExists ".gitignore"
 Include-IfExists "Packages/manifest.json"
 Include-IfExists "Packages/packages-lock.json"
 Include-IfExists "ProjectSettings/ProjectVersion.txt"
@@ -85,8 +88,8 @@ Include-IfExists "ProjectSettings/InputManager.asset"
 
 $manifestPath = Join-Path $tempDir "EXPORT_MANIFEST.txt"
 $manifestLines = @(
-    "Frontier Depths Chat Review Export",
-    "Generated: $(Get-Date -Format s)",
+    "Frontier Depths AI Context Export",
+    "Generated: $timestamp",
     "Output: $OutputZip",
     "Included files: $($included.Count)",
     "",
@@ -95,6 +98,7 @@ $manifestLines = @(
     "- ProjectSnapshot markdown docs",
     "- Packages manifest/lock",
     "- Minimal ProjectSettings version/tag/input files",
+    "- README.md and .gitignore when present",
     "",
     "Excluded by design:",
     "- Library, Logs, Temp, Obj, UserSettings, Builds, .git",
@@ -118,8 +122,10 @@ $zipInfo = Get-Item -LiteralPath $resolvedZip
 Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "Wrote $OutputZip"
+Write-Host "Timestamp: $timestamp"
 Write-Host "Included files: $($included.Count)"
 Write-Host ("Zip size: {0:N1} KB" -f ($zipInfo.Length / 1KB))
+Write-Host "Excluded heavy folders: Library, Logs, Temp, Obj, UserSettings, Builds, .git"
 if ($skippedLarge.Count -gt 0) {
     Write-Host "Skipped large text assets: $($skippedLarge.Count)"
 }

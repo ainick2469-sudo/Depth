@@ -1,5 +1,8 @@
 # Recent Changes
 
+- `Gate VS-1.3.1D`: add project vision bible, AI handoff docs, roadmap lock, and standardized `AI_CONTEXT_EXPORT.zip` review package.
+- `ad5bcaa Gate VS-1.3.1C`: hotfix pause freeze, HUD nudge, and revolver materials.
+- `481067a Gate VS-1.3.1C`: hotfix pause menu and weapon HUD alignment.
 - `Gate VS-1.3.1C`: align revolver HUD chamber pips, remove the `REV` block, brighten runtime revolver materials, and add a lightweight ChatGPT review export.
 - `0167726 Gate VS-1.3.1B`: fix HUD chamber alignment weapon readability and town label.
 - `ba96462 Gate VS-1.3.1A`: restore revolver viewmodel color.
