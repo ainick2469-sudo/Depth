@@ -33,6 +33,7 @@ namespace FrontierDepths.World
         public float averageCorridorLength;
         public float maxCorridorLength;
         public float percentCorridorsOverTarget;
+        public DungeonLayoutQualityReport layoutQualityReport;
         public DungeonShellVisualTruthReport shellVisualReport;
 
         public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
@@ -44,6 +45,7 @@ namespace FrontierDepths.World
         public readonly List<DungeonInteractableBuildRecord> interactables = new List<DungeonInteractableBuildRecord>();
         public readonly List<DungeonSpawnPointRecord> spawnPoints = new List<DungeonSpawnPointRecord>();
         public readonly List<RoomClusterRecord> roomClusters = new List<RoomClusterRecord>();
+        public readonly List<DungeonRoomMergeCandidateRecord> mergeCandidates = new List<DungeonRoomMergeCandidateRecord>();
 
         public static string GetEdgeKey(string a, string b)
         {
@@ -157,8 +159,15 @@ namespace FrontierDepths.World
         public string zoneId = string.Empty;
         public DungeonZoneType zoneType = DungeonZoneType.None;
         public DungeonRoomRole roomRole = DungeonRoomRole.None;
+        public DungeonRoomRole layoutRole = DungeonRoomRole.None;
         public int criticalPathIndex = -1;
         public bool isOptional;
+        public bool isProtected;
+        public bool isMainPath;
+        public bool isBranch;
+        public bool isDeadEnd;
+        public bool isLandmarkRoom;
+        public bool isFutureBossApproach;
         public int dangerTier;
         public string lockId = string.Empty;
         public string requiredKeyId = string.Empty;
@@ -178,6 +187,52 @@ namespace FrontierDepths.World
         public float footprintArea;
         public Vector2Int centerCell;
         public readonly List<Vector2Int> floorCells = new List<Vector2Int>();
+    }
+
+    public sealed class DungeonRoomMergeCandidateRecord
+    {
+        public string roomA = string.Empty;
+        public string roomB = string.Empty;
+        public Bounds combinedBounds;
+        public string reason = string.Empty;
+        public int floorDepth;
+        public bool isSafeToApply;
+        public string rejectionReason = string.Empty;
+    }
+
+    public sealed class DungeonLayoutQualityReport
+    {
+        public int roomCount;
+        public int corridorCount;
+        public float averageRoomArea;
+        public float smallestRoomArea;
+        public float largestRoomArea;
+        public float averageCorridorLength;
+        public float longestCorridorLength;
+        public int veryLongCorridorCount;
+        public int straightCorridorChainCount;
+        public float corridorToRoomRatio;
+        public int mainPathRoomCount;
+        public int branchRoomCount;
+        public int deadEndRoomCount;
+        public int landmarkRoomCount;
+        public int mergeCandidateCount;
+        public int specialRoomCount;
+        public int protectedRoomCount;
+        public int repeatedSpecialRoomWarnings;
+        public int longCorridorWarnings;
+        public readonly List<string> layoutWarnings = new List<string>();
+
+        public int warningCount => layoutWarnings.Count + longCorridorWarnings;
+
+        public string ToSummaryString()
+        {
+            return "Dungeon Layout Quality: " +
+                   $"rooms={roomCount}, avgArea={averageRoomArea:0.0}, largest={largestRoomArea:0.0}, " +
+                   $"corridors={corridorCount}, avgCorridor={averageCorridorLength:0.0}, longest={longestCorridorLength:0.0}, " +
+                   $"mainPath={mainPathRoomCount}, branches={branchRoomCount}, deadEnds={deadEndRoomCount}, " +
+                   $"landmarks={landmarkRoomCount}, mergeCandidates={mergeCandidateCount}, warnings={warningCount}";
+        }
     }
 
     public sealed class DungeonCorridorBuildRecord

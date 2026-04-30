@@ -197,7 +197,15 @@ namespace FrontierDepths.World
         KeyItem,
         LockedGate,
         Secret,
-        Exit
+        Exit,
+        MainPath,
+        Branch,
+        DeadEnd,
+        Landmark,
+        Special,
+        Safe,
+        FutureBossApproach,
+        Protected
     }
 
     public enum DungeonRoomTemplateKind

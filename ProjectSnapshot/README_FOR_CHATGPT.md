@@ -83,8 +83,9 @@ Dungeon shell wrappers must validate against source wall/collision records befor
 Current dungeon visual pass:
 
 - `Gate VS-1.4.1E` adds safer primitive wrapper polish only: floors, corridor floors, side-only doorway trim, stair markers, and subtle room-purpose floor markers.
+- `Gate VS-1.4.1F` begins layout-quality foundation work: room roles, protected-room metadata, landmarks, corridor metrics, special-room repetition warnings, and metadata-only merge candidates.
 - Secret rooms must stay visually neutral until discovered.
-- Do not change dungeon generation/layout in the visual pass; the next planned layout pass is `Gate VS-1.4.1F: Labyrinth Layout Quality Foundation`.
+- Do not turn VS-1.4.1F merge candidates into real merged geometry without a separate validation gate.
 
 No raw dungeon vendor assets were copied in `Gate VS-1.4.1C`. Future curated dungeon art should be selected through `ASSET_DUNGEON_COPY_MANIFEST.md` and remain isolated under:
 

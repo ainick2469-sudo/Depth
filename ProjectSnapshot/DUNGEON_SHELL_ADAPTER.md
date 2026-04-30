@@ -2,7 +2,7 @@
 
 ## Gate
 
-Current: `Gate VS-1.4.1E.1: Fix Shell Floor Alignment And Descent State Regressions`
+Current: `Gate VS-1.4.1F: Labyrinth Layout Quality Foundation`
 
 Foundation: `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
@@ -61,12 +61,14 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Raised floor veneers are skipped or trigger SafeGraybox fallback before any graybox renderer is hidden.
 - Adapter visuals must report zero violations or fallback to SafeGraybox.
 - SafeGraybox must never hide graybox renderers.
+- Layout-quality changes must not weaken shell validation: any future merged-room or landmark geometry must preserve doorway clearance, corridor clearance, floor veneer alignment, and source-owned visual truth.
 
 ## Deferred
 
 - Full modular art import from `DungeonModularPack`.
 - Decorative torch/chain/trim placement.
 - Room-type-specific prop dressing.
+- Actual merged-room geometry.
 - Dungeon generation overhaul.
 - Boss path, boss rooms, and labyrinth progression.
 

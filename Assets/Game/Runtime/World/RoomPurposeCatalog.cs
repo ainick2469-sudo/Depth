@@ -84,6 +84,17 @@ namespace FrontierDepths.World
 
         public static RoomPurposeDefinition Choose(DungeonNodeKind nodeKind, int floorIndex, int floorSeed, string nodeId, IReadOnlyDictionary<string, int> purposeUsageCounts)
         {
+            return Choose(nodeKind, floorIndex, floorSeed, nodeId, purposeUsageCounts, false);
+        }
+
+        public static RoomPurposeDefinition Choose(
+            DungeonNodeKind nodeKind,
+            int floorIndex,
+            int floorSeed,
+            string nodeId,
+            IReadOnlyDictionary<string, int> purposeUsageCounts,
+            bool preferSpecialPlacement)
+        {
             if (nodeKind == DungeonNodeKind.Landmark)
             {
                 return PickFrom(floorIndex, floorSeed, nodeId, purposeUsageCounts, "green_cache", "red_elite", "gold_treasury", "cyan_armory");
@@ -101,6 +112,11 @@ namespace FrontierDepths.World
 
             int roll = StableRoll(floorSeed, nodeId, 100);
             int chance = floorIndex <= 1 ? 8 : (floorIndex <= 3 ? 14 : (floorIndex <= 8 ? 20 : 26));
+            if (preferSpecialPlacement)
+            {
+                chance = Mathf.Min(42, chance + 12);
+            }
+
             if (roll >= chance)
             {
                 return null;

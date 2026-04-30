@@ -1461,6 +1461,8 @@ namespace FrontierDepths.World
             buildResult.percentCorridorsOverTarget = buildResult.corridors.Count > 0
                 ? corridorsOverTarget * 100f / buildResult.corridors.Count
                 : 0f;
+            DungeonLayoutQualityReport layoutReport = DungeonLayoutQualityUtility.Analyze(buildResult);
+            Debug.Log(layoutReport.ToSummaryString());
         }
 
         private bool TryFindSafeSpawnPosition(DungeonRoomBuildRecord room, string nodeId, out Vector3 spawnPosition)
@@ -1573,7 +1575,14 @@ namespace FrontierDepths.World
             DungeonMetadataUtility.CopyNodeMetadata(node, roomRecord);
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
-            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(node.nodeKind, activeBuildResult != null ? activeBuildResult.floorIndex : 1, activeBuildResult != null ? activeBuildResult.seed : 0, node.nodeId, activePurposeCounts);
+            bool preferSpecialPlacement = node.nodeKind == DungeonNodeKind.Ordinary && graph.GetDegree(node.nodeId) <= 1;
+            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(
+                node.nodeKind,
+                activeBuildResult != null ? activeBuildResult.floorIndex : 1,
+                activeBuildResult != null ? activeBuildResult.seed : 0,
+                node.nodeId,
+                activePurposeCounts,
+                preferSpecialPlacement);
             if (purpose != null)
             {
                 roomRecord.purposeId = purpose.purposeId;

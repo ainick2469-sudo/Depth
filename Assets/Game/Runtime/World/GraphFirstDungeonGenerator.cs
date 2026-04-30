@@ -178,7 +178,7 @@ namespace FrontierDepths.World
             EnsureOuterCoverage(graph, occupied, random, floorIndex, targetRoomCount, maxRadius, ref nextOrdinaryId);
             AddLoopEdges(graph, occupied, random, floorIndex);
             AssignSpecialRooms(graph, occupied, random, floorIndex, ref nextSecretId);
-            AssignTemplates(graph, random);
+            AssignTemplates(graph, random, floorIndex);
             SyncLegacyIds(graph);
             DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
             return graph;
@@ -207,7 +207,7 @@ namespace FrontierDepths.World
             graph.transitUpNodeId = "transit_up";
             graph.transitDownNodeId = "transit_down";
             SyncLegacyIds(graph);
-            AssignTemplates(graph, random);
+            AssignTemplates(graph, random, floorIndex);
             DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
             return graph;
         }
@@ -451,7 +451,7 @@ namespace FrontierDepths.World
             return best;
         }
 
-        private static void AssignTemplates(DungeonLayoutGraph graph, System.Random random)
+        private static void AssignTemplates(DungeonLayoutGraph graph, System.Random random, int floorIndex)
         {
             Dictionary<string, int> distances = graph.BuildDistanceMap(graph.entryHubNodeId);
             List<DungeonNode> orderedNodes = new List<DungeonNode>(graph.nodes);
@@ -478,14 +478,14 @@ namespace FrontierDepths.World
                 DungeonExitMask requiredExits = GetRequiredExitMask(graph, node);
                 List<DungeonRoomTemplateKind> candidates = GetTemplateCandidates(node.nodeKind, requiredExits, degree, distance);
                 FilterTemplatesByRotationFit(candidates, requiredExits);
-                ApplySizeTierPreference(node.nodeKind, candidates, random);
+                ApplySizeTierPreference(node.nodeKind, candidates, random, floorIndex);
                 ApplyAntiRepetitionRules(graph, node, assignedTemplates, candidates);
 
                 if (candidates.Count == 0)
                 {
                     candidates = GetFallbackTemplateCandidates(node.nodeKind, requiredExits);
                     FilterTemplatesByRotationFit(candidates, requiredExits);
-                    ApplySizeTierPreference(node.nodeKind, candidates, random);
+                    ApplySizeTierPreference(node.nodeKind, candidates, random, floorIndex);
                 }
 
                 if (candidates.Count == 0)
@@ -630,14 +630,15 @@ namespace FrontierDepths.World
         private static void ApplySizeTierPreference(
             DungeonNodeKind kind,
             List<DungeonRoomTemplateKind> candidates,
-            System.Random random)
+            System.Random random,
+            int floorIndex)
         {
             if (candidates.Count <= 1)
             {
                 return;
             }
 
-            DungeonRoomSizeTier desiredTier = ChooseDesiredSizeTier(kind, random);
+            DungeonRoomSizeTier desiredTier = ChooseDesiredSizeTier(kind, random, floorIndex);
             DungeonRoomSizeTier[] fallbackOrder = GetFallbackTierOrder(desiredTier);
             for (int orderIndex = 0; orderIndex < fallbackOrder.Length; orderIndex++)
             {
@@ -661,9 +662,11 @@ namespace FrontierDepths.World
             }
         }
 
-        private static DungeonRoomSizeTier ChooseDesiredSizeTier(DungeonNodeKind kind, System.Random random)
+        private static DungeonRoomSizeTier ChooseDesiredSizeTier(DungeonNodeKind kind, System.Random random, int floorIndex)
         {
             int roll = random.Next(100);
+            bool shallow = floorIndex <= 1;
+            bool transition = floorIndex <= 5;
             return kind switch
             {
                 DungeonNodeKind.EntryHub => DungeonRoomSizeTier.Large,
@@ -671,10 +674,22 @@ namespace FrontierDepths.World
                 DungeonNodeKind.TransitUp => roll < 45 ? DungeonRoomSizeTier.Medium : DungeonRoomSizeTier.Large,
                 DungeonNodeKind.TransitDown => roll < 45 ? DungeonRoomSizeTier.Medium : DungeonRoomSizeTier.Large,
                 DungeonNodeKind.Secret => roll < 45 ? DungeonRoomSizeTier.Small : DungeonRoomSizeTier.Medium,
-                _ => roll switch
+                _ when shallow => roll switch
+                {
+                    < 60 => DungeonRoomSizeTier.Medium,
+                    < 95 => DungeonRoomSizeTier.Large,
+                    _ => DungeonRoomSizeTier.Grand
+                },
+                _ when transition => roll switch
                 {
                     < 45 => DungeonRoomSizeTier.Medium,
-                    < 88 => DungeonRoomSizeTier.Large,
+                    < 90 => DungeonRoomSizeTier.Large,
+                    _ => DungeonRoomSizeTier.Grand
+                },
+                _ => roll switch
+                {
+                    < 32 => DungeonRoomSizeTier.Medium,
+                    < 82 => DungeonRoomSizeTier.Large,
                     _ => DungeonRoomSizeTier.Grand
                 }
             };

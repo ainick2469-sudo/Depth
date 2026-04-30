@@ -25,6 +25,7 @@ MainMenu
 - `DungeonRuntime` is still the playable dungeon scene.
 - In the new architecture, current `DungeonRuntime` represents the future Floor 1 labyrinth runtime.
 - The current dungeon generator is preserved; VS-1.4.0 adds data/state wrappers above it.
+- VS-1.4.1F adds labyrinth layout-quality metadata that future world-floor gates can consume for boss approach rooms, landmark rooms, side objectives, safe routes, and full-map readability.
 
 ## World Floor Definition
 
@@ -66,5 +67,6 @@ When a floor boss is defeated with the matching boss id, that floor becomes clea
 - No overworld generator yet.
 - No terrain, forests, lakes, or field enemy zones yet.
 - No boss combat yet.
+- No actual merged-room geometry yet; VS-1.4.1F records safe merge candidates only.
 - No teleport gate UI yet.
 - No imported dungeon generation pack.
