@@ -76,12 +76,12 @@ namespace FrontierDepths.Tests.EditMode
         [Test]
         public void CompassLocationLabel_UsesSceneContextInsteadOfBlindRunFloor()
         {
-            Assert.IsFalse(CompassHudView.ShouldShowLocationLabelForTests(HudLocationContext.MainMenu));
-            Assert.AreEqual(string.Empty, CompassHudView.GetLocationLabelForTests(HudLocationContext.MainMenu, 1));
-            Assert.IsTrue(CompassHudView.ShouldShowLocationLabelForTests(HudLocationContext.Town));
-            Assert.AreEqual("Town - Frontier Outpost", CompassHudView.GetLocationLabelForTests(HudLocationContext.Town, 1));
-            Assert.IsTrue(CompassHudView.ShouldShowLocationLabelForTests(HudLocationContext.Dungeon));
-            Assert.AreEqual("Floor 1 - Frontier Depths", CompassHudView.GetLocationLabelForTests(HudLocationContext.Dungeon, 1));
+            Assert.IsFalse(CompassHudView.ShouldShowLocationLabelForTests(WorldLocationKind.MainMenu));
+            Assert.AreEqual(string.Empty, CompassHudView.GetLocationLabelForTests(WorldLocationKind.MainMenu, 1));
+            Assert.IsTrue(CompassHudView.ShouldShowLocationLabelForTests(WorldLocationKind.Settlement));
+            Assert.AreEqual("World Floor 1 - Frontier Outpost\nSettlement: Safe Zone", CompassHudView.GetLocationLabelForTests(WorldLocationKind.Settlement, 1));
+            Assert.IsTrue(CompassHudView.ShouldShowLocationLabelForTests(WorldLocationKind.Labyrinth));
+            Assert.AreEqual("World Floor 1 - Frontier Outpost\nTraining Labyrinth", CompassHudView.GetLocationLabelForTests(WorldLocationKind.Labyrinth, 1));
         }
 
         [Test]

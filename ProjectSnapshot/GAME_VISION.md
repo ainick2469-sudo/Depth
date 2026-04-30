@@ -2,7 +2,7 @@
 
 ## One-Sentence Identity
 
-Frontier Depths is a western-fantasy dungeon ascension RPG where players descend through an endless living dungeon from a growing frontier outpost, build class-specific power, hunt bounties, defeat milestone bosses, and eventually unlock an Ascension Route where climbing upward scales much harder than going down.
+Frontier Depths is a western-fantasy dungeon ascension RPG where players descend through persistent generated world-floors from a growing frontier outpost, build class-specific power, hunt bounties, defeat milestone bosses, and eventually unlock an Ascension Route where climbing upward scales much harder than going down.
 
 ## Core Fantasy
 
@@ -14,7 +14,7 @@ Going down is progression. Going up is escalation. The dungeon lets the player b
 
 ## Descent Phase
 
-The descent is the regular run loop: enter from town, clear rooms, take rewards, pursue bounties, improve class power, and decide when to return or push deeper.
+The descent is the regular run loop: travel through a world floor, enter its labyrinth, clear rooms, take rewards, pursue bounties, improve class power, defeat the floor boss, and unlock the next world floor.
 
 ## Ascension Phase
 
@@ -22,11 +22,11 @@ Ascension is a future high-pressure route back upward. It should scale harder th
 
 ## Frontier Town Role
 
-The town is the anchor. It is where the player returns, upgrades, accepts bounties, unlocks services, tracks reputation, and sees long-term progression become visible.
+The town is the anchor. Major settlements and smaller camps are where the player returns, upgrades, accepts bounties, unlocks services, tracks reputation, and sees long-term progression become visible.
 
 ## Living Dungeon Role
 
-The dungeon is the threat. It should feel reactive, layered, and hostile rather than like a generic sequence of rooms. Room purpose, enemy packs, secrets, rewards, and future bosses should reinforce that identity.
+The dungeon is the threat. Each world floor should eventually combine a dangerous outer field with a labyrinth and boss gate. Room purpose, enemy packs, secrets, rewards, field landmarks, and future bosses should reinforce that identity.
 
 ## Class Identity Role
 

@@ -1,17 +1,10 @@
 using FrontierDepths.Core;
-using FrontierDepths.Progression;
+using FrontierDepths.World;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace FrontierDepths.UI
 {
-    public enum HudLocationContext
-    {
-        MainMenu,
-        Town,
-        Dungeon
-    }
-
     public sealed class CompassHudView : MonoBehaviour
     {
         private static readonly string[] HeadingLabels = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
@@ -50,12 +43,12 @@ namespace FrontierDepths.UI
             }
 
             UpdateCompass(smoothedYaw);
-            RunState run = GameBootstrap.Instance?.RunService?.Current;
             if (floorText != null)
             {
-                HudLocationContext context = ResolveLocationContext();
-                floorText.enabled = ShouldShowLocationLabel(context);
-                floorText.text = GetLocationLabel(context, run != null ? run.floorIndex : 1);
+                ProfileState profile = GameBootstrap.Instance?.ProfileService?.Current;
+                WorldFloorSceneContext context = WorldFloorSceneContext.ResolveCurrent(profile);
+                floorText.enabled = context.ShouldShowHudLabel;
+                floorText.text = context.FormatHudLabel();
             }
         }
 
@@ -70,14 +63,14 @@ namespace FrontierDepths.UI
             return Mathf.DeltaAngle(playerYaw, headingYaw) * pixelsPerDegree;
         }
 
-        internal static string GetLocationLabelForTests(HudLocationContext context, int floorIndex)
+        internal static string GetLocationLabelForTests(WorldLocationKind context, int worldFloor)
         {
-            return GetLocationLabel(context, floorIndex);
+            return WorldFloorSceneContext.Create(context, worldFloor).FormatHudLabel();
         }
 
-        internal static bool ShouldShowLocationLabelForTests(HudLocationContext context)
+        internal static bool ShouldShowLocationLabelForTests(WorldLocationKind context)
         {
-            return ShouldShowLocationLabel(context);
+            return WorldFloorSceneContext.Create(context, 1).ShouldShowHudLabel;
         }
 
         private void UpdateCompass(float yaw)
@@ -115,37 +108,6 @@ namespace FrontierDepths.UI
             nextResolveTime = Time.unscaledTime + 0.5f;
             FirstPersonController controller = FindAnyObjectByType<FirstPersonController>();
             player = controller != null ? controller.transform : null;
-        }
-
-        private static HudLocationContext ResolveLocationContext()
-        {
-            string sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            if (sceneName == "MainMenu")
-            {
-                return HudLocationContext.MainMenu;
-            }
-
-            if (sceneName == "TownHub" || FindAnyObjectByType<TownHubController>() != null)
-            {
-                return HudLocationContext.Town;
-            }
-
-            return HudLocationContext.Dungeon;
-        }
-
-        private static bool ShouldShowLocationLabel(HudLocationContext context)
-        {
-            return context != HudLocationContext.MainMenu;
-        }
-
-        private static string GetLocationLabel(HudLocationContext context, int floorIndex)
-        {
-            return context switch
-            {
-                HudLocationContext.MainMenu => string.Empty,
-                HudLocationContext.Town => "Town - Frontier Outpost",
-                _ => $"Floor {Mathf.Max(1, floorIndex)} - Frontier Depths"
-            };
         }
 
         private void EnsureUi()
@@ -205,15 +167,15 @@ namespace FrontierDepths.UI
             floorObject.transform.SetParent(parent != null ? parent : transform, false);
             floorText = floorObject.GetComponent<Text>();
             floorText.font = font;
-            floorText.fontSize = 15;
+            floorText.fontSize = 14;
             floorText.alignment = TextAnchor.UpperCenter;
             floorText.color = new Color(UiTheme.Text.r, UiTheme.Text.g, UiTheme.Text.b, 0.78f);
             floorText.raycastTarget = false;
             RectTransform floorRect = floorText.rectTransform;
             floorRect.anchorMin = floorRect.anchorMax = new Vector2(0.5f, 1f);
             floorRect.pivot = new Vector2(0.5f, 1f);
-            floorRect.sizeDelta = new Vector2(420f, 24f);
-            floorRect.anchoredPosition = new Vector2(0f, -72f);
+            floorRect.sizeDelta = new Vector2(460f, 42f);
+            floorRect.anchoredPosition = new Vector2(0f, -70f);
         }
     }
 }

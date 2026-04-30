@@ -23,6 +23,7 @@ namespace FrontierDepths.Core
         public List<BountyRuntimeState> bounties = new List<BountyRuntimeState>();
         public List<string> unlockedSkillNodeIds = new List<string>();
         public List<ShopPurchaseRecord> purchaseRecords = new List<ShopPurchaseRecord>();
+        public WorldFloorProgressionProfileState worldFloorProgression = new WorldFloorProgressionProfileState();
 
         public void Normalize()
         {
@@ -32,6 +33,8 @@ namespace FrontierDepths.Core
             bounties ??= new List<BountyRuntimeState>();
             unlockedSkillNodeIds ??= new List<string>();
             purchaseRecords ??= new List<ShopPurchaseRecord>();
+            worldFloorProgression ??= new WorldFloorProgressionProfileState();
+            worldFloorProgression.Normalize();
             classXp = Math.Max(0, classXp);
             skillPoints = Math.Max(0, skillPoints);
             townReputation = Math.Max(0, townReputation);

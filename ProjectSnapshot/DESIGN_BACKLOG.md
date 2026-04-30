@@ -6,11 +6,19 @@ Labels: Now, Soon, Later, Long-term, Do not touch yet.
 
 - Now: Preserve western-fantasy dungeon ascension identity.
 - Now: Keep town as anchor and dungeon as threat.
+- Now: Wrap the old town/dungeon loop in persistent world-floor architecture.
 - Later: Deepen frontier flavor through services, bounties, signs, music, and artifacts.
+
+## World Floors
+
+- Now: Define world-floor metadata, progression state, stable floor seeds, and location context.
+- Soon: Build a graybox Floor 1 runtime with settlement, road, outer field, landmarks, and labyrinth entrance.
+- Soon: Bridge overworld entrance into the current DungeonRuntime labyrinth.
+- Later: Add floor boss gates, teleport gates, field bounties, and floor-specific content density.
 
 ## Dungeon Generation
 
-- Soon: Add dungeon generation metadata and room planning foundation.
+- Soon: Treat current DungeonRuntime as prototype LabyrinthRuntime.
 - Soon: Add unique-room caps, special-room rules, and secret-room concealment.
 - Later: Prototype full dungeon generation overhaul.
 - Do not touch yet: Replace architecture wholesale with an imported generator.

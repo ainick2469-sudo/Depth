@@ -1,5 +1,6 @@
 # Recent Changes
 
+- `Gate VS-1.4.0`: add world-floor architecture foundation, persistent floor progression state, and world-aware HUD location context.
 - `Gate VS-1.3.1D`: add project vision bible, AI handoff docs, roadmap lock, and standardized `AI_CONTEXT_EXPORT.zip` review package.
 - `ad5bcaa Gate VS-1.3.1C`: hotfix pause freeze, HUD nudge, and revolver materials.
 - `481067a Gate VS-1.3.1C`: hotfix pause menu and weapon HUD alignment.

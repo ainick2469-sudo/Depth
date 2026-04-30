@@ -2,18 +2,18 @@
 
 ## Latest Stable Gameplay Base
 
-- `ad5bcaa Gate VS-1.3.1C: hotfix pause freeze HUD nudge and revolver materials`
+- `4a4b99f Gate VS-1.3.1D: add project vision bible and AI handoff export`
 
 ## Current Gate
 
-- `Gate VS-1.3.1D: Project Vision Bible, AI Handoff Export, and Roadmap Lock`
+- `Gate VS-1.4.0: World-Floor Architecture Foundation`
 
 Purpose:
 
-- Create durable design/project memory docs.
-- Standardize the lightweight AI context export.
-- Lock near-term roadmap and "do not touch yet" boundaries.
+- Add persistent world-floor definitions and progression state.
+- Teach HUD/location context about settlements, fields, labyrinths, safe rooms, and boss rooms.
+- Preserve the current TownHub -> DungeonRuntime flow while preparing the wrapper architecture above it.
 
 ## Next Planned Gate
 
-- `Gate VS-1.3.2: Dungeon Generation Metadata and Room Planning Foundation`
+- `Gate VS-1.4.1: Graybox World Floor Runtime`

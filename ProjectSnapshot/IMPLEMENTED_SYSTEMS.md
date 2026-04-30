@@ -26,6 +26,12 @@ Status: Partial
 
 The dungeon runtime builds playable floor layouts with rooms, connections, stairs, encounter placement, room purpose metadata, minimap data, and validation tests. It is still a simple/grid-style baseline and not the planned overhaul.
 
+## World-Floor Architecture
+
+Status: Partial
+
+World-floor definitions, progression state, stable seeds, boss-clear unlock data, settlement/labyrinth/teleport tracking, and HUD location context exist. The actual overworld generator, terrain, field zones, boss gates, and teleport UI are deferred.
+
 ## Minimap
 
 Status: Partial

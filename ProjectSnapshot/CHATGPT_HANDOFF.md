@@ -4,13 +4,13 @@ Read this file first when reviewing Frontier Depths.
 
 ## Latest Gate
 
-Current gate: Gate VS-1.3.1D: Project Vision Bible, AI Handoff Export, and Roadmap Lock.
+Current gate: Gate VS-1.4.0: World-Floor Architecture Foundation.
 
-Latest gameplay base before this documentation gate: `ad5bcaa Gate VS-1.3.1C: hotfix pause freeze HUD nudge and revolver materials`.
+Latest stable base before this gate: `4a4b99f Gate VS-1.3.1D: add project vision bible and AI handoff export`.
 
 ## Current Project State
 
-Frontier Depths is a Unity western-fantasy dungeon ascension RPG prototype. The current playable loop is Main Menu -> TownHub -> DungeonRuntime -> combat/rewards -> return/deeper descent.
+Frontier Depths is a Unity western-fantasy dungeon ascension RPG prototype. The current playable loop is Main Menu -> TownHub -> DungeonRuntime -> combat/rewards -> return/deeper descent. The architecture is pivoting toward persistent world-floors where each floor eventually has a settlement/camp, outer field, labyrinth entrance, labyrinth, boss room, and gate to the next world floor.
 
 ## Most Important Folders
 
@@ -25,7 +25,7 @@ Frontier Depths is a Unity western-fantasy dungeon ascension RPG prototype. The 
 
 ## Current Gameplay Loop
 
-The player starts from a frontier town, enters the dungeon, fights graybox enemies, earns rewards/XP/reputation, interacts with room-purpose events, tracks bounties, and can return through the current scene flow. The long-term loop will add milestone bosses and an Ascension Route.
+The player starts from a frontier settlement, enters the current prototype labyrinth, fights graybox enemies, earns rewards/XP/reputation, interacts with room-purpose events, tracks bounties, and can return through the current scene flow. The long-term loop wraps this with generated world floors, floor bosses, teleport gates, and an Ascension Route.
 
 ## Current Known Issues
 
@@ -37,13 +37,14 @@ Recent gates added HUD/minimap polish, infinite basic ammo policy, screen-space 
 
 ## Planned Next
 
-Next planned gate: Gate VS-1.3.2: Dungeon Generation Metadata and Room Planning Foundation.
+Next planned gate: Gate VS-1.4.1: Graybox World Floor Runtime.
 
-The enemy attack-family behavior pass remains important, but the current roadmap puts dungeon metadata/planning next so room generation work has a clear foundation.
+The enemy attack-family behavior pass remains important, but the current roadmap first locks the world-floor wrapper so future dungeon/overworld work has a stable state model.
 
 ## What Not To Touch
 
 - Do not overhaul dungeon generation without a dedicated gate.
+- Do not build overworld generation before VS-1.4.1.
 - Do not add skill trees before the Gunslinger tree gate.
 - Do not add new enemy families before current enemies play differently.
 - Do not import asset packs directly into main.
@@ -57,6 +58,8 @@ The enemy attack-family behavior pass remains important, but the current roadmap
 - Not real yet: `NOT_YET_IMPLEMENTED.md`
 - Backlog: `DESIGN_BACKLOG.md`
 - Roadmap: `ROADMAP.md`
+- World-floor architecture: `WORLD_FLOOR_ARCHITECTURE.md`
+- Scrapped/deferred boundaries: `SCRAPPED_AND_DEFERRED.md`
 - Enemy roster: `ENEMY_ROSTER.md`
 - Enemy packs: `ENEMY_PACKS.md`
 - Export contents: `EXPORT_CONTENTS.md`

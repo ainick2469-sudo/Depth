@@ -14,9 +14,11 @@ Use this folder as the project memory layer when the full Unity project is too l
 8. `NOT_YET_IMPLEMENTED.md`
 9. `DESIGN_BACKLOG.md`
 10. `ROADMAP.md`
-11. `ENEMY_ROSTER.md`
-12. `ENEMY_PACKS.md`
-13. `TEST_INDEX.md`
+11. `WORLD_FLOOR_ARCHITECTURE.md`
+12. `SCRAPPED_AND_DEFERRED.md`
+13. `ENEMY_ROSTER.md`
+14. `ENEMY_PACKS.md`
+15. `TEST_INDEX.md`
 
 ## Lightweight Export
 

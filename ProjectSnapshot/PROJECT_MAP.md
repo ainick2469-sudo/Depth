@@ -17,9 +17,9 @@
 ## World
 
 - Path: `Assets/Game/Runtime/World`
-- Contains: dungeon runtime assembly, graph generation, room metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
-- Key files: `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`, `RoomPurposeInteractable.cs`.
-- Do not edit casually: scene YAML, safe/transit room rules, encounter spacing, and room purpose reward policy.
+- Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
+- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
+- Do not edit casually: world-floor persistence semantics, scene YAML, safe/transit room rules, encounter spacing, and room purpose reward policy.
 
 ## Progression
 
@@ -31,9 +31,9 @@
 ## Core
 
 - Path: `Assets/Game/Runtime/Core`
-- Contains: bootstrap, run/profile state, scene flow, settings, input binding, events, reputation, bounty system, and shared labels.
-- Key files: `GameBootstrap.cs`, `RunState.cs`, `ProfileService.cs`, `SceneFlowService.cs`, `BountySystem.cs`, `InputBindingService.cs`.
-- Do not edit casually: serialized state fields and scene flow rules.
+- Contains: bootstrap, run/profile state, world-floor persistence DTOs, scene flow, settings, input binding, events, reputation, bounty system, and shared labels.
+- Key files: `GameBootstrap.cs`, `RunState.cs`, `ProfileState.cs`, `WorldFloorProgressionProfileState.cs`, `ProfileService.cs`, `SceneFlowService.cs`, `BountySystem.cs`, `InputBindingService.cs`.
+- Do not edit casually: serialized state fields, backward-compatible profile defaults, and scene flow rules.
 
 ## Player
 

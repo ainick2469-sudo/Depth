@@ -95,10 +95,15 @@ namespace FrontierDepths.World
         private DungeonBuildResult activeBuildResult;
         private DungeonBuildResult currentBuildResult;
         private DungeonBuildResult emergencyDebugBuildResult;
+        private WorldFloorSceneContext worldFloorContext;
         private bool debugOverlayVisible;
         private string statusMessage = string.Empty;
 
         public DungeonBuildResult CurrentBuildResult => GetVisibleBuildResult();
+        public WorldFloorSceneContext CurrentWorldFloorContext => worldFloorContext.ShouldShowHudLabel
+            ? worldFloorContext
+            : WorldFloorSceneContext.ResolveForScene(FrontierDepths.Core.GameSceneCatalog.DungeonRuntime, GameBootstrap.Instance?.ProfileService?.Current);
+        internal WorldFloorSceneContext CurrentWorldFloorContextForTests => CurrentWorldFloorContext;
 
         public string GetStatusLine()
         {
@@ -139,6 +144,8 @@ namespace FrontierDepths.World
             currentBuildResult = null;
             emergencyDebugBuildResult = null;
             RunState run = bootstrap.RunService.EnsureRun();
+            worldFloorContext = WorldFloorSceneContext.ResolveForScene(FrontierDepths.Core.GameSceneCatalog.DungeonRuntime, bootstrap.ProfileService.Current);
+            new WorldFloorProgressionService(bootstrap.ProfileService).MarkLabyrinthEntranceKnown(worldFloorContext.worldFloor);
             FloorState currentFloor = run.currentFloor ?? new FloorState();
             int baseSeed = currentFloor.floorSeed == 0
                 ? 1000 + Mathf.Max(1, currentFloor.floorIndex) * 977
