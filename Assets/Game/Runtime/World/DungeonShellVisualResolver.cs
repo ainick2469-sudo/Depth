@@ -55,7 +55,9 @@ namespace FrontierDepths.World
             Vector3 localPosition,
             Vector3 localScale,
             Quaternion localRotation,
-            out GameObject visual)
+            out GameObject visual,
+            bool applyTint = false,
+            Color tint = default)
         {
             visual = null;
             if (!DungeonShellVisualCatalog.TryGet(kind, out DungeonShellVisualDefinition definition))
@@ -64,6 +66,11 @@ namespace FrontierDepths.World
             }
 
             visual = InstantiateVisual(definition, parent, localPosition, localScale, localRotation, out bool usedWrapper);
+            if (visual != null && applyTint)
+            {
+                ApplyRuntimeTint(visual, tint);
+            }
+
             return usedWrapper && visual != null;
         }
 
@@ -131,6 +138,19 @@ namespace FrontierDepths.World
                 {
                     Object.DestroyImmediate(colliders[i]);
                 }
+            }
+        }
+
+        private static void ApplyRuntimeTint(GameObject visual, Color tint)
+        {
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Material source = renderers[i].sharedMaterial;
+                Shader shader = source != null ? source.shader : Shader.Find("Standard");
+                Material instance = source != null ? new Material(source) : new Material(shader);
+                instance.color = tint;
+                renderers[i].sharedMaterial = instance;
             }
         }
     }

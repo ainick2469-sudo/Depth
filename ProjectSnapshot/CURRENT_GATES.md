@@ -2,21 +2,21 @@
 
 ## Latest Stable Gameplay Base
 
-- `f9b7313 Gate VS-1.4.1C: add dungeon modular shell adapter`
+- `14a8ca1 Gate VS-1.4.1D: stabilize dungeon shell traversal and doorway visuals`
 
 ## Current Gate
 
-- `Gate VS-1.4.1D: Stabilize Dungeon Shell Traversal And Doorway Visuals`
+- `Gate VS-1.4.1E: Curated Dungeon Modular Visual Pass`
 
 Purpose:
 
-- Make dungeon shell visuals validate against actual playable collision and clearance before hiding graybox renderers.
-- Skip solid doorway wrappers, risky trim/caps/accent wrappers, and corridor wall wrappers until they can respect doorway/corridor clearances.
-- Add `DungeonShellVisualMode` with AdapterVisuals, SafeGraybox fallback, and Off.
-- Keep current dungeon generation, collisions, minimap, room purposes, spawns, stairs, pickups, town, enemies, and assets unchanged.
+- Make the validated dungeon shell more readable and dungeon-like with safer game-owned primitive wrappers/materials.
+- Add visual intensity tiers, shell visual profiles, side-only doorway trim, stair markers, and subtle room-purpose floor markers.
+- Preserve the VS-1.4.1D visual-truth contract: no blocked doorways, no walk-through wall lies, and SafeGraybox fallback on validation failure.
+- Keep dungeon generation, room placement, corridors, enemies, town, rewards, bounties, overworld, and floor progression unchanged.
 
 ## Next Planned Gate
 
-- `Gate VS-1.4.2: World Floor 1 Graybox Overworld Runtime`
+- `Gate VS-1.4.1F: Labyrinth Layout Quality Foundation`
 
-Build the first simple runtime overworld wrapper around Frontier Outpost, the safe settlement, outer field, road, and existing Training Labyrinth gate.
+Improve room size variety, layout pacing, landmark/main-path metadata, and corridor quality without undoing shell-truth validation.

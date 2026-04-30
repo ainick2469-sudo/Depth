@@ -12,6 +12,8 @@ namespace FrontierDepths.World
         public int spawnedWallVisualCount;
         public int spawnedFloorVisualCount;
         public int spawnedCorridorVisualCount;
+        public int spawnedDoorwaySideTrimCount;
+        public int spawnedPurposeVisualCount;
         public int doorwayClearanceCount;
         public int corridorClearanceCount;
         public int skippedDoorwayVisualCount;
@@ -26,7 +28,7 @@ namespace FrontierDepths.World
         public string ToSummaryString()
         {
             string reason = string.IsNullOrWhiteSpace(fallbackReason) ? "none" : fallbackReason;
-            return $"Dungeon Visual Truth: mode={activeMode} requested={requestedMode} visuals={spawnedVisualCount} walls={spawnedWallVisualCount} floors={spawnedFloorVisualCount} corridors={spawnedCorridorVisualCount} doorwayClearances={doorwayClearanceCount} corridorClearances={corridorClearanceCount} skippedDoorway={skippedDoorwayVisualCount} skippedRisky={skippedRiskyVisualCount} skippedMismatch={skippedMismatchVisualCount} violations={violationCount} fallback={(fallbackTriggered ? "Yes" : "No")} reason={reason}";
+            return $"Dungeon Visual Truth: mode={activeMode}, requested={requestedMode}, floors={spawnedFloorVisualCount}, walls={spawnedWallVisualCount}, corridors={spawnedCorridorVisualCount}, trims={spawnedDoorwaySideTrimCount}, purposeMarkers={spawnedPurposeVisualCount}, doorwayClearances={doorwayClearanceCount}, corridorClearances={corridorClearanceCount}, skippedDoorway={skippedDoorwayVisualCount}, skippedRisky={skippedRiskyVisualCount}, skippedMismatch={skippedMismatchVisualCount}, violations={violationCount}, fallback={(fallbackTriggered ? "Yes" : "No")}, fallbackReason={reason}";
         }
     }
 

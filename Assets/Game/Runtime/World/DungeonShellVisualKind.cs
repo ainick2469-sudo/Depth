@@ -11,6 +11,14 @@ namespace FrontierDepths.World
         StairsUp,
         StairsDown,
         RoomAccent,
-        SecretAccent
+        SecretAccent,
+        RoomFloor,
+        CorridorFloor,
+        RoomWall,
+        CorridorWall,
+        DoorwaySideTrim,
+        StairMarker,
+        RoomPurposeFloorTint,
+        RoomPurposeMarker
     }
 }

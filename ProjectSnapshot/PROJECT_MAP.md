@@ -20,6 +20,7 @@
 - Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
 - Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonShellVisualTruthReport.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
 - Do not edit casually: world-floor persistence semantics, dungeon shell visual wrapper paths/modes, shell truth validation, scene YAML, safe/transit room rules, encounter spacing, collision records, and room purpose reward policy.
+- Current shell rule: VS-1.4.1E may tune visual wrappers/materials and validated floor/trim/marker roles only; layout, generation, rewards, enemies, and bounties are out of scope.
 
 ## Progression
 

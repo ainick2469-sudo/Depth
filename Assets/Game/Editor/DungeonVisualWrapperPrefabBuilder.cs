@@ -15,16 +15,17 @@ namespace FrontierDepths.Editor
             EnsureFolder(DungeonVisualRoot);
             EnsureFolder(MaterialRoot);
 
-            Material floor = GetOrCreateMaterial("DungeonWrapper_Floor.mat", new Color(0.27f, 0.26f, 0.24f));
-            Material wall = GetOrCreateMaterial("DungeonWrapper_Wall.mat", new Color(0.2f, 0.21f, 0.24f));
-            Material trim = GetOrCreateMaterial("DungeonWrapper_Trim.mat", new Color(0.34f, 0.32f, 0.29f));
-            Material accent = GetOrCreateMaterial("DungeonWrapper_Accent.mat", new Color(0.45f, 0.38f, 0.24f));
+            Material floor = GetOrCreateMaterial("DungeonWrapper_Floor.mat", new Color(0.36f, 0.34f, 0.3f));
+            Material corridorFloor = GetOrCreateMaterial("DungeonWrapper_CorridorFloor.mat", new Color(0.26f, 0.25f, 0.23f));
+            Material wall = GetOrCreateMaterial("DungeonWrapper_Wall.mat", new Color(0.15f, 0.16f, 0.18f));
+            Material trim = GetOrCreateMaterial("DungeonWrapper_Trim.mat", new Color(0.36f, 0.32f, 0.26f));
+            Material accent = GetOrCreateMaterial("DungeonWrapper_Accent.mat", new Color(0.52f, 0.4f, 0.22f));
             Material secret = GetOrCreateMaterial("DungeonWrapper_Secret.mat", new Color(0.43f, 0.31f, 0.58f));
 
             CreateFloorVisual(floor, trim);
             CreateWallVisual(wall, trim);
             CreateDoorwayVisual(wall, trim, accent);
-            CreateCorridorVisual(floor, trim);
+            CreateCorridorVisual(corridorFloor, trim);
             CreateCornerVisual(wall, trim);
             CreatePillarVisual(wall, trim);
             CreateStairsVisual("StairsUpVisual", new Color(0.32f, 0.52f, 0.62f), trim);

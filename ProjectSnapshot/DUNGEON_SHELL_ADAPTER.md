@@ -2,7 +2,9 @@
 
 ## Gate
 
-`Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
+Current: `Gate VS-1.4.1E: Curated Dungeon Modular Visual Pass`
+
+Foundation: `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
 ## Purpose
 
@@ -12,7 +14,7 @@ This gate does not rewrite `GraphFirstDungeonGenerator`, adopt vendor dungeon ge
 
 ## Runtime Types
 
-- `DungeonShellVisualKind`: enumerates floor, wall, doorway, corridor, corner, pillar, stairs, room accent, and secret accent visual slots.
+- `DungeonShellVisualKind`: enumerates legacy floor/wall/corridor slots plus curated safe roles for room floor, corridor floor, room wall, doorway side trim, stair markers, and room-purpose floor markers.
 - `DungeonShellVisualDefinition`: describes display name, wrapper resource path, fallback color/scale metadata, visual-only policy, collider stripping policy, and warning label.
 - `DungeonShellVisualCatalog`: fixed game-owned definitions for all required shell kinds.
 - `DungeonShellVisualResolver`: loads wrappers from `Resources/DungeonVisuals`, strips unsafe colliders from instances, warns once per bad/missing resource, and safely leaves graybox primitives visible when wrappers are unavailable.
@@ -38,8 +40,10 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Shell wrappers spawn under a temporary `DungeonShellVisuals` root.
 - Only after validation passes may eligible graybox renderers be hidden.
 - If validation fails, shell visuals are destroyed and SafeGraybox remains visible.
-- Room floors, corridor floors, and source-owned room wall visuals can use wrapper visuals.
-- Solid doorway wrappers, corridor wall wrappers, corners, pillars, stairs, room accents, secret accents, headers, caps, and trim are skipped until they can satisfy clearance checks.
+- Room floors, corridor floors, source-owned room wall visuals, side-only doorway trim, stair markers, and subtle room-purpose floor markers can use wrapper visuals.
+- Solid doorway wrappers, corridor wall wrappers, corners, pillars, overhead headers/caps, freestanding props, room accents, and secret reveal visuals stay disabled until a later prop/dressing pass.
+- Visual intensity tiers are enforced: Tier 1 floors/material swaps, Tier 2 validated trims/markers, Tier 3 risky props disabled.
+- Secret/hidden rooms must remain neutral before discovery and must not get special tints, markers, trim, accents, or minimap spoilers.
 - Existing primitive colliders and build records remain authoritative.
 - Missing wrappers fall back to current graybox visuals with one controlled warning per missing resource path.
 - Wrapper prefabs are primitive/game-owned in this gate; no raw DungeonModularPack files were copied.
@@ -49,6 +53,8 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Every wall-like visual must link to a trusted source wall primitive or `DungeonWallSpanRecord`.
 - Doorway and corridor clearance bounds include player-size padding and must remain visually clear.
 - Shell visuals stay non-colliding; gameplay collision is still the existing graybox collision.
+- Doorway side trim must sit outside doorway/corridor clearance and may never fill the passable opening.
+- Purpose markers are thin floor-level tints only; they must not block pickups, enemies, stairs, interactables, doorways, or corridors.
 - Adapter visuals must report zero violations or fallback to SafeGraybox.
 - SafeGraybox must never hide graybox renderers.
 

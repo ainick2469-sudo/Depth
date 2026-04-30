@@ -21,6 +21,9 @@ namespace FrontierDepths.World
         private const float ShellPlayerRadius = 1.1f;
         private const float ShellClearancePadding = 0.55f;
         private const float ShellPlayerHeight = 4.5f;
+        private const float DoorwayTrimWidth = 0.34f;
+        private const float DoorwayTrimClearanceGap = 0.28f;
+        private const float PurposeMarkerHeight = 0.06f;
         internal const float CorridorRoomOverlap = 0.75f;
         internal const float CorridorVisualRoomOverlap = 0.02f;
         internal const float CorridorVisualFloorYOffset = -0.015f;
@@ -1586,6 +1589,7 @@ namespace FrontierDepths.World
 
             CreateInteriorFeature(roomRoot.transform, node, floorCells);
             CreateNodeInteractables(roomRoot.transform, node, purpose);
+            TryStageRoomPurposeVisual(roomRoot.transform, node, roomRecord, purpose);
         }
 
         private void CreateCorridor(DungeonNode a, DungeonNode b)
@@ -1677,7 +1681,7 @@ namespace FrontierDepths.World
             SetRendererEnabled(collisionFloor, false);
             Bounds collisionBounds = GetBounds(collisionFloor.transform.position, collisionFloorScale);
             TryStageShellVisual(
-                DungeonShellVisualKind.Corridor,
+                DungeonShellVisualKind.CorridorFloor,
                 segmentRoot.transform,
                 visualMidpoint + Vector3.down * (FloorThickness * 0.5f) + Vector3.up * CorridorVisualFloorYOffset,
                 visualFloorScale,
@@ -1730,7 +1734,7 @@ namespace FrontierDepths.World
             GameObject leftWall = CreatePrimitive("LeftWall", parent, midpoint + leftOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
             GameObject rightWall = CreatePrimitive("RightWall", parent, midpoint + rightOffset, wallScale, new Color(0.16f, 0.17f, 0.2f));
             TryStageShellVisual(
-                DungeonShellVisualKind.Wall,
+                DungeonShellVisualKind.CorridorWall,
                 parent,
                 midpoint + leftOffset,
                 wallScale,
@@ -1741,7 +1745,7 @@ namespace FrontierDepths.World
                 sourceIsBlocking: true,
                 canHideSourceRenderer: true);
             TryStageShellVisual(
-                DungeonShellVisualKind.Wall,
+                DungeonShellVisualKind.CorridorWall,
                 parent,
                 midpoint + rightOffset,
                 wallScale,
@@ -2487,14 +2491,7 @@ namespace FrontierDepths.World
             GameObject openingMarker = new GameObject($"DoorOpening_{node.nodeId}_{DirectionToToken(direction)}");
             openingMarker.transform.SetParent(roomRoot, false);
             openingMarker.transform.localPosition = GetDoorLocalPosition(node, direction);
-            TryCreateShellVisual(
-                DungeonShellVisualKind.Doorway,
-                roomRoot,
-                GetDoorLocalPosition(node, direction) + Vector3.up * (WallHeight * 0.5f - FloorThickness * 0.5f),
-                visualOpeningSize,
-                Quaternion.identity);
-
-            activeBuildResult.doorOpenings.Add(new DungeonDoorOpeningRecord
+            DungeonDoorOpeningRecord openingRecord = new DungeonDoorOpeningRecord
             {
                 openingId = openingMarker.name,
                 nodeId = node.nodeId,
@@ -2507,7 +2504,9 @@ namespace FrontierDepths.World
                 center = doorwayCenter,
                 visualBounds = GetBounds(openingBoundsCenter, visualOpeningSize),
                 bounds = GetBounds(openingBoundsCenter, validationOpeningSize)
-            });
+            };
+            activeBuildResult.doorOpenings.Add(openingRecord);
+            TryStageDoorwaySideTrim(roomRoot, node, direction, openingRecord);
             activeBuildResult.reservedZones.Add(new DungeonReservedZoneRecord
             {
                 ownerId = node.nodeId,
@@ -2665,7 +2664,7 @@ namespace FrontierDepths.World
                 Vector3 localScale = new Vector3(width * CellSize, FloorThickness, height * CellSize);
                 GameObject floor = CreatePrimitive($"Floor_{origin.x}_{origin.y}_{width}_{height}", roomRoot, localPosition, localScale, color);
                 TryStageShellVisual(
-                    DungeonShellVisualKind.Floor,
+                    DungeonShellVisualKind.RoomFloor,
                     roomRoot,
                     localPosition,
                     localScale,
@@ -2863,7 +2862,7 @@ namespace FrontierDepths.World
                 scale,
                 GetWallColor(kind));
             TryStageShellVisual(
-                DungeonShellVisualKind.Wall,
+                DungeonShellVisualKind.RoomWall,
                 roomRoot,
                 localPosition,
                 scale,
@@ -3084,7 +3083,7 @@ namespace FrontierDepths.World
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(6f, 0.75f, 6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
-                TryCreateShellVisual(DungeonShellVisualKind.StairsDown, stairs.transform, Vector3.zero, Vector3.one, Quaternion.identity);
+                TryStageStairMarker(roomRoot, stairs.transform.localPosition, new Color(0.86f, 0.68f, 0.2f, 0.8f));
                 stairs.AddComponent<DungeonStairsInteractable>();
                 RecordInteractable(node.nodeId, "StairsDown", stairs, false, false, false);
             }
@@ -3096,7 +3095,7 @@ namespace FrontierDepths.World
                 stairs.transform.localPosition = new Vector3(0f, 1f, 0f);
                 stairs.transform.localScale = new Vector3(5.6f, 0.75f, 5.6f);
                 ApplyColor(stairs.GetComponent<Renderer>(), GetFloorColor(node.nodeKind));
-                TryCreateShellVisual(DungeonShellVisualKind.StairsUp, stairs.transform, Vector3.zero, Vector3.one, Quaternion.identity);
+                TryStageStairMarker(roomRoot, stairs.transform.localPosition, new Color(0.36f, 0.62f, 0.72f, 0.8f));
                 stairs.AddComponent<DungeonAscendInteractable>();
                 bool requiredReturnRoute = activeBuildResult != null && activeBuildResult.floorIndex == 1;
                 RecordInteractable(node.nodeId, "ReturnLift", stairs, false, true, requiredReturnRoute);
@@ -3243,6 +3242,185 @@ namespace FrontierDepths.World
                 EncounterDropKind.Health => new Color(0.25f, 0.9f, 0.38f, 1f),
                 EncounterDropKind.Ammo => new Color(0.28f, 0.58f, 1f, 1f),
                 _ => new Color(1f, 0.78f, 0.22f, 1f)
+            };
+        }
+
+        private void TryStageDoorwaySideTrim(Transform roomRoot, DungeonNode node, Vector2Int direction, DungeonDoorOpeningRecord opening)
+        {
+            if (roomRoot == null || opening == null || node == null || node.nodeKind == DungeonNodeKind.Secret)
+            {
+                return;
+            }
+
+            if (activeShellVisualReport != null)
+            {
+                activeShellVisualReport.skippedDoorwayVisualCount++;
+            }
+            Vector3 doorwayLocal = GetDoorLocalPosition(node, direction);
+            float halfOpening = opening.visualOpeningWidth * 0.5f;
+            float offsetFromCenter = halfOpening + DoorwayTrimClearanceGap + DoorwayTrimWidth * 0.5f;
+            Vector3 trimScale = direction.x == 0
+                ? new Vector3(DoorwayTrimWidth, WallHeight * 0.82f, WallThickness * 0.72f)
+                : new Vector3(WallThickness * 0.72f, WallHeight * 0.82f, DoorwayTrimWidth);
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Vector3 localPosition = doorwayLocal + Vector3.up * (WallHeight * 0.42f - FloorThickness * 0.5f);
+                if (direction.x == 0)
+                {
+                    localPosition.x += offsetFromCenter * side;
+                }
+                else
+                {
+                    localPosition.z += offsetFromCenter * side;
+                }
+
+                Bounds trimBounds = GetBounds(roomRoot.TransformPoint(localPosition), trimScale);
+                if (IntersectsAnyDoorwayClearance(trimBounds, activeBuildResult) ||
+                    IntersectsAnyCorridorClearance(trimBounds, activeBuildResult))
+                {
+                    activeShellVisualReport.skippedMismatchVisualCount++;
+                    continue;
+                }
+
+                TryStageShellVisual(
+                    DungeonShellVisualKind.DoorwaySideTrim,
+                    roomRoot,
+                    localPosition,
+                    trimScale,
+                    Quaternion.identity,
+                    null,
+                    default,
+                    $"doorway_trim:{opening.openingId}:{side}",
+                    sourceIsBlocking: false,
+                    canHideSourceRenderer: false,
+                    applyTint: true,
+                    visualTint: new Color(0.34f, 0.3f, 0.23f, 0.92f));
+            }
+        }
+
+        private void TryStageStairMarker(Transform roomRoot, Vector3 stairLocalPosition, Color tint)
+        {
+            if (roomRoot == null)
+            {
+                return;
+            }
+
+            Vector3 markerPosition = new Vector3(stairLocalPosition.x, -FloorThickness * 0.45f + PurposeMarkerHeight, stairLocalPosition.z);
+            Vector3 markerScale = new Vector3(3.4f, PurposeMarkerHeight, 3.4f);
+            TryStageShellVisual(
+                DungeonShellVisualKind.StairMarker,
+                roomRoot,
+                markerPosition,
+                markerScale,
+                Quaternion.identity,
+                null,
+                default,
+                $"stair_marker:{roomRoot.name}:{stairLocalPosition.x:0.0}:{stairLocalPosition.z:0.0}",
+                sourceIsBlocking: false,
+                canHideSourceRenderer: false,
+                applyTint: true,
+                visualTint: tint);
+        }
+
+        private void TryStageRoomPurposeVisual(Transform roomRoot, DungeonNode node, DungeonRoomBuildRecord roomRecord, RoomPurposeDefinition purpose)
+        {
+            if (roomRoot == null || node == null || roomRecord == null || purpose == null || node.nodeKind == DungeonNodeKind.Secret)
+            {
+                return;
+            }
+
+            Vector3 roomCenterLocal = roomRoot.InverseTransformPoint(roomRecord.bounds.center);
+            Vector3 markerScale = new Vector3(2.6f, PurposeMarkerHeight, 2.6f);
+            float offsetX = Mathf.Min(4f, roomRecord.bounds.size.x * 0.2f);
+            float offsetZ = Mathf.Min(4f, roomRecord.bounds.size.z * 0.2f);
+            Vector3[] candidateOffsets =
+            {
+                new Vector3(offsetX, 0f, offsetZ),
+                new Vector3(-offsetX, 0f, offsetZ),
+                new Vector3(offsetX, 0f, -offsetZ),
+                Vector3.zero
+            };
+
+            Color tint = GetPurposeShellTint(purpose);
+            for (int i = 0; i < candidateOffsets.Length; i++)
+            {
+                Vector3 localPosition = new Vector3(roomCenterLocal.x, -FloorThickness * 0.45f + PurposeMarkerHeight, roomCenterLocal.z) + candidateOffsets[i];
+                Bounds markerBounds = GetBounds(roomRoot.TransformPoint(localPosition), markerScale);
+                if (!IsRoomPurposeVisualPlacementSafe(roomRecord, markerBounds))
+                {
+                    activeShellVisualReport.skippedMismatchVisualCount++;
+                    continue;
+                }
+
+                TryStageShellVisual(
+                    DungeonShellVisualKind.RoomPurposeFloorTint,
+                    roomRoot,
+                    localPosition,
+                    markerScale,
+                    Quaternion.identity,
+                    null,
+                    default,
+                    $"purpose_marker:{node.nodeId}:{purpose.purposeId}",
+                    sourceIsBlocking: false,
+                    canHideSourceRenderer: false,
+                    applyTint: true,
+                    visualTint: tint);
+                return;
+            }
+        }
+
+        private bool IsRoomPurposeVisualPlacementSafe(DungeonRoomBuildRecord roomRecord, Bounds markerBounds)
+        {
+            if (activeBuildResult == null || roomRecord == null || !roomRecord.bounds.Contains(markerBounds.center))
+            {
+                return false;
+            }
+
+            if (IntersectsAnyDoorwayClearance(markerBounds, activeBuildResult) ||
+                IntersectsAnyCorridorClearance(markerBounds, activeBuildResult))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < activeBuildResult.interactables.Count; i++)
+            {
+                DungeonInteractableBuildRecord interactable = activeBuildResult.interactables[i];
+                if (interactable.nodeId == roomRecord.nodeId && markerBounds.Intersects(interactable.bounds))
+                {
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < activeBuildResult.spawnPoints.Count; i++)
+            {
+                DungeonSpawnPointRecord spawn = activeBuildResult.spawnPoints[i];
+                if (spawn.nodeId == roomRecord.nodeId && markerBounds.Intersects(spawn.bounds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static Color GetPurposeShellTint(RoomPurposeDefinition purpose)
+        {
+            if (purpose == null)
+            {
+                return new Color(0.5f, 0.42f, 0.28f, 0.72f);
+            }
+
+            return purpose.effect switch
+            {
+                RoomPurposeEffect.Cache => new Color(1f, 0.72f, 0.22f, 0.72f),
+                RoomPurposeEffect.Shrine => new Color(0.42f, 0.26f, 0.95f, 0.68f),
+                RoomPurposeEffect.Armory => new Color(0.5f, 0.68f, 0.72f, 0.7f),
+                RoomPurposeEffect.Ambush => new Color(1f, 0.34f, 0.08f, 0.7f),
+                RoomPurposeEffect.Sanctuary => new Color(0.58f, 0.88f, 0.62f, 0.65f),
+                RoomPurposeEffect.Elite => new Color(0.72f, 0.08f, 0.06f, 0.72f),
+                RoomPurposeEffect.Treasury => new Color(1f, 0.82f, 0.2f, 0.72f),
+                _ => new Color(purpose.color.r, purpose.color.g, purpose.color.b, 0.68f)
             };
         }
 
@@ -3476,30 +3654,43 @@ namespace FrontierDepths.World
             for (int i = 0; i < report.visuals.Count; i++)
             {
                 DungeonShellVisualSpawnRecord visual = report.visuals[i];
-                if (visual.kind != DungeonShellVisualKind.Wall)
+                if (!IsWallLikeShellVisual(visual.kind) &&
+                    visual.kind != DungeonShellVisualKind.DoorwaySideTrim &&
+                    visual.kind != DungeonShellVisualKind.RoomPurposeFloorTint &&
+                    visual.kind != DungeonShellVisualKind.RoomPurposeMarker &&
+                    visual.kind != DungeonShellVisualKind.StairMarker)
                 {
                     continue;
                 }
 
-                if (!visual.sourceOwned || !visual.sourceIsBlocking)
+                if (IsWallLikeShellVisual(visual.kind) && (!visual.sourceOwned || !visual.sourceIsBlocking))
                 {
                     AddShellViolation(report, visual, "wall visual has no trusted blocking source");
                     continue;
                 }
 
-                if (!BoundsOverlapNearlyEqual(visual.bounds, visual.sourceBounds))
+                if (IsWallLikeShellVisual(visual.kind) && !BoundsOverlapNearlyEqual(visual.bounds, visual.sourceBounds))
                 {
                     AddShellViolation(report, visual, "wall visual does not align with source wall bounds");
                     continue;
                 }
 
-                if (IntersectsAnyDoorwayClearance(visual.bounds, buildResult))
+                if (visual.kind == DungeonShellVisualKind.RoomPurposeFloorTint &&
+                    visual.sourceId.Contains(":Secret:", StringComparison.Ordinal))
+                {
+                    AddShellViolation(report, visual, "secret room received visible purpose marker");
+                    continue;
+                }
+
+                if ((IsWallLikeShellVisual(visual.kind) || visual.kind == DungeonShellVisualKind.DoorwaySideTrim || IsPurposeShellVisual(visual.kind)) &&
+                    IntersectsAnyDoorwayClearance(visual.bounds, buildResult))
                 {
                     AddShellViolation(report, visual, "wall visual intersects doorway clearance");
                     continue;
                 }
 
-                if (IntersectsAnyCorridorClearance(visual.bounds, buildResult))
+                if ((IsWallLikeShellVisual(visual.kind) || visual.kind == DungeonShellVisualKind.DoorwaySideTrim || IsPurposeShellVisual(visual.kind)) &&
+                    IntersectsAnyCorridorClearance(visual.bounds, buildResult))
                 {
                     AddShellViolation(report, visual, "wall visual intersects corridor center clearance");
                 }
@@ -3533,7 +3724,9 @@ namespace FrontierDepths.World
             Bounds sourceBounds,
             string sourceId,
             bool sourceIsBlocking,
-            bool canHideSourceRenderer)
+            bool canHideSourceRenderer,
+            bool applyTint = false,
+            Color visualTint = default)
         {
             DungeonShellVisualTruthReport report = activeShellVisualReport;
             if (report == null || report.requestedMode != DungeonShellVisualMode.AdapterVisuals || activeShellVisualRoot == null)
@@ -3555,7 +3748,7 @@ namespace FrontierDepths.World
                 return false;
             }
 
-            if (kind == DungeonShellVisualKind.Wall &&
+            if ((kind == DungeonShellVisualKind.Wall || kind == DungeonShellVisualKind.RoomWall || kind == DungeonShellVisualKind.CorridorWall) &&
                 !string.IsNullOrWhiteSpace(sourceId) &&
                 sourceId.StartsWith("corridor_wall:", StringComparison.Ordinal))
             {
@@ -3563,7 +3756,7 @@ namespace FrontierDepths.World
                 return false;
             }
 
-            if ((kind == DungeonShellVisualKind.Wall || kind == DungeonShellVisualKind.Floor || kind == DungeonShellVisualKind.Corridor) &&
+            if ((IsWallLikeShellVisual(kind) || IsFloorLikeShellVisual(kind)) &&
                 (sourceObject == null || string.IsNullOrWhiteSpace(sourceId)))
             {
                 report.skippedMismatchVisualCount++;
@@ -3573,6 +3766,11 @@ namespace FrontierDepths.World
             Vector3 worldPosition = parent != null ? parent.TransformPoint(localPosition) : localPosition;
             Quaternion worldRotation = parent != null ? parent.rotation * localRotation : localRotation;
             Vector3 worldScale = parent != null ? Vector3.Scale(parent.lossyScale, localScale) : localScale;
+            if (!PassesVisualScalePivotAudit(kind, worldPosition, worldScale, sourceObject, sourceBounds, report))
+            {
+                return false;
+            }
+
             Vector3 shellLocalPosition = activeShellVisualRoot.InverseTransformPoint(worldPosition);
             Quaternion shellLocalRotation = Quaternion.Inverse(activeShellVisualRoot.rotation) * worldRotation;
 
@@ -3582,7 +3780,9 @@ namespace FrontierDepths.World
                     shellLocalPosition,
                     worldScale,
                     shellLocalRotation,
-                    out GameObject visual))
+                    out GameObject visual,
+                    applyTint,
+                    visualTint))
             {
                 return false;
             }
@@ -3607,17 +3807,25 @@ namespace FrontierDepths.World
             });
 
             report.spawnedVisualCount++;
-            if (kind == DungeonShellVisualKind.Wall)
+            if (IsWallLikeShellVisual(kind))
             {
                 report.spawnedWallVisualCount++;
             }
-            else if (kind == DungeonShellVisualKind.Floor)
+            else if (IsFloorLikeShellVisual(kind))
             {
                 report.spawnedFloorVisualCount++;
             }
-            else if (kind == DungeonShellVisualKind.Corridor)
+            else if (kind == DungeonShellVisualKind.Corridor || kind == DungeonShellVisualKind.CorridorFloor)
             {
                 report.spawnedCorridorVisualCount++;
+            }
+            else if (kind == DungeonShellVisualKind.DoorwaySideTrim)
+            {
+                report.spawnedDoorwaySideTrimCount++;
+            }
+            else if (IsPurposeShellVisual(kind))
+            {
+                report.spawnedPurposeVisualCount++;
             }
 
             return true;
@@ -3627,7 +3835,58 @@ namespace FrontierDepths.World
         {
             return kind == DungeonShellVisualKind.Floor ||
                    kind == DungeonShellVisualKind.Wall ||
-                   kind == DungeonShellVisualKind.Corridor;
+                   kind == DungeonShellVisualKind.Corridor ||
+                   kind == DungeonShellVisualKind.RoomFloor ||
+                   kind == DungeonShellVisualKind.CorridorFloor ||
+                   kind == DungeonShellVisualKind.RoomWall ||
+                   kind == DungeonShellVisualKind.DoorwaySideTrim ||
+                   kind == DungeonShellVisualKind.StairMarker ||
+                   kind == DungeonShellVisualKind.RoomPurposeFloorTint ||
+                   kind == DungeonShellVisualKind.RoomPurposeMarker;
+        }
+
+        private static bool IsWallLikeShellVisual(DungeonShellVisualKind kind)
+        {
+            return kind == DungeonShellVisualKind.Wall ||
+                   kind == DungeonShellVisualKind.RoomWall ||
+                   kind == DungeonShellVisualKind.CorridorWall;
+        }
+
+        private static bool IsFloorLikeShellVisual(DungeonShellVisualKind kind)
+        {
+            return kind == DungeonShellVisualKind.Floor ||
+                   kind == DungeonShellVisualKind.RoomFloor;
+        }
+
+        private static bool IsPurposeShellVisual(DungeonShellVisualKind kind)
+        {
+            return kind == DungeonShellVisualKind.RoomPurposeFloorTint ||
+                   kind == DungeonShellVisualKind.RoomPurposeMarker;
+        }
+
+        private static bool PassesVisualScalePivotAudit(
+            DungeonShellVisualKind kind,
+            Vector3 worldPosition,
+            Vector3 worldScale,
+            GameObject sourceObject,
+            Bounds sourceBounds,
+            DungeonShellVisualTruthReport report)
+        {
+            if (sourceObject == null)
+            {
+                return true;
+            }
+
+            Bounds expected = GetBounds(worldPosition, worldScale);
+            if (Vector3.Distance(expected.center, sourceBounds.center) <= 0.06f &&
+                Vector3.Distance(expected.size, sourceBounds.size) <= 0.06f)
+            {
+                return true;
+            }
+
+            report.skippedMismatchVisualCount++;
+            report.failingVisualIds.Add($"{kind}: visual scale/pivot audit failed");
+            return false;
         }
 
         private void DestroyShellVisualRoot()
