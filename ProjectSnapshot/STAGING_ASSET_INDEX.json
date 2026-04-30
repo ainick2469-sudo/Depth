@@ -1,0 +1,187 @@
+{
+  "stagingProjectPath": "C:\\Users\\nickb\\FrontierDepths_AssetStaging",
+  "generatedForGate": "VS-1.4.1A",
+  "townBuildings": [
+    {
+      "displayName": "3DForge Smithy",
+      "sourcePack": "3DForge",
+      "assetPath": "Assets/3DForge/FantasyExteriors/Village & Towns/Prefabs/Buildings/ForestVillage/Smithy.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Blacksmith exterior landmark wrapper",
+      "riskLevel": "medium",
+      "notes": "Good first blacksmith building candidate; inspect scale/materials in staging before copying selected dependencies."
+    },
+    {
+      "displayName": "3DForge Basic House",
+      "sourcePack": "3DForge",
+      "assetPath": "Assets/3DForge/FantasyExteriors/Village & Towns/Prefabs/Base/Templates/BasicHouse.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Generic town service building shell",
+      "riskLevel": "medium",
+      "notes": "Useful for Quartermaster/general shop wrappers if orientation and footprint fit the town plaza."
+    },
+    {
+      "displayName": "Mega Fantasy House",
+      "sourcePack": "Mega Fantasy Props Pack",
+      "assetPath": "Assets/Mega Fantasy Props Pack/Prefabs/Houses/House.001.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Alternate town structure or background building",
+      "riskLevel": "medium",
+      "notes": "Broad prop pack; do not copy the whole folder."
+    }
+  ],
+  "townProps": [
+    {
+      "displayName": "Forge Anvil",
+      "sourcePack": "3DForge",
+      "assetPath": "Assets/3DForge/Fantasy_Interiors/Villages_&_Towns/Prefabs/Forge/fi_vil_forge_anvil.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Blacksmith interactable dressing",
+      "riskLevel": "low",
+      "notes": "Small focused prop; good early curated import candidate."
+    },
+    {
+      "displayName": "Forge Tool Rack",
+      "sourcePack": "3DForge",
+      "assetPath": "Assets/3DForge/Fantasy_Interiors/Villages_&_Towns/Prefabs/Forge/fi_vil_forge_toolsrack1b.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Blacksmith backdrop dressing",
+      "riskLevel": "low",
+      "notes": "Use as non-interactive dressing around service kiosk."
+    },
+    {
+      "displayName": "Medieval Tavern Bar Module",
+      "sourcePack": "MedievalTavernPack",
+      "assetPath": "Assets/MedievalTavernPack/Prefabs/Furniture/Bar_01_mod.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Saloon/Inn service dressing",
+      "riskLevel": "low",
+      "notes": "Strong visual identity for Inn/Saloon without changing service logic."
+    },
+    {
+      "displayName": "Mega Fantasy Barrels",
+      "sourcePack": "Mega Fantasy Props Pack",
+      "assetPath": "Assets/Mega Fantasy Props Pack/Prefabs/Complex prefabs/Barrels.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Town and dungeon clutter",
+      "riskLevel": "medium",
+      "notes": "Use wrapper prefab and trim collider/material complexity if needed."
+    }
+  ],
+  "dungeonPieces": [
+    {
+      "displayName": "Dungeon Wall A",
+      "sourcePack": "DungeonModularPack",
+      "assetPath": "Assets/DungeonModularPack/Prefabs/Wall_A.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Curated dungeon wall wrapper",
+      "riskLevel": "medium",
+      "notes": "Validate shader graph/material setup before import."
+    },
+    {
+      "displayName": "Dungeon Tile A",
+      "sourcePack": "DungeonModularPack",
+      "assetPath": "Assets/DungeonModularPack/Prefabs/Tile_A.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Curated dungeon floor wrapper",
+      "riskLevel": "medium",
+      "notes": "Use as visual shell over current generated rooms; do not replace graph generation."
+    },
+    {
+      "displayName": "Dungeon Arch A",
+      "sourcePack": "DungeonModularPack",
+      "assetPath": "Assets/DungeonModularPack/Prefabs/Arch_A.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Doorway/corridor transition wrapper",
+      "riskLevel": "medium",
+      "notes": "Good candidate for room exits and labyrinth entrance language."
+    },
+    {
+      "displayName": "Mega Fantasy Stone Half Gate",
+      "sourcePack": "Mega Fantasy Props Pack",
+      "assetPath": "Assets/Mega Fantasy Props Pack/Prefabs/Castle walls/stone_half_gate.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Dungeon gate or town edge gate candidate",
+      "riskLevel": "medium",
+      "notes": "Inspect scale and collider assumptions before use."
+    }
+  ],
+  "overworldPieces": [
+    {
+      "displayName": "RockFREE Rocks",
+      "sourcePack": "RockFREE",
+      "assetPath": "Assets/RockFREE",
+      "assetType": "folder",
+      "recommendedUse": "Overworld rocks, cliffs, cave-mouth dressing",
+      "riskLevel": "low",
+      "notes": "Small focused rock pack; good first overworld dressing candidate."
+    },
+    {
+      "displayName": "3DForge Fence Gate",
+      "sourcePack": "3DForge",
+      "assetPath": "Assets/3DForge/FantasyExteriors/Village & Towns/Prefabs/Fences/Fence02/fi_vil_fence02_gate_frame_gate.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Town perimeter, road marker, or field camp fence",
+      "riskLevel": "medium",
+      "notes": "Use only with selected dependencies."
+    },
+    {
+      "displayName": "EmaceArt Slavic World",
+      "sourcePack": "EmaceArt",
+      "assetPath": "Assets/EmaceArt/Slavic World Free",
+      "assetType": "folder",
+      "recommendedUse": "Future overworld village/ruin research",
+      "riskLevel": "medium",
+      "notes": "Contains demo scenes and grass shader; inspect before curated import."
+    }
+  ],
+  "weapons": [
+    {
+      "displayName": "FlexUnit Bow",
+      "sourcePack": "FlexUnit",
+      "assetPath": "Assets/FlexUnit/MedievalWeaponPack/Prefabs/Bow.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Enemy archer prop or town weapon display",
+      "riskLevel": "low",
+      "notes": "Not a player weapon implementation by itself."
+    },
+    {
+      "displayName": "FlexUnit Shield",
+      "sourcePack": "FlexUnit",
+      "assetPath": "Assets/FlexUnit/MedievalWeaponPack/Prefabs/Shield.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Shield enemy prop or blacksmith display",
+      "riskLevel": "low",
+      "notes": "Good candidate for Goblin Shield Rat readability later."
+    }
+  ],
+  "unsafeOrDeferred": [
+    {
+      "displayName": "ADoorToGaming Dungeon Generation",
+      "sourcePack": "ADoorToGaming",
+      "assetPath": "Assets/ADoorToGaming/Dungeon Generation",
+      "assetType": "scripts and scene",
+      "recommendedUse": "Reference only on spike branch",
+      "riskLevel": "high",
+      "notes": "Do not import generator scripts into runtime; they could conflict with current architecture."
+    },
+    {
+      "displayName": "Caves and Dungeons Audio Payload",
+      "sourcePack": "Caves and Dungeons",
+      "assetPath": "Assets/Caves and Dungeons",
+      "assetType": "audio folder",
+      "recommendedUse": "Future audio reference only",
+      "riskLevel": "high",
+      "notes": "Many 30-54 MB WAV files; do not commit without explicit audio selection and LFS policy."
+    },
+    {
+      "displayName": "Mega Fantasy FPSController",
+      "sourcePack": "Mega Fantasy Props Pack",
+      "assetPath": "Assets/Mega Fantasy Props Pack/Example Scenes/Prefabs/FPSController.prefab",
+      "assetType": "prefab",
+      "recommendedUse": "Never import into gameplay",
+      "riskLevel": "high",
+      "notes": "Existing player/controller architecture must remain authoritative."
+    }
+  ]
+}

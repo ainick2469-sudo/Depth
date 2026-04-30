@@ -50,15 +50,22 @@
 ## ProjectSnapshot
 
 - Path: `ProjectSnapshot`
-- Contains: AI handoff docs, vision, backlog, roadmap, known issues, current gates, enemy docs, test index, and export contents.
+- Contains: AI handoff docs, vision, backlog, roadmap, known issues, current gates, enemy docs, asset staging audit docs, test index, and export contents.
 - Do not edit casually: `CHATGPT_HANDOFF.md`, `GAME_VISION.md`, and roadmap boundaries without reflecting current direction.
 
 ## Tools
 
 - Path: `Tools`
-- Contains: lightweight export scripts.
-- Key file: `GenerateChatReviewExport.ps1`.
+- Contains: lightweight export scripts and staging audit tooling.
+- Key files: `GenerateChatReviewExport.ps1`, `GenerateAssetStagingReport.ps1`.
 - Do not edit casually: export allowlist/exclusion rules that prevent cache/art payloads from entering AI uploads.
+
+## Asset Staging
+
+- Path: `C:\Users\nickb\FrontierDepths_AssetStaging`
+- Contains: imported Asset Store packs for inspection only.
+- Key docs: `STAGING_ASSET_AUDIT.md`, `ASSET_STAGING_REPORT.md`, `STAGING_ASSET_INDEX.json`, `ASSET_IMPORT_PLAN.md`.
+- Do not edit casually: do not run git in staging, do not copy whole vendor folders into FrontierDepths, and do not import staging packs directly into main.
 
 ## Art / Resources
 

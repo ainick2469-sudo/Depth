@@ -14,6 +14,13 @@ $maxTextAssetBytes = $MaxTextAssetKB * 1024
 $included = New-Object System.Collections.Generic.List[string]
 $skippedLarge = New-Object System.Collections.Generic.List[string]
 $timestamp = Get-Date -Format s
+$latestCommit = try { (git rev-parse --short HEAD 2>$null) } catch { "unknown" }
+$gitStatusLines = try { @(git status --short 2>$null) } catch { @("git status unavailable") }
+if ($gitStatusLines.Count -eq 0) {
+    $gitStatusSummary = "clean"
+} else {
+    $gitStatusSummary = ($gitStatusLines -join "; ")
+}
 
 function Copy-ExportFile {
     param([System.IO.FileInfo]$File)
@@ -45,7 +52,7 @@ Remove-Item -LiteralPath $resolvedZip -Force -ErrorAction SilentlyContinue
 
 $codeExtensions = @(".cs", ".asmdef", ".asmref")
 $smallTextExtensions = @(".asset", ".prefab", ".json", ".txt", ".md", ".uxml", ".uss", ".inputactions")
-$excludedExtensions = @(".fbx", ".png", ".jpg", ".jpeg", ".tga", ".psd", ".wav", ".mp3", ".ogg", ".mp4", ".mov", ".zip", ".dll", ".exe")
+$excludedExtensions = @(".fbx", ".obj", ".blend", ".png", ".jpg", ".jpeg", ".tga", ".psd", ".wav", ".mp3", ".ogg", ".mp4", ".mov", ".unitypackage", ".zip", ".dll", ".exe")
 
 if (Test-Path "Assets/Game") {
     Get-ChildItem "Assets/Game" -Recurse -File |
@@ -73,7 +80,13 @@ if (Test-Path "Assets/Game") {
 }
 
 if (Test-Path "ProjectSnapshot") {
-    Get-ChildItem "ProjectSnapshot" -Recurse -File -Filter *.md |
+    Get-ChildItem "ProjectSnapshot" -Recurse -File |
+        Where-Object {
+            $_.Extension.ToLowerInvariant() -in ".md", ".json" -and
+            $_.FullName -notlike "*_ai_context_export_tmp*" -and
+            $_.FullName -notlike "*_chat_review_export_tmp*" -and
+            $_.FullName -notlike "*_export_tmp*"
+        } |
         Sort-Object FullName |
         ForEach-Object { Copy-ExportFile $_ }
 }
@@ -86,26 +99,33 @@ Include-IfExists "ProjectSettings/ProjectVersion.txt"
 Include-IfExists "ProjectSettings/TagManager.asset"
 Include-IfExists "ProjectSettings/InputManager.asset"
 
-$manifestPath = Join-Path $tempDir "EXPORT_MANIFEST.txt"
+$manifestPath = Join-Path $tempDir "EXPORT_MANIFEST.md"
 $manifestLines = @(
-    "Frontier Depths AI Context Export",
-    "Generated: $timestamp",
-    "Output: $OutputZip",
-    "Included files: $($included.Count)",
+    "# Frontier Depths AI Context Export",
     "",
-    "Included allowlist:",
+    "- Generated: $timestamp",
+    "- Output: $OutputZip",
+    "- Included files: $($included.Count)",
+    "- Latest git commit: $latestCommit",
+    "- Git status summary: $gitStatusSummary",
+    "",
+    "## Included Allowlist",
+    "",
     "- Assets/Game code, asmdefs, asmrefs, and small text gameplay data",
-    "- ProjectSnapshot markdown docs",
+    "- ProjectSnapshot markdown and json docs",
     "- Packages manifest/lock",
     "- Minimal ProjectSettings version/tag/input files",
     "- README.md and .gitignore when present",
     "",
-    "Excluded by design:",
-    "- Library, Logs, Temp, Obj, UserSettings, Builds, .git",
-    "- generated zip exports and temp export folders",
-    "- imported models, images, audio, video, binaries, and heavy third-party payloads",
+    "## Excluded By Design",
     "",
-    "Included paths:",
+    "- Library, Logs, Temp, Obj, UserSettings, Builds, .git",
+    "- local staging project folders and vendor imports",
+    "- generated zip exports and temp export folders",
+    "- imported models, images, audio, video, unitypackages, binaries, and heavy third-party payloads",
+    "",
+    "## Included Paths",
+    "",
     $included
 )
 

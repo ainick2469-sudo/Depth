@@ -16,9 +16,17 @@ Use this folder as the project memory layer when the full Unity project is too l
 10. `ROADMAP.md`
 11. `WORLD_FLOOR_ARCHITECTURE.md`
 12. `SCRAPPED_AND_DEFERRED.md`
-13. `ENEMY_ROSTER.md`
-14. `ENEMY_PACKS.md`
-15. `TEST_INDEX.md`
+13. `STAGING_ASSET_AUDIT.md`
+14. `ASSET_STAGING_REPORT.md`
+15. `STAGING_ASSET_INDEX.json`
+16. `ASSET_IMPORT_PLAN.md`
+17. `ASSET_RISK_REGISTER.md`
+18. `ASSET_CANDIDATE_LIST.md`
+19. `ASSET_INTEGRATION_PLAN.md`
+20. `ASSET_IMPORT_POLICY.md`
+21. `ENEMY_ROSTER.md`
+22. `ENEMY_PACKS.md`
+23. `TEST_INDEX.md`
 
 ## Lightweight Export
 
@@ -33,3 +41,17 @@ Output:
 - `ProjectSnapshot/AI_CONTEXT_EXPORT.zip`
 
 The export is allowlisted for code, tests, ProjectSnapshot docs, and lightweight project metadata. It intentionally excludes Unity caches, generated zips, imported heavy art/audio/models, build outputs, and third-party payloads.
+
+## Asset Staging Workflow
+
+Asset Store packs are staged outside the main repo at:
+
+- `C:\Users\nickb\FrontierDepths_AssetStaging`
+
+Do not upload or copy the whole staging project. When the full project is too large, send `ProjectSnapshot/AI_CONTEXT_EXPORT.zip` instead. The export includes code/docs/json context and excludes staging folders, third-party payloads, models, textures, audio, demo scenes, generated zips, and Unity caches.
+
+To refresh the staging audit report:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Tools/GenerateAssetStagingReport.ps1 -StagingProjectPath "C:\Users\nickb\FrontierDepths_AssetStaging"
+```

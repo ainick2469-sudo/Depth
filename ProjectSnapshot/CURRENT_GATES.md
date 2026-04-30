@@ -2,18 +2,21 @@
 
 ## Latest Stable Gameplay Base
 
-- `4a4b99f Gate VS-1.3.1D: add project vision bible and AI handoff export`
+- `6912964 Gate VS-1.4.0: add world-floor architecture foundation`
 
 ## Current Gate
 
-- `Gate VS-1.4.0: World-Floor Architecture Foundation`
+- `Gate VS-1.4.1A: Scan Staging Assets and Plan Integration`
 
 Purpose:
 
-- Add persistent world-floor definitions and progression state.
-- Teach HUD/location context about settlements, fields, labyrinths, safe rooms, and boss rooms.
-- Preserve the current TownHub -> DungeonRuntime flow while preparing the wrapper architecture above it.
+- Audit `C:\Users\nickb\FrontierDepths_AssetStaging` without copying assets into FrontierDepths.
+- Classify town, dungeon, prop, road, weapon, and overworld candidates.
+- Document asset import risks and a safe wrapper-prefab integration path.
+- Keep generated review exports lightweight and free of vendor/art/cache payloads.
 
 ## Next Planned Gate
 
 - `Gate VS-1.4.1: Graybox World Floor Runtime`
+
+Asset integration remains a later curated import pass. Do not import Asset Store packs directly into main.

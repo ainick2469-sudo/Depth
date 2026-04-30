@@ -27,6 +27,7 @@ ProjectSnapshot/AI_CONTEXT_EXPORT.zip
 ProjectSnapshot/CHAT_REVIEW_EXPORT.zip
 ProjectSnapshot/*_EXPORT.zip
 ProjectSnapshot/*.zip
+/ProjectSnapshot.zip
 ProjectSnapshot/_export_tmp/
 ProjectSnapshot/_chat_review_export_tmp/
 ProjectSnapshot/_ai_context_export_tmp/

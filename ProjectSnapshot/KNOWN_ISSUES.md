@@ -10,6 +10,9 @@
 - Full skill trees are not implemented.
 - Ascension Route is not implemented.
 - Dungeon Generation Pack is a future research/import candidate, not integrated.
+- Asset Store packs exist only in the staging project at `C:\Users\nickb\FrontierDepths_AssetStaging`; none are integrated into FrontierDepths yet.
+- Staging contains demo scenes, imported scripts, custom shaders, huge textures, and large audio files that must be filtered before any curated import.
+- Root/local generated zips such as `ProjectSnapshot.zip` and `ProjectSnapshot/AI_CONTEXT_EXPORT.zip` are local artifacts and must not be committed.
 - Basic reserve ammo fields and pickup code remain serialized for compatibility, but current Gunslinger gameplay treats basic ammo as infinite and active rewards should not grant or mention ammo.
 - Full map input is intentionally simplified to hold `M` open / release `M` close; tap-toggle and hold-to-zoom are deferred.
 - Special ammo may return later as a separate, more interesting loot system.
