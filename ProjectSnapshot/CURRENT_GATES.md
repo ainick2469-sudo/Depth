@@ -2,22 +2,22 @@
 
 ## Latest Stable Gameplay Base
 
-- `4dbb4de Gate VS-1.4.1E.1: fix shell floor alignment and descent state regressions`
+- `b575dd7 Gate VS-1.4.1F: improve labyrinth layout quality foundation`
 
 ## Current Gate
 
-- `Gate VS-1.4.1F: Labyrinth Layout Quality Foundation`
+- `Gate VS-1.4.1G: Labyrinth Objective Path And Boss Approach Foundation`
 
 Purpose:
 
-- Add layout-quality reporting for rooms, corridors, branches, landmarks, merge candidates, and warnings.
-- Populate structural layout metadata for main path, branches, dead ends, protected rooms, landmarks, and future boss approach.
-- Tune room template size weighting so deeper floors can produce more varied/larger room silhouettes without rewriting generation.
-- Add metadata-only merge candidates for future merged-room work; geometry merging is still deferred.
-- Tighten special-room distribution warnings and branch/dead-end preference while preserving secret-room non-reveal rules.
+- Add deterministic labyrinth objective-path metadata.
+- Select an objective/key room, boss approach room, boss room placeholder, and exit/stairs room for every generated build.
+- Keep exit/stairs locking metadata prepared but disabled by default so current playtesting remains unblocked.
+- Prevent objective/boss placeholder rooms from becoming random cache/shrine/reward rooms.
+- Expose objective roles to minimap/full-map metadata without revealing secret rooms or adding boss combat.
 
 ## Next Planned Gate
 
-- `Gate VS-1.4.2: Graybox World Floor Runtime`
+- `Gate VS-1.4.1H: Safe Room Merge Geometry And Irregular Room Shapes`
 
-Begin the SAO-style world-floor runtime wrapper after the current labyrinth foundation is stable.
+Use VS-1.4.1F/G metadata to safely reshape rooms after the objective spine is stable.

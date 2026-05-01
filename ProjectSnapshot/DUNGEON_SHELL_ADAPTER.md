@@ -2,7 +2,7 @@
 
 ## Gate
 
-Current: `Gate VS-1.4.1F: Labyrinth Layout Quality Foundation`
+Current: `Gate VS-1.4.1G: Labyrinth Objective Path And Boss Approach Foundation`
 
 Foundation: `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
@@ -62,6 +62,7 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Adapter visuals must report zero violations or fallback to SafeGraybox.
 - SafeGraybox must never hide graybox renderers.
 - Layout-quality changes must not weaken shell validation: any future merged-room or landmark geometry must preserve doorway clearance, corridor clearance, floor veneer alignment, and source-owned visual truth.
+- Objective-path metadata does not alter shell geometry in VS-1.4.1G; future boss doors or merged rooms must pass the same visual-truth checks before hiding graybox.
 
 ## Deferred
 
@@ -70,7 +71,7 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Room-type-specific prop dressing.
 - Actual merged-room geometry.
 - Dungeon generation overhaul.
-- Boss path, boss rooms, and labyrinth progression.
+- Boss combat, boss doors, and enforced labyrinth progression locks.
 
 ## Validation Focus
 

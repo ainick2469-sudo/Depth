@@ -302,7 +302,8 @@ namespace FrontierDepths.World
                 transitUpNodeId = graph.transitUpNodeId,
                 transitDownNodeId = graph.transitDownNodeId,
                 landmarkNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Landmark),
-                secretNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Secret)
+                secretNodeId = GetNodeIdByKind(graph, DungeonNodeKind.Secret),
+                labyrinthObjectivePlan = DungeonLabyrinthObjectiveUtility.BuildObjectivePlan(graph, Mathf.Max(1, floorState.floorIndex))
             };
             BeginShellVisualStaging(activeBuildResult);
             activePurposeCounts.Clear();
@@ -1573,16 +1574,19 @@ namespace FrontierDepths.World
                 bounds = GetRoomBounds(roomRoot.transform.position, floorCells)
             };
             DungeonMetadataUtility.CopyNodeMetadata(node, roomRecord);
+            DungeonLabyrinthObjectiveUtility.ApplyObjectivePlanToRoom(roomRecord, activeBuildResult?.labyrinthObjectivePlan);
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
             bool preferSpecialPlacement = node.nodeKind == DungeonNodeKind.Ordinary && graph.GetDegree(node.nodeId) <= 1;
-            RoomPurposeDefinition purpose = RoomPurposeCatalog.Choose(
-                node.nodeKind,
-                activeBuildResult != null ? activeBuildResult.floorIndex : 1,
-                activeBuildResult != null ? activeBuildResult.seed : 0,
-                node.nodeId,
-                activePurposeCounts,
-                preferSpecialPlacement);
+            RoomPurposeDefinition purpose = DungeonLabyrinthObjectiveUtility.IsReservedObjectiveRoom(node.nodeId, activeBuildResult?.labyrinthObjectivePlan)
+                ? null
+                : RoomPurposeCatalog.Choose(
+                    node.nodeKind,
+                    activeBuildResult != null ? activeBuildResult.floorIndex : 1,
+                    activeBuildResult != null ? activeBuildResult.seed : 0,
+                    node.nodeId,
+                    activePurposeCounts,
+                    preferSpecialPlacement);
             if (purpose != null)
             {
                 roomRecord.purposeId = purpose.purposeId;

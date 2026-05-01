@@ -17,11 +17,13 @@ namespace FrontierDepths.World
             }
 
             ClassifyRooms(build);
+            DungeonLabyrinthObjectiveUtility.ApplyObjectivePlan(build);
             SelectLandmarkRooms(build);
             BuildMergeCandidates(build);
             PopulateRoomMetrics(build, report);
             PopulateCorridorMetrics(build, report);
             PopulateSpecialRoomMetrics(build, report);
+            PopulateObjectiveMetrics(build, report);
             build.layoutQualityReport = report;
             return report;
         }
@@ -312,6 +314,23 @@ namespace FrontierDepths.World
             {
                 report.layoutWarnings.Add("Special rooms are not using branches or dead ends.");
             }
+        }
+
+        private static void PopulateObjectiveMetrics(DungeonBuildResult build, DungeonLayoutQualityReport report)
+        {
+            DungeonLabyrinthObjectivePlan plan = build.labyrinthObjectivePlan;
+            if (plan == null)
+            {
+                report.objectivePlanWarnings.Add("Objective plan missing.");
+                return;
+            }
+
+            report.objectivePathRoomCount = plan.mainPathRoomIds.Count;
+            report.hasObjectiveRoom = !string.IsNullOrWhiteSpace(plan.objectiveRoomId);
+            report.hasBossApproachRoom = !string.IsNullOrWhiteSpace(plan.bossApproachRoomId);
+            report.hasBossRoomPlaceholder = !string.IsNullOrWhiteSpace(plan.bossRoomId);
+            report.exitLockMetadataPrepared = !string.IsNullOrWhiteSpace(plan.exitStairsRoomId);
+            report.objectivePlanWarnings.AddRange(plan.warnings);
         }
 
         private static HashSet<string> BuildShortestPathIds(DungeonLayoutGraph graph, string startId, string goalId)

@@ -17,10 +17,10 @@
 ## World
 
 - Path: `Assets/Game/Runtime/World`
-- Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, layout-quality reporting, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
-- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonLayoutQualityUtility.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonShellVisualTruthReport.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
-- Do not edit casually: world-floor persistence semantics, dungeon shell visual wrapper paths/modes, shell truth validation, scene YAML, safe/transit/protected room rules, layout-quality metadata, encounter spacing, collision records, and room purpose reward policy.
-- Current layout rule: VS-1.4.1F may improve metadata, report quality, room size weighting, landmark selection, and metadata-only merge candidates; actual merged-room geometry and boss-room systems are deferred.
+- Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, layout-quality reporting, labyrinth objective-path metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
+- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonLayoutQualityUtility.cs`, `DungeonLabyrinthObjectiveUtility.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonShellVisualTruthReport.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
+- Do not edit casually: world-floor persistence semantics, dungeon shell visual wrapper paths/modes, shell truth validation, scene YAML, safe/transit/protected room rules, layout-quality metadata, objective-path metadata, encounter spacing, collision records, and room purpose reward policy.
+- Current layout rule: VS-1.4.1G may improve objective-path metadata only; actual merged-room geometry, boss combat, boss doors, and objective lock enforcement are deferred.
 
 ## Progression
 

@@ -84,6 +84,7 @@ Current dungeon visual pass:
 
 - `Gate VS-1.4.1E` adds safer primitive wrapper polish only: floors, corridor floors, side-only doorway trim, stair markers, and subtle room-purpose floor markers.
 - `Gate VS-1.4.1F` begins layout-quality foundation work: room roles, protected-room metadata, landmarks, corridor metrics, special-room repetition warnings, and metadata-only merge candidates.
+- `Gate VS-1.4.1G` adds objective-path metadata: objective/key room, boss approach, boss room placeholder, and exit/stairs lock metadata without enforcing locks by default.
 - Secret rooms must stay visually neutral until discovered.
 - Do not turn VS-1.4.1F merge candidates into real merged geometry without a separate validation gate.
 

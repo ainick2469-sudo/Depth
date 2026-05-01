@@ -10,6 +10,7 @@
 - VS-1.4.1E enables safe floor/corridor materials, side-only doorway trim, stair markers, and subtle room-purpose floor markers; caps, headers, pillars, overhead pieces, freestanding props, and secret reveal props remain disabled.
 - VS-1.4.1E.1 converts floor/corridor/purpose/stair shell visuals to thin validated veneers; any future floor art must preserve flush vertical alignment and remain non-colliding.
 - VS-1.4.1F adds layout metadata and merge-candidate reporting only; actual merged-room geometry, boss rooms, key rooms, and quest rooms remain deferred.
+- VS-1.4.1G adds objective/boss approach/boss placeholder metadata only; real boss combat, boss doors, key inventory, objective lock enforcement, and clear rewards remain deferred.
 - Layout-quality reports can warn about long corridors or repeated special rooms, but corridor routing is still conservative and mostly unchanged.
 - Secret rooms should remain visually neutral until discovered; future room dressing must not reveal hidden routes or special room identity early.
 - Damage-number readability should be manually confirmed.

@@ -268,7 +268,16 @@ namespace FrontierDepths.UI
 
         private static Color GetRoomColor(DungeonRoomBuildRecord room, bool visited, bool current)
         {
-            Color color = room.roomRole switch
+            Color color = room.objectiveRole switch
+            {
+                DungeonRoomRole.Objective => new Color(0.35f, 0.92f, 0.5f, 1f),
+                DungeonRoomRole.BossApproach => new Color(1f, 0.48f, 0.16f, 1f),
+                DungeonRoomRole.BossPlaceholder => new Color(0.95f, 0.12f, 0.1f, 1f),
+                _ => default
+            };
+            if (color == default)
+            {
+                color = room.roomRole switch
             {
                 DungeonRoomRole.Start => new Color(0.45f, 0.58f, 0.72f, 1f),
                 DungeonRoomRole.Return => new Color(0.55f, 0.82f, 0.95f, 1f),
@@ -279,8 +288,9 @@ namespace FrontierDepths.UI
                 DungeonRoomRole.Elite => new Color(0.94f, 0.2f, 0.16f, 1f),
                 DungeonRoomRole.Secret => new Color(0.55f, 0.32f, 0.72f, 1f),
                 DungeonRoomRole.Scout => new Color(0.22f, 0.78f, 0.68f, 1f),
-                _ => new Color(0.58f, 0.6f, 0.64f, 1f)
-            };
+                    _ => new Color(0.58f, 0.6f, 0.64f, 1f)
+                };
+            }
             float alpha = current ? 0.95f : visited ? 0.76f : 0.38f;
             return new Color(color.r, color.g, color.b, alpha);
         }
@@ -290,6 +300,18 @@ namespace FrontierDepths.UI
             if (!string.IsNullOrWhiteSpace(room.purposeIcon))
             {
                 return room.purposeIcon;
+            }
+
+            string objectiveIcon = room.objectiveRole switch
+            {
+                DungeonRoomRole.Objective => "K",
+                DungeonRoomRole.BossApproach => "!",
+                DungeonRoomRole.BossPlaceholder => "B",
+                _ => string.Empty
+            };
+            if (!string.IsNullOrWhiteSpace(objectiveIcon))
+            {
+                return objectiveIcon;
             }
 
             return room.roomRole switch

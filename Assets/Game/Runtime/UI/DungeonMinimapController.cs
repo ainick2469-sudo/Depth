@@ -840,6 +840,17 @@ namespace FrontierDepths.UI
             Color baseColor = GetPurposeMinimapColor(room);
             if (baseColor == default)
             {
+                baseColor = room.objectiveRole switch
+                {
+                    DungeonRoomRole.Objective => new Color(0.35f, 0.92f, 0.5f, 1f),
+                    DungeonRoomRole.BossApproach => new Color(1f, 0.48f, 0.16f, 1f),
+                    DungeonRoomRole.BossPlaceholder => new Color(0.95f, 0.12f, 0.1f, 1f),
+                    _ => default
+                };
+            }
+
+            if (baseColor == default)
+            {
                 baseColor = room.roomRole switch
                 {
                     DungeonRoomRole.Start => new Color(0.45f, 0.58f, 0.72f, 1f),
@@ -922,6 +933,18 @@ namespace FrontierDepths.UI
                 {
                     return purposeIcon;
                 }
+            }
+
+            string objectiveIcon = room.objectiveRole switch
+            {
+                DungeonRoomRole.Objective => "K",
+                DungeonRoomRole.BossApproach => "!",
+                DungeonRoomRole.BossPlaceholder => "B",
+                _ => string.Empty
+            };
+            if (!string.IsNullOrWhiteSpace(objectiveIcon))
+            {
+                return objectiveIcon;
             }
 
             return room.roomRole switch

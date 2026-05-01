@@ -205,6 +205,9 @@ namespace FrontierDepths.World
         Special,
         Safe,
         FutureBossApproach,
+        Objective,
+        BossApproach,
+        BossPlaceholder,
         Protected
     }
 

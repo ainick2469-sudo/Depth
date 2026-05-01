@@ -34,6 +34,7 @@ namespace FrontierDepths.World
         public float maxCorridorLength;
         public float percentCorridorsOverTarget;
         public DungeonLayoutQualityReport layoutQualityReport;
+        public DungeonLabyrinthObjectivePlan labyrinthObjectivePlan;
         public DungeonShellVisualTruthReport shellVisualReport;
 
         public readonly List<DungeonGraphEdgeRecord> graphEdges = new List<DungeonGraphEdgeRecord>();
@@ -168,6 +169,12 @@ namespace FrontierDepths.World
         public bool isDeadEnd;
         public bool isLandmarkRoom;
         public bool isFutureBossApproach;
+        public bool isObjectiveRoom;
+        public bool isBossApproachRoom;
+        public bool isBossRoomPlaceholder;
+        public bool isExitStairsRoom;
+        public int objectivePathIndex = -1;
+        public DungeonRoomRole objectiveRole = DungeonRoomRole.None;
         public int dangerTier;
         public string lockId = string.Empty;
         public string requiredKeyId = string.Empty;
@@ -200,6 +207,30 @@ namespace FrontierDepths.World
         public string rejectionReason = string.Empty;
     }
 
+    public sealed class DungeonLabyrinthObjectivePlan
+    {
+        public string entranceRoomId = string.Empty;
+        public readonly List<string> mainPathRoomIds = new List<string>();
+        public string objectiveRoomId = string.Empty;
+        public string bossApproachRoomId = string.Empty;
+        public string bossRoomId = string.Empty;
+        public string exitStairsRoomId = string.Empty;
+        public bool objectiveRequired = true;
+        public bool objectiveCompleted;
+        public bool bossDefeated;
+        public bool lockedExitUntilObjectiveComplete;
+        public bool lockedExitUntilBossDefeated;
+        public bool nextDepthUnlocked = true;
+        public readonly List<string> warnings = new List<string>();
+
+        public bool HasObjectiveStructure =>
+            !string.IsNullOrWhiteSpace(entranceRoomId) &&
+            !string.IsNullOrWhiteSpace(objectiveRoomId) &&
+            !string.IsNullOrWhiteSpace(bossApproachRoomId) &&
+            !string.IsNullOrWhiteSpace(bossRoomId) &&
+            !string.IsNullOrWhiteSpace(exitStairsRoomId);
+    }
+
     public sealed class DungeonLayoutQualityReport
     {
         public int roomCount;
@@ -221,9 +252,15 @@ namespace FrontierDepths.World
         public int protectedRoomCount;
         public int repeatedSpecialRoomWarnings;
         public int longCorridorWarnings;
+        public int objectivePathRoomCount;
+        public bool hasObjectiveRoom;
+        public bool hasBossApproachRoom;
+        public bool hasBossRoomPlaceholder;
+        public bool exitLockMetadataPrepared;
+        public readonly List<string> objectivePlanWarnings = new List<string>();
         public readonly List<string> layoutWarnings = new List<string>();
 
-        public int warningCount => layoutWarnings.Count + longCorridorWarnings;
+        public int warningCount => layoutWarnings.Count + objectivePlanWarnings.Count + longCorridorWarnings;
 
         public string ToSummaryString()
         {
@@ -231,7 +268,8 @@ namespace FrontierDepths.World
                    $"rooms={roomCount}, avgArea={averageRoomArea:0.0}, largest={largestRoomArea:0.0}, " +
                    $"corridors={corridorCount}, avgCorridor={averageCorridorLength:0.0}, longest={longestCorridorLength:0.0}, " +
                    $"mainPath={mainPathRoomCount}, branches={branchRoomCount}, deadEnds={deadEndRoomCount}, " +
-                   $"landmarks={landmarkRoomCount}, mergeCandidates={mergeCandidateCount}, warnings={warningCount}";
+                   $"landmarks={landmarkRoomCount}, objective={hasObjectiveRoom}, bossApproach={hasBossApproachRoom}, " +
+                   $"bossRoom={hasBossRoomPlaceholder}, mergeCandidates={mergeCandidateCount}, warnings={warningCount}";
         }
     }
 
