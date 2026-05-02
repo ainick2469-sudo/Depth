@@ -1,5 +1,6 @@
 # Recent Changes
 
+- `Gate VS-1.4.1H`: adds safe room-shape planning with existing broad/alcove/L/T/cross/octagon/fork templates, source-level compound room records, conservative widened compound connectors, expanded layout-quality merge/shape metrics, and descent reward modal mouse/input capture fixes.
 - `Gate VS-1.4.1G`: adds deterministic labyrinth objective-path metadata, objective/key room selection, boss approach selection, boss room placeholder selection, exit/stairs lock metadata prepared but disabled by default, and minimap/full-map objective role support.
 - `Gate VS-1.4.1F`: adds labyrinth layout-quality reporting, structural room metadata, protected-room classification, landmark selection, metadata-only merge candidates, corridor pacing metrics, early special-room repetition warnings, and safer depth-scaled room size weighting.
 - `Gate VS-1.4.1E.1`: hotfixes raised shell floor/corridor visuals by converting floor-like wrappers to thin validated veneers, adds floor alignment report metrics, persists current HP across dungeon descents, separates world-floor and labyrinth-depth HUD text, removes the black chamber-pip backing, and adds stamina exhaustion thresholds.

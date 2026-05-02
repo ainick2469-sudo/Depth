@@ -317,7 +317,13 @@ namespace FrontierDepths.World
                     a = edge.a,
                     b = edge.b
                 });
+            }
 
+            DungeonRoomShapeUtility.BuildCompoundPlan(activeBuildResult);
+
+            for (int edgeIndex = 0; edgeIndex < graph.edges.Count; edgeIndex++)
+            {
+                DungeonEdge edge = graph.edges[edgeIndex];
                 CreateCorridor(graph.GetNode(edge.a), graph.GetNode(edge.b));
             }
 
@@ -1575,6 +1581,7 @@ namespace FrontierDepths.World
             };
             DungeonMetadataUtility.CopyNodeMetadata(node, roomRecord);
             DungeonLabyrinthObjectiveUtility.ApplyObjectivePlanToRoom(roomRecord, activeBuildResult?.labyrinthObjectivePlan);
+            DungeonRoomShapeUtility.ApplyRoomShapeMetadata(roomRecord, node);
             roomRecord.footprintArea = roomRecord.bounds.size.x * roomRecord.bounds.size.z;
             roomRecord.floorCells.AddRange(floorCells);
             bool preferSpecialPlacement = node.nodeKind == DungeonNodeKind.Ordinary && graph.GetDegree(node.nodeId) <= 1;
@@ -1619,15 +1626,20 @@ namespace FrontierDepths.World
             direction2D.x = Mathf.Clamp(direction2D.x, -1, 1);
             direction2D.y = Mathf.Clamp(direction2D.y, -1, 1);
             Vector2Int reverseDirection = new Vector2Int(-direction2D.x, -direction2D.y);
+            string edgeKey = DungeonBuildResult.GetEdgeKey(a.nodeId, b.nodeId);
             float corridorWidth = a.nodeKind == DungeonNodeKind.Secret || b.nodeKind == DungeonNodeKind.Secret
                 ? SecretCorridorWidth
                 : PrimaryCorridorWidth;
+            bool isCompoundConnector = DungeonRoomShapeUtility.TryGetCompoundForEdge(activeBuildResult, edgeKey, out DungeonRoomCompoundRecord compoundRecord);
+            if (isCompoundConnector)
+            {
+                corridorWidth = DungeonRoomShapeUtility.GetCompoundConnectorWidth(corridorWidth);
+            }
 
             Vector3 start = GetDoorWorldPosition(a, direction2D);
             Vector3 end = GetDoorWorldPosition(b, reverseDirection);
             List<Vector3> routePoints = BuildCorridorRoute(start, end, direction2D);
             routePoints = ExpandRouteEndpointsIntoRooms(routePoints, direction2D, CorridorRoomOverlap);
-            string edgeKey = DungeonBuildResult.GetEdgeKey(a.nodeId, b.nodeId);
             GameObject corridorRoot = new GameObject($"Corridor_{a.nodeId}_To_{b.nodeId}");
             corridorRoot.transform.SetParent(runtimeRoot, false);
 
@@ -1643,7 +1655,19 @@ namespace FrontierDepths.World
 
                 bool trimStart = i == 1;
                 bool trimEnd = i == routePoints.Count - 1;
-                CreateCorridorSegment(corridorRoot.transform, edgeKey, a.nodeId, b.nodeId, segmentIndex++, corridorWidth, segmentStart, segmentEnd, trimStart, trimEnd);
+                CreateCorridorSegment(
+                    corridorRoot.transform,
+                    edgeKey,
+                    a.nodeId,
+                    b.nodeId,
+                    segmentIndex++,
+                    corridorWidth,
+                    segmentStart,
+                    segmentEnd,
+                    trimStart,
+                    trimEnd,
+                    isCompoundConnector,
+                    compoundRecord != null ? compoundRecord.compoundRoomId : string.Empty);
             }
         }
 
@@ -1657,7 +1681,9 @@ namespace FrontierDepths.World
             Vector3 start,
             Vector3 end,
             bool trimVisualStart,
-            bool trimVisualEnd)
+            bool trimVisualEnd,
+            bool isCompoundConnector = false,
+            string compoundRoomId = "")
         {
             Vector3 midpoint = (start + end) * 0.5f;
             Vector3 delta = end - start;
@@ -1719,7 +1745,9 @@ namespace FrontierDepths.World
                 horizontal = horizontal,
                 length = corridorLength,
                 width = corridorWidth,
-                isSecretCorridor = Mathf.Abs(corridorWidth - SecretCorridorWidth) <= 0.01f
+                isSecretCorridor = Mathf.Abs(corridorWidth - SecretCorridorWidth) <= 0.01f,
+                isCompoundConnector = isCompoundConnector,
+                compoundRoomId = compoundRoomId ?? string.Empty
             });
             activeBuildResult?.reservedZones.Add(new DungeonReservedZoneRecord
             {

@@ -47,6 +47,7 @@ namespace FrontierDepths.World
         public readonly List<DungeonSpawnPointRecord> spawnPoints = new List<DungeonSpawnPointRecord>();
         public readonly List<RoomClusterRecord> roomClusters = new List<RoomClusterRecord>();
         public readonly List<DungeonRoomMergeCandidateRecord> mergeCandidates = new List<DungeonRoomMergeCandidateRecord>();
+        public readonly List<DungeonRoomCompoundRecord> compoundRooms = new List<DungeonRoomCompoundRecord>();
 
         public static string GetEdgeKey(string a, string b)
         {
@@ -175,6 +176,11 @@ namespace FrontierDepths.World
         public bool isExitStairsRoom;
         public int objectivePathIndex = -1;
         public DungeonRoomRole objectiveRole = DungeonRoomRole.None;
+        public string shapeClass = string.Empty;
+        public bool isExpandedRoom;
+        public bool isMergedRoom;
+        public string compoundRoomId = string.Empty;
+        public string sourceCompoundId = string.Empty;
         public int dangerTier;
         public string lockId = string.Empty;
         public string requiredKeyId = string.Empty;
@@ -205,6 +211,22 @@ namespace FrontierDepths.World
         public int floorDepth;
         public bool isSafeToApply;
         public string rejectionReason = string.Empty;
+    }
+
+    public sealed class DungeonRoomCompoundRecord
+    {
+        public string compoundRoomId = string.Empty;
+        public readonly List<string> sourceRoomIds = new List<string>();
+        public Bounds compoundBounds;
+        public string connectorEdgeKey = string.Empty;
+        public int removedInteriorWallCount;
+        public int preservedDoorOpeningCount;
+        public string compoundShapeClass = string.Empty;
+        public string compoundScaleClass = string.Empty;
+        public bool isLandmarkCompound;
+        public string mergeReason = string.Empty;
+        public string rejectionReason = string.Empty;
+        public bool applied;
     }
 
     public sealed class DungeonLabyrinthObjectivePlan
@@ -257,6 +279,16 @@ namespace FrontierDepths.World
         public bool hasBossApproachRoom;
         public bool hasBossRoomPlaceholder;
         public bool exitLockMetadataPrepared;
+        public int mergeAppliedCount;
+        public int mergeRejectedCount;
+        public readonly List<string> mergeRejectionReasons = new List<string>();
+        public int mergedRoomCount;
+        public float largestMergedRoomArea;
+        public int irregularRoomCount;
+        public int expandedRoomCount;
+        public int landmarkCompoundCount;
+        public int minimapMergeWarnings;
+        public int shellMergeWarnings;
         public readonly List<string> objectivePlanWarnings = new List<string>();
         public readonly List<string> layoutWarnings = new List<string>();
 
@@ -269,7 +301,9 @@ namespace FrontierDepths.World
                    $"corridors={corridorCount}, avgCorridor={averageCorridorLength:0.0}, longest={longestCorridorLength:0.0}, " +
                    $"mainPath={mainPathRoomCount}, branches={branchRoomCount}, deadEnds={deadEndRoomCount}, " +
                    $"landmarks={landmarkRoomCount}, objective={hasObjectiveRoom}, bossApproach={hasBossApproachRoom}, " +
-                   $"bossRoom={hasBossRoomPlaceholder}, mergeCandidates={mergeCandidateCount}, warnings={warningCount}";
+                   $"bossRoom={hasBossRoomPlaceholder}, mergeCandidates={mergeCandidateCount}, merges={mergeAppliedCount}, " +
+                   $"mergedRooms={mergedRoomCount}, irregular={irregularRoomCount}, expanded={expandedRoomCount}, " +
+                   $"rejected={mergeRejectedCount}, warnings={warningCount}";
         }
     }
 
@@ -287,6 +321,8 @@ namespace FrontierDepths.World
         public float length;
         public float width;
         public bool isSecretCorridor;
+        public bool isCompoundConnector;
+        public string compoundRoomId = string.Empty;
     }
 
     public sealed class DungeonDoorOpeningRecord

@@ -20,10 +20,12 @@ namespace FrontierDepths.World
             DungeonLabyrinthObjectiveUtility.ApplyObjectivePlan(build);
             SelectLandmarkRooms(build);
             BuildMergeCandidates(build);
+            DungeonRoomShapeUtility.ApplyPostBuildCompoundMetadata(build);
             PopulateRoomMetrics(build, report);
             PopulateCorridorMetrics(build, report);
             PopulateSpecialRoomMetrics(build, report);
             PopulateObjectiveMetrics(build, report);
+            PopulateMergeShapeMetrics(build, report);
             build.layoutQualityReport = report;
             return report;
         }
@@ -163,12 +165,12 @@ namespace FrontierDepths.World
         private static void BuildMergeCandidates(DungeonBuildResult build)
         {
             build.mergeCandidates.Clear();
-            if (build.graph == null || build.floorIndex <= 3)
+            if (build.graph == null || build.floorIndex <= 1)
             {
                 return;
             }
 
-            int safeCap = build.floorIndex < 10 ? 2 : 4;
+            int safeCap = build.floorIndex <= 3 ? 1 : (build.floorIndex < 8 ? 2 : 3);
             for (int i = 0; i < build.graphEdges.Count; i++)
             {
                 DungeonGraphEdgeRecord edge = build.graphEdges[i];
@@ -210,6 +212,13 @@ namespace FrontierDepths.World
             if (a.roomType != DungeonNodeKind.Ordinary || b.roomType != DungeonNodeKind.Ordinary)
             {
                 candidate.rejectionReason = "Only ordinary rooms are merge candidates in this foundation gate.";
+                return candidate;
+            }
+
+            if (a.isObjectiveRoom || a.isBossApproachRoom || a.isBossRoomPlaceholder || a.isExitStairsRoom ||
+                b.isObjectiveRoom || b.isBossApproachRoom || b.isBossRoomPlaceholder || b.isExitStairsRoom)
+            {
+                candidate.rejectionReason = "Objective, boss, and exit rooms are shaped but not physically merged in this gate.";
                 return candidate;
             }
 
@@ -331,6 +340,51 @@ namespace FrontierDepths.World
             report.hasBossRoomPlaceholder = !string.IsNullOrWhiteSpace(plan.bossRoomId);
             report.exitLockMetadataPrepared = !string.IsNullOrWhiteSpace(plan.exitStairsRoomId);
             report.objectivePlanWarnings.AddRange(plan.warnings);
+        }
+
+        private static void PopulateMergeShapeMetrics(DungeonBuildResult build, DungeonLayoutQualityReport report)
+        {
+            for (int i = 0; i < build.rooms.Count; i++)
+            {
+                DungeonRoomBuildRecord room = build.rooms[i];
+                report.expandedRoomCount += room.isExpandedRoom ? 1 : 0;
+                report.irregularRoomCount += DungeonRoomShapeUtility.IsIrregularTemplate(room.templateKind) ? 1 : 0;
+                report.mergedRoomCount += room.isMergedRoom ? 1 : 0;
+            }
+
+            for (int i = 0; i < build.mergeCandidates.Count; i++)
+            {
+                DungeonRoomMergeCandidateRecord candidate = build.mergeCandidates[i];
+                if (candidate.isSafeToApply)
+                {
+                    continue;
+                }
+
+                report.mergeRejectedCount++;
+                if (!string.IsNullOrWhiteSpace(candidate.rejectionReason) && !report.mergeRejectionReasons.Contains(candidate.rejectionReason))
+                {
+                    report.mergeRejectionReasons.Add(candidate.rejectionReason);
+                }
+            }
+
+            for (int i = 0; i < build.compoundRooms.Count; i++)
+            {
+                DungeonRoomCompoundRecord compound = build.compoundRooms[i];
+                if (!compound.applied)
+                {
+                    continue;
+                }
+
+                report.mergeAppliedCount++;
+                report.largestMergedRoomArea = Mathf.Max(report.largestMergedRoomArea, compound.compoundBounds.size.x * compound.compoundBounds.size.z);
+                report.landmarkCompoundCount += compound.isLandmarkCompound ? 1 : 0;
+            }
+
+            if (build.compoundRooms.Count > 0 && report.mergeAppliedCount == 0)
+            {
+                report.shellMergeWarnings++;
+                report.layoutWarnings.Add("Compound room records exist but no applied source-level merge was validated.");
+            }
         }
 
         private static HashSet<string> BuildShortestPathIds(DungeonLayoutGraph graph, string startId, string goalId)

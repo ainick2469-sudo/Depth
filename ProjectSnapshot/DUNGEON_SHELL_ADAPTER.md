@@ -2,7 +2,7 @@
 
 ## Gate
 
-Current: `Gate VS-1.4.1G: Labyrinth Objective Path And Boss Approach Foundation`
+Current: `Gate VS-1.4.1H: Safe Room Merge Geometry And Irregular Room Shapes`
 
 Foundation: `Gate VS-1.4.1C: Dungeon Modular Shell Adapter`
 
@@ -62,14 +62,15 @@ Runtime code must not load arbitrary vendor prefabs directly. Wrapper roots are 
 - Adapter visuals must report zero violations or fallback to SafeGraybox.
 - SafeGraybox must never hide graybox renderers.
 - Layout-quality changes must not weaken shell validation: any future merged-room or landmark geometry must preserve doorway clearance, corridor clearance, floor veneer alignment, and source-owned visual truth.
-- Objective-path metadata does not alter shell geometry in VS-1.4.1G; future boss doors or merged rooms must pass the same visual-truth checks before hiding graybox.
+- VS-1.4.1H compound connectors are source-level corridor geometry, not visual-only wall removal. They must still generate matching floor/collision/wall records before shell visuals hide graybox.
+- Future boss doors or deeper merged-room geometry must pass the same visual-truth checks before hiding graybox.
 
 ## Deferred
 
 - Full modular art import from `DungeonModularPack`.
 - Decorative torch/chain/trim placement.
 - Room-type-specific prop dressing.
-- Actual merged-room geometry.
+- Arbitrary mesh-based room merging and interior wall surgery beyond the conservative VS-1.4.1H compound connector pass.
 - Dungeon generation overhaul.
 - Boss combat, boss doors, and enforced labyrinth progression locks.
 

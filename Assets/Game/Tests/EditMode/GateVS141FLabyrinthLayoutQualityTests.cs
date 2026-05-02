@@ -58,9 +58,9 @@ namespace FrontierDepths.Tests.EditMode
         }
 
         [Test]
-        public void MergeCandidates_AreSuppressedOnEarlyTrainingFloors()
+        public void MergeCandidates_AreSuppressedOnlyOnFirstTrainingFloor()
         {
-            DungeonBuildResult build = CreateBranchedBuild(floor: 2);
+            DungeonBuildResult build = CreateBranchedBuild(floor: 1);
 
             DungeonLayoutQualityReport report = DungeonLayoutQualityUtility.Analyze(build);
 

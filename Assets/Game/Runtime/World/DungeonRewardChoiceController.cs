@@ -16,9 +16,16 @@ namespace FrontierDepths.World
         private Action descendAfterReward;
         private string errorMessage = string.Empty;
         private bool active;
+        private bool selectionInProgress;
+        private int focusedChoiceIndex;
 
         public static bool IsRewardChoiceActive => Instance != null && Instance.active;
         public IReadOnlyList<RunUpgradeDefinition> Choices => choices;
+        internal bool ActiveForTests => active;
+        internal bool SelectionInProgressForTests => selectionInProgress;
+        internal int ChoiceCountForTests => choices.Count;
+        internal int FocusedChoiceIndexForTests => focusedChoiceIndex;
+        internal bool CursorUnlockedForTests => Cursor.visible && Cursor.lockState == CursorLockMode.None;
 
         private static DungeonRewardChoiceController Instance { get; set; }
 
@@ -133,6 +140,30 @@ namespace FrontierDepths.World
             {
                 SelectChoice(2);
             }
+            else if (Input.GetKeyDown(KeyCode.Keypad1))
+            {
+                SelectChoice(0);
+            }
+            else if (Input.GetKeyDown(KeyCode.Keypad2))
+            {
+                SelectChoice(1);
+            }
+            else if (Input.GetKeyDown(KeyCode.Keypad3))
+            {
+                SelectChoice(2);
+            }
+            else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
+            {
+                focusedChoiceIndex = choices.Count > 0 ? (focusedChoiceIndex + 1) % choices.Count : 0;
+            }
+            else if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
+            {
+                focusedChoiceIndex = choices.Count > 0 ? (focusedChoiceIndex + choices.Count - 1) % choices.Count : 0;
+            }
+            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            {
+                SelectChoice(focusedChoiceIndex);
+            }
         }
 
         private void OnGUI()
@@ -154,9 +185,16 @@ namespace FrontierDepths.World
             for (int i = 0; i < choices.Count; i++)
             {
                 RunUpgradeDefinition choice = choices[i];
-                if (GUILayout.Button($"{i + 1}. {BuildChoiceLabel(choice)}", GUILayout.Height(82f)))
+                if (GUILayout.Button($"{i + 1}. {BuildChoiceLabel(choice)}", CreateChoiceStyle(i == focusedChoiceIndex), GUILayout.Height(82f)))
                 {
                     SelectChoice(i);
+                }
+
+                Rect choiceRect = GUILayoutUtility.GetLastRect();
+                Event currentEvent = Event.current;
+                if (currentEvent != null && choiceRect.Contains(currentEvent.mousePosition))
+                {
+                    focusedChoiceIndex = i;
                 }
             }
 
@@ -167,6 +205,7 @@ namespace FrontierDepths.World
             }
 
             GUILayout.EndArea();
+            ConsumeModalInputEvent();
         }
 
         private void Begin(PlayerInteractor interactor, Action descendCallback, List<RunUpgradeDefinition> rewardChoices)
@@ -175,24 +214,31 @@ namespace FrontierDepths.World
             choices.AddRange(rewardChoices);
             descendAfterReward = descendCallback;
             errorMessage = string.Empty;
+            selectionInProgress = false;
+            focusedChoiceIndex = 0;
             playerController = interactor != null ? interactor.GetComponent<FirstPersonController>() : FindAnyObjectByType<FirstPersonController>();
-            playerController?.SetUiCaptured(true);
             active = true;
+            playerController?.SetUiCaptured(true);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            Time.timeScale = 0f;
         }
 
-        private void SelectChoice(int index)
+        private bool SelectChoice(int index)
         {
-            if (index < 0 || index >= choices.Count)
+            if (selectionInProgress || index < 0 || index >= choices.Count)
             {
-                return;
+                return false;
             }
 
+            selectionInProgress = true;
             RunUpgradeDefinition selected = choices[index];
             if (!RunUpgradeCatalog.TryGet(selected.upgradeId, out _))
             {
                 errorMessage = $"Failed to apply upgrade: {selected.upgradeId}";
                 Debug.LogError(errorMessage);
-                return;
+                selectionInProgress = false;
+                return false;
             }
 
             try
@@ -213,22 +259,64 @@ namespace FrontierDepths.World
             {
                 errorMessage = $"Failed to apply upgrade: {exception.Message}";
                 Debug.LogError(errorMessage);
-                return;
+                selectionInProgress = false;
+                return false;
             }
 
             CompleteAndDescend();
+            return true;
         }
 
         private void CompleteAndDescend()
         {
             active = false;
+            selectionInProgress = false;
             choices.Clear();
             errorMessage = string.Empty;
             playerController?.SetUiCaptured(false);
+            if (playerController == null)
+            {
+                Time.timeScale = 1f;
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
 
             Action callback = descendAfterReward;
             descendAfterReward = null;
             callback?.Invoke();
+        }
+
+        internal void BeginForTests(List<RunUpgradeDefinition> rewardChoices, Action descendCallback = null)
+        {
+            Begin(null, descendCallback, rewardChoices);
+        }
+
+        internal bool TrySelectChoiceForTests(int index)
+        {
+            return SelectChoice(index);
+        }
+
+        internal bool TrySelectChoiceForTests(int index, RunState run)
+        {
+            if (run == null)
+            {
+                return SelectChoice(index);
+            }
+
+            if (selectionInProgress || index < 0 || index >= choices.Count)
+            {
+                return false;
+            }
+
+            selectionInProgress = true;
+            if (!TryApplySelectionForTests(run, choices[index]))
+            {
+                selectionInProgress = false;
+                return false;
+            }
+
+            CompleteAndDescend();
+            return true;
         }
 
         private string BuildChoiceLabel(RunUpgradeDefinition choice)
@@ -262,6 +350,24 @@ namespace FrontierDepths.World
             return style;
         }
 
+        private static GUIStyle CreateChoiceStyle(bool focused)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.button)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = focused ? 16 : 15,
+                fontStyle = focused ? FontStyle.Bold : FontStyle.Normal,
+                wordWrap = true,
+                padding = new RectOffset(18, 18, 8, 8)
+            };
+            if (focused)
+            {
+                style.normal.textColor = new Color(1f, 0.9f, 0.52f, 1f);
+            }
+
+            return style;
+        }
+
         private static GUIStyle CreateErrorStyle()
         {
             GUIStyle style = new GUIStyle(GUI.skin.label)
@@ -272,6 +378,24 @@ namespace FrontierDepths.World
             };
             style.normal.textColor = new Color(1f, 0.34f, 0.24f, 1f);
             return style;
+        }
+
+        private static void ConsumeModalInputEvent()
+        {
+            Event current = Event.current;
+            if (current == null)
+            {
+                return;
+            }
+
+            if (current.isKey ||
+                current.type == EventType.MouseDown ||
+                current.type == EventType.MouseUp ||
+                current.type == EventType.MouseDrag ||
+                current.type == EventType.ScrollWheel)
+            {
+                current.Use();
+            }
         }
     }
 }

@@ -9,13 +9,14 @@
 - Dungeon shell visuals are intentionally visual-only and validated before graybox renderers hide; existing graybox collision primitives remain authoritative.
 - VS-1.4.1E enables safe floor/corridor materials, side-only doorway trim, stair markers, and subtle room-purpose floor markers; caps, headers, pillars, overhead pieces, freestanding props, and secret reveal props remain disabled.
 - VS-1.4.1E.1 converts floor/corridor/purpose/stair shell visuals to thin validated veneers; any future floor art must preserve flush vertical alignment and remain non-colliding.
-- VS-1.4.1F adds layout metadata and merge-candidate reporting only; actual merged-room geometry, boss rooms, key rooms, and quest rooms remain deferred.
+- VS-1.4.1F adds layout metadata and merge-candidate reporting; VS-1.4.1H begins safe physical compound connectors, but arbitrary room mesh merging is still deferred.
 - VS-1.4.1G adds objective/boss approach/boss placeholder metadata only; real boss combat, boss doors, key inventory, objective lock enforcement, and clear rewards remain deferred.
+- VS-1.4.1H uses existing safe templates and widened source-level connectors for merged-room feel; it does not move room roots, generate custom meshes, or remove arbitrary interior walls.
 - Layout-quality reports can warn about long corridors or repeated special rooms, but corridor routing is still conservative and mostly unchanged.
 - Secret rooms should remain visually neutral until discovered; future room dressing must not reveal hidden routes or special room identity early.
 - Damage-number readability should be manually confirmed.
 - Enemy attack families are still mostly data/fallback, not fully bespoke.
-- Dungeon generation is still grid/simple; VS-1.4.1F improves metadata, room variety weighting, landmarks, and reports but does not replace the graph planner.
+- Dungeon generation is still grid/simple; VS-1.4.1H improves safe template variety and compound connector feel but does not replace the graph planner.
 - Full skill trees are not implemented.
 - Ascension Route is not implemented.
 - Dungeon Generation Pack is a future research/import candidate, not integrated.

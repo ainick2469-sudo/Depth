@@ -181,6 +181,7 @@ namespace FrontierDepths.World
             AssignTemplates(graph, random, floorIndex);
             SyncLegacyIds(graph);
             DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
+            DungeonRoomShapeUtility.ApplyTemplateShapePlan(graph, DungeonLabyrinthObjectiveUtility.BuildObjectivePlan(graph, floorIndex), floorIndex, seed);
             return graph;
         }
 
@@ -209,6 +210,7 @@ namespace FrontierDepths.World
             SyncLegacyIds(graph);
             AssignTemplates(graph, random, floorIndex);
             DungeonMetadataUtility.ApplyGraphDefaults(graph, floorIndex, seed);
+            DungeonRoomShapeUtility.ApplyTemplateShapePlan(graph, DungeonLabyrinthObjectiveUtility.BuildObjectivePlan(graph, floorIndex), floorIndex, seed);
             return graph;
         }
 

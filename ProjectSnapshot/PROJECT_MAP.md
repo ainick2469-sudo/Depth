@@ -17,10 +17,10 @@
 ## World
 
 - Path: `Assets/Game/Runtime/World`
-- Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, layout-quality reporting, labyrinth objective-path metadata, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
-- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonLayoutQualityUtility.cs`, `DungeonLabyrinthObjectiveUtility.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonShellVisualTruthReport.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
+- Contains: world-floor catalog/progression helpers, dungeon runtime assembly, graph generation, room metadata, layout-quality reporting, labyrinth objective-path metadata, room-shape/compound planning, encounters, enemy pack selection, room purpose rewards, stairs, and pickups.
+- Key files: `WorldFloorCatalog.cs`, `WorldFloorProgressionService.cs`, `WorldFloorSceneContext.cs`, `GraphFirstDungeonGenerator.cs`, `DungeonSceneController.cs`, `DungeonLayoutQualityUtility.cs`, `DungeonLabyrinthObjectiveUtility.cs`, `DungeonRoomShapeUtility.cs`, `DungeonShellVisualCatalog.cs`, `DungeonShellVisualResolver.cs`, `DungeonShellVisualTruthReport.cs`, `DungeonEncounterDirector.cs`, `RoomPurposeCatalog.cs`.
 - Do not edit casually: world-floor persistence semantics, dungeon shell visual wrapper paths/modes, shell truth validation, scene YAML, safe/transit/protected room rules, layout-quality metadata, objective-path metadata, encounter spacing, collision records, and room purpose reward policy.
-- Current layout rule: VS-1.4.1G may improve objective-path metadata only; actual merged-room geometry, boss combat, boss doors, and objective lock enforcement are deferred.
+- Current layout rule: VS-1.4.1H may use existing safe room templates and conservative source-level compound connectors; arbitrary geometry merging, boss combat, boss doors, and objective lock enforcement are deferred.
 
 ## Progression
 

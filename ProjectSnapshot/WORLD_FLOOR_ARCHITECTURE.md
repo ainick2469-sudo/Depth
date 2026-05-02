@@ -27,6 +27,7 @@ MainMenu
 - The current dungeon generator is preserved; VS-1.4.0 adds data/state wrappers above it.
 - VS-1.4.1F adds labyrinth layout-quality metadata that future world-floor gates can consume for boss approach rooms, landmark rooms, side objectives, safe routes, and full-map readability.
 - VS-1.4.1G adds the first deterministic labyrinth objective skeleton: objective/key room, boss approach, boss room placeholder, and exit/stairs metadata. Progression locks are prepared but not enforced by default.
+- VS-1.4.1H starts making that skeleton visible through safer room template selection and conservative compound connector records, without adding boss combat or overworld runtime.
 
 ## World Floor Definition
 
@@ -69,6 +70,6 @@ When a floor boss is defeated with the matching boss id, that floor becomes clea
 - No terrain, forests, lakes, or field enemy zones yet.
 - No boss combat yet.
 - No boss-door/key-lock enforcement yet; VS-1.4.1G prepares metadata only.
-- No actual merged-room geometry yet; VS-1.4.1F records safe merge candidates only.
+- No arbitrary merged-room mesh generation yet; VS-1.4.1H uses conservative source-level compound connectors and existing safe templates only.
 - No teleport gate UI yet.
 - No imported dungeon generation pack.
